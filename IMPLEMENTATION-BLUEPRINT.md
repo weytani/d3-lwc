@@ -2322,7 +2322,1699 @@ Implement the gauge arc rendering with D3.
 
 ---
 
-*[Prompts 17-66 continue in the same pattern, each building on previous work...]*
+### Prompt 17: Gauge Component - Value Display
+
+```text
+You are continuing the D3.js LWC chart library project.
+
+**Context:**
+- Previous: d3Gauge renders basic arc
+- Need to display the actual value in the center of the gauge
+
+**Task:**
+Add value text display to the gauge center.
+
+**Requirements:**
+1. Add to d3Gauge.js renderChart() after drawing arcs:
+   - Add centered text group
+   - Display currentValue with formatNumber
+   - Display optional label from advancedConfig.label
+   - Style with SLDS typography classes
+
+2. Add to parsedConfig handling:
+   - Support minValue, maxValue overrides
+   - Support label property
+   - Support valueFormat ('number', 'currency', 'percent')
+
+3. Update Jest tests to verify:
+   - Value text is rendered
+   - formatNumber is called
+   - Label displays when configured
+
+**Reuses:** chartUtils.formatNumber, chartUtils.formatCurrency, chartUtils.formatPercent
+
+**Wiring:** Extends Step 16 gauge rendering
+```
+
+---
+
+### Prompt 18: Gauge Component - Theme Integration
+
+```text
+You are continuing the D3.js LWC chart library project.
+
+**Context:**
+- Previous: d3Gauge displays value in arc
+- Need full theme integration with gradient support
+
+**Task:**
+Integrate theme colors and optional gradients.
+
+**Requirements:**
+1. Update renderChart():
+   - Use themeService.getColors for arc fill
+   - Support advancedConfig.useGradient boolean
+   - If gradient, create linearGradient def with theme colors
+   - Add subtle shadow/glow effect option
+
+2. Add color zones support:
+   - advancedConfig.zones: [{ min: 0, max: 50, color: 'red' }, ...]
+   - If zones defined, override theme colors based on currentValue
+
+3. Jest tests:
+   - Theme colors applied correctly
+   - Custom colors override theme
+   - Zones work as expected
+
+**Reuses:** themeService.getColors (Step 11)
+
+**Wiring:** Extends Step 17
+```
+
+---
+
+### Prompt 19: Gauge Component - Resize Handling
+
+```text
+You are continuing the D3.js LWC chart library project.
+
+**Context:**
+- Previous: d3Gauge has theme integration
+- Need responsive resizing
+
+**Task:**
+Implement responsive resize with compact mode.
+
+**Requirements:**
+1. Already have createResizeHandler wired - verify it triggers re-render
+2. Implement compact mode:
+   - If width < 200px: hide label, use smaller font
+   - If width < 150px: hide value text, show only arc
+3. Add minimum size warning if container too small
+4. Ensure smooth transitions on resize (CSS transition on SVG)
+
+5. Jest tests:
+   - Resize callback triggers renderChart
+   - Compact mode activates at threshold
+   - cleanup on disconnectedCallback
+
+**Reuses:** chartUtils.createResizeHandler, chartUtils.shouldUseCompactMode (Step 14)
+
+**Wiring:** Extends Step 18
+```
+
+---
+
+### Prompt 20: Gauge Component - App Builder XML Complete
+
+```text
+You are continuing the D3.js LWC chart library project.
+
+**Context:**
+- Previous: d3Gauge has resize handling
+- Need complete App Builder configuration
+
+**Task:**
+Finalize the meta XML for full App Builder support.
+
+**Requirements:**
+1. Update d3Gauge.js-meta.xml:
+   - Add all property configurations with proper types
+   - Add design attributes for Flow compatibility
+   - Ensure recordCollection works in Flow context
+
+2. Properties to expose:
+   - soqlQuery (String)
+   - valueField (String, required)
+   - height (Integer, default 200)
+   - theme (String, picklist)
+   - minValue (Integer, default 0)
+   - maxValue (Integer, default 100)
+   - targetRecordId (String)
+   - advancedConfig (String)
+
+3. Test in App Builder (manual verification):
+   - Component appears in component palette
+   - All properties render in property panel
+   - Default values work
+
+**Wiring:** Extends Step 19
+```
+
+---
+
+### Prompt 21: Gauge Component - SOQL Data Source
+
+```text
+You are continuing the D3.js LWC chart library project.
+
+**Context:**
+- Previous: d3Gauge has App Builder config
+- Need to load data from SOQL query
+
+**Task:**
+Implement data loading from SOQL via Apex controller.
+
+**Requirements:**
+1. Update d3Gauge.js:
+   ```javascript
+   import executeQuery from '@salesforce/apex/D3ChartController.executeQuery';
+   
+   async loadData() {
+       // Priority: recordCollection > soqlQuery
+       if (this.recordCollection && this.recordCollection.length > 0) {
+           this.processData(this.recordCollection);
+           return;
+       }
+       
+       if (this.soqlQuery) {
+           try {
+               const result = await executeQuery({ queryString: this.soqlQuery });
+               this.processData(result);
+           } catch (e) {
+               this.error = 'Query failed: ' + e.body?.message || e.message;
+           }
+       }
+   }
+   
+   processData(records) {
+       if (!records || records.length === 0) {
+           this.currentValue = 0;
+           return;
+       }
+       // For gauge, use first record's valueField
+       const record = records[0];
+       this.currentValue = Number(record[this.valueField]) || 0;
+   }
+   ```
+
+2. Jest tests:
+   - Mock executeQuery Apex call
+   - Test recordCollection takes priority
+   - Test SOQL query fallback
+   - Test error handling
+
+**Reuses:** D3ChartController.executeQuery (Step 06)
+
+**Wiring:** Extends Step 20 - now gauge loads real data
+```
+
+---
+
+### Prompt 22: Gauge Component - Navigation Click
+
+```text
+You are continuing the D3.js LWC chart library project.
+
+**Context:**
+- Previous: d3Gauge loads data from SOQL
+- Need click-to-navigate functionality
+
+**Task:**
+Implement navigation on gauge click.
+
+**Requirements:**
+1. Import NavigationMixin:
+   ```javascript
+   import { NavigationMixin } from 'lightning/navigation';
+   
+   export default class D3Gauge extends NavigationMixin(LightningElement) {
+   ```
+
+2. Add click handler to arc:
+   ```javascript
+   g.append('path')
+       .attr('d', arcValue)
+       .attr('fill', colors[0])
+       .style('cursor', this.targetRecordId ? 'pointer' : 'default')
+       .on('click', () => this.handleClick());
+   
+   handleClick() {
+       if (!this.targetRecordId) return;
+       
+       this[NavigationMixin.Navigate]({
+           type: 'standard__recordPage',
+           attributes: {
+               recordId: this.targetRecordId,
+               actionName: 'view'
+           }
+       });
+   }
+   ```
+
+3. Jest tests:
+   - Click handler fires
+   - Navigation called with correct recordId
+   - No navigation if targetRecordId empty
+
+**Wiring:** Completes gauge navigation per spec
+```
+
+---
+
+### Prompt 23: Gauge Component - Complete Tests
+
+```text
+You are continuing the D3.js LWC chart library project.
+
+**Context:**
+- Previous: d3Gauge has all functionality
+- Need comprehensive test coverage
+
+**Task:**
+Complete Jest test suite for d3Gauge.
+
+**Requirements:**
+1. Test coverage targets:
+   - All @api properties
+   - Data loading (collection vs SOQL)
+   - Rendering lifecycle
+   - Theme application
+   - Resize behavior
+   - Click navigation
+   - Error states
+   - advancedConfig parsing
+
+2. Add edge case tests:
+   - Null/undefined values
+   - Invalid SOQL
+   - Missing valueField
+   - Extreme values (negative, very large)
+
+3. Run: npm test -- --coverage
+
+**Output:**
+- >90% code coverage for d3Gauge
+- All tests passing
+
+**Wiring:** Gauge component complete - ready for next chart
+```
+
+---
+
+### Prompt 24: Bar Chart - Component Skeleton
+
+```text
+You are continuing the D3.js LWC chart library project.
+
+**Context:**
+- Previous: d3Gauge complete with full test coverage
+- Now building d3-bar-chart (first aggregation chart)
+
+**Task:**
+Create d3BarChart skeleton following gauge pattern.
+
+**Requirements:**
+1. Create force-app/main/default/lwc/d3BarChart/ with:
+   - d3BarChart.html (same structure as gauge)
+   - d3BarChart.js (skeleton with @api properties)
+   - d3BarChart.css (same as gauge)
+   - d3BarChart.js-meta.xml (bar-specific properties)
+
+2. Bar-specific @api properties:
+   - recordCollection, soqlQuery (same as gauge)
+   - groupByField (String, required) - category axis
+   - valueField (String, required) - value axis
+   - operation (String: Sum/Count/Average)
+   - height (Integer, default 300)
+   - theme (String)
+   - advancedConfig (String)
+
+3. Skeleton should:
+   - Load D3
+   - Show loading state
+   - Call loadData() and renderChart() stubs
+
+**Reuses:** Same structure as d3Gauge (Step 15)
+
+**Wiring:** Foundation for bar chart
+```
+
+---
+
+### Prompt 25: Bar Chart - Aggregation Wiring
+
+```text
+You are continuing the D3.js LWC chart library project.
+
+**Context:**
+- Previous: d3BarChart skeleton created
+- Need to wire in dataService aggregation
+
+**Task:**
+Implement data loading with aggregation.
+
+**Requirements:**
+1. Update d3BarChart.js loadData():
+   ```javascript
+   import { prepareData, aggregateData, OPERATIONS } from 'c/dataService';
+   import executeQuery from '@salesforce/apex/D3ChartController.executeQuery';
+   
+   async loadData() {
+       let rawData = [];
+       
+       if (this.recordCollection?.length > 0) {
+           rawData = this.recordCollection;
+       } else if (this.soqlQuery) {
+           rawData = await executeQuery({ queryString: this.soqlQuery });
+       }
+       
+       // Validate and truncate
+       const prepared = prepareData(rawData, {
+           requiredFields: [this.groupByField, this.valueField],
+           limit: 2000
+       });
+       
+       if (!prepared.valid) {
+           this.error = prepared.error;
+           return;
+       }
+       
+       if (prepared.truncated) {
+           this.showTruncationWarning(prepared.originalCount);
+       }
+       
+       // Aggregate
+       this.chartData = aggregateData(
+           prepared.data,
+           this.groupByField,
+           this.valueField,
+           this.operation || OPERATIONS.SUM
+       );
+   }
+   ```
+
+2. Add truncation warning toast:
+   ```javascript
+   import { ShowToastEvent } from 'lightning/platformShowToastEvent';
+   
+   showTruncationWarning(originalCount) {
+       this.dispatchEvent(new ShowToastEvent({
+           title: 'Data Truncated',
+           message: `Displaying first 2,000 of ${originalCount} records`,
+           variant: 'warning'
+       }));
+   }
+   ```
+
+3. Jest tests:
+   - Aggregation called with correct params
+   - Truncation warning fires when needed
+   - Validation errors set this.error
+
+**Reuses:** dataService (Steps 7-9), D3ChartController (Step 6)
+
+**Wiring:** Bar chart now processes real data
+```
+
+---
+
+### Prompt 26: Bar Chart - Basic Render
+
+```text
+You are continuing the D3.js LWC chart library project.
+
+**Context:**
+- Previous: d3BarChart has aggregated data in this.chartData
+- Need to render bars
+
+**Task:**
+Implement basic bar rendering with D3.
+
+**Requirements:**
+1. Update renderChart():
+   ```javascript
+   renderChart() {
+       if (!this.chartData?.length || !this.d3) return;
+       
+       const d3 = this.d3;
+       const container = this.refs.container;
+       const svg = this.refs.svg;
+       
+       const { width, height, margins } = calculateDimensions(
+           container.clientWidth,
+           this.height,
+           { top: 20, right: 20, bottom: 50, left: 60 }
+       );
+       
+       d3.select(svg).selectAll('*').remove();
+       
+       const svgEl = d3.select(svg)
+           .attr('width', width + margins.left + margins.right)
+           .attr('height', height + margins.top + margins.bottom);
+       
+       const g = svgEl.append('g')
+           .attr('transform', `translate(${margins.left},${margins.top})`);
+       
+       // Scales
+       const x = d3.scaleBand()
+           .domain(this.chartData.map(d => d.label))
+           .range([0, width])
+           .padding(0.2);
+       
+       const y = d3.scaleLinear()
+           .domain([0, d3.max(this.chartData, d => d.value)])
+           .nice()
+           .range([height, 0]);
+       
+       // Colors
+       const colors = getColors(this.theme, this.chartData.length);
+       
+       // Bars
+       g.selectAll('.bar')
+           .data(this.chartData)
+           .join('rect')
+           .attr('class', 'bar')
+           .attr('x', d => x(d.label))
+           .attr('y', d => y(d.value))
+           .attr('width', x.bandwidth())
+           .attr('height', d => height - y(d.value))
+           .attr('fill', (d, i) => colors[i]);
+   }
+   ```
+
+2. Jest tests:
+   - SVG elements created
+   - Correct number of bars
+   - Bars have proper dimensions
+
+**Reuses:** chartUtils.calculateDimensions (Step 14), themeService.getColors (Step 11)
+
+**Wiring:** Bar chart renders visual bars
+```
+
+---
+
+### Prompt 27: Bar Chart - Axes and Grid
+
+```text
+You are continuing the D3.js LWC chart library project.
+
+**Context:**
+- Previous: d3BarChart renders bars
+- Need axes and optional grid lines
+
+**Task:**
+Add X and Y axes with optional grid.
+
+**Requirements:**
+1. Add to renderChart() after bars:
+   ```javascript
+   // X Axis
+   g.append('g')
+       .attr('class', 'x-axis')
+       .attr('transform', `translate(0,${height})`)
+       .call(d3.axisBottom(x))
+       .selectAll('text')
+       .attr('transform', 'rotate(-45)')
+       .style('text-anchor', 'end')
+       .each(function(d) {
+           const text = d3.select(this);
+           text.text(truncateLabel(text.text(), 15));
+       });
+   
+   // Y Axis
+   g.append('g')
+       .attr('class', 'y-axis')
+       .call(d3.axisLeft(y).tickFormat(d => formatNumber(d, 0)));
+   
+   // Grid (if enabled)
+   if (this.parsedConfig.showGrid) {
+       g.append('g')
+           .attr('class', 'grid')
+           .call(d3.axisLeft(y)
+               .tickSize(-width)
+               .tickFormat('')
+           )
+           .style('stroke-opacity', 0.1);
+   }
+   ```
+
+2. Add CSS for axis styling (SLDS-like):
+   ```css
+   .x-axis text, .y-axis text {
+       font-size: 12px;
+       fill: #706e6b;
+   }
+   .grid line {
+       stroke: #e5e5e5;
+   }
+   ```
+
+3. Jest tests:
+   - Axes render
+   - Grid conditional on config
+   - Labels truncated
+
+**Reuses:** chartUtils.truncateLabel, chartUtils.formatNumber (Step 12)
+
+**Wiring:** Bar chart has proper axes
+```
+
+---
+
+### Prompt 28: Bar Chart - Theme Integration
+
+```text
+You are continuing the D3.js LWC chart library project.
+
+**Context:**
+- Previous: d3BarChart has axes
+- Need full theme and tooltip integration
+
+**Task:**
+Add theme colors and hover tooltips.
+
+**Requirements:**
+1. Add tooltip on hover:
+   ```javascript
+   // In connectedCallback after D3 loads:
+   this.tooltip = createTooltip(this.refs.container);
+   
+   // In renderChart, update bars:
+   g.selectAll('.bar')
+       .on('mouseover', (event, d) => {
+           const content = buildTooltipContent(d.label, d.value, {
+               formatter: formatNumber
+           });
+           const [x, y] = d3.pointer(event, svg);
+           this.tooltip.show(content, x, y);
+       })
+       .on('mouseout', () => this.tooltip.hide());
+   
+   // In disconnectedCallback:
+   if (this.tooltip) this.tooltip.destroy();
+   ```
+
+2. Support customColors from advancedConfig
+3. Add hover highlight effect (opacity change)
+
+4. Jest tests:
+   - Tooltip shows on hover
+   - Custom colors applied
+   - Hover effect works
+
+**Reuses:** chartUtils.createTooltip, chartUtils.buildTooltipContent (Step 13)
+
+**Wiring:** Bar chart has interactive tooltips
+```
+
+---
+
+### Prompt 29: Bar Chart - Resize Handling
+
+```text
+You are continuing the D3.js LWC chart library project.
+
+**Context:**
+- Previous: d3BarChart has tooltips
+- Need responsive resize
+
+**Task:**
+Implement responsive behavior.
+
+**Requirements:**
+1. Wire createResizeHandler (same pattern as gauge)
+2. Compact mode adjustments:
+   - width < 400: rotate labels 90°, fewer ticks
+   - width < 250: hide axis labels, show only bars
+3. Smooth re-render on resize
+4. Cleanup on disconnect
+
+**Reuses:** chartUtils.createResizeHandler, shouldUseCompactMode (Step 14)
+
+**Wiring:** Same pattern as gauge Step 19
+```
+
+---
+
+### Prompt 30: Bar Chart - App Builder XML
+
+```text
+You are continuing the D3.js LWC chart library project.
+
+**Context:**
+- Previous: d3BarChart has resize handling
+- Need complete App Builder config
+
+**Task:**
+Finalize meta XML for bar chart.
+
+**Requirements:**
+1. Properties:
+   - soqlQuery, recordCollection
+   - groupByField (required)
+   - valueField (required)
+   - operation (picklist: Sum, Count, Average)
+   - height
+   - theme
+   - advancedConfig
+
+2. Flow support with proper role attributes
+3. All targets enabled
+
+**Wiring:** Same pattern as gauge Step 20
+```
+
+---
+
+### Prompt 31: Bar Chart - SOQL Integration
+
+```text
+You are continuing the D3.js LWC chart library project.
+
+**Context:**
+- Previous: d3BarChart has App Builder config
+- Need complete SOQL integration
+
+**Task:**
+Verify SOQL data loading works end-to-end.
+
+**Requirements:**
+1. Already implemented in Step 25 - verify:
+   - executeQuery import works
+   - Error handling shows in UI
+   - Data flows through aggregation
+
+2. Add test with sample SOQL:
+   ```
+   SELECT StageName, Amount FROM Opportunity WHERE Amount > 0
+   ```
+
+3. Jest tests for error scenarios
+
+**Reuses:** D3ChartController.executeQuery (Step 6)
+
+**Wiring:** Bar chart loads real Salesforce data
+```
+
+---
+
+### Prompt 32: Bar Chart - Drill-Down Click
+
+```text
+You are continuing the D3.js LWC chart library project.
+
+**Context:**
+- Previous: d3BarChart loads SOQL data
+- Need drill-down click interaction
+
+**Task:**
+Implement click-to-filter drill-down.
+
+**Requirements:**
+1. Add click handler to bars:
+   ```javascript
+   .on('click', (event, d) => {
+       this.dispatchEvent(new CustomEvent('bardrill', {
+           detail: {
+               label: d.label,
+               value: d.value,
+               field: this.groupByField
+           },
+           bubbles: true,
+           composed: true
+       }));
+   });
+   ```
+
+2. For App Builder, add optional filterField property that:
+   - Updates a parent filter component
+   - Or navigates to filtered list view
+
+3. Style: cursor pointer on bars
+
+4. Jest tests:
+   - Custom event fired on click
+   - Event detail contains correct data
+
+**Wiring:** Bar chart has drill-down per spec
+```
+
+---
+
+### Prompt 33: Bar Chart - advancedConfig JSON
+
+```text
+You are continuing the D3.js LWC chart library project.
+
+**Context:**
+- Previous: d3BarChart has drill-down
+- Need full advancedConfig support
+
+**Task:**
+Support all advanced configuration options.
+
+**Requirements:**
+1. Supported advancedConfig properties:
+   ```javascript
+   {
+       "showGrid": true,
+       "legendPosition": "bottom", // top, bottom, none
+       "customColors": ["#FF0000", "#00FF00"],
+       "barRadius": 4, // rounded corners
+       "sortOrder": "desc", // asc, desc, none
+       "maxBars": 10 // limit visible bars
+   }
+   ```
+
+2. Implement each option in renderChart()
+3. Add legend rendering if position != none
+
+4. Jest tests for each option
+
+**Wiring:** Bar chart fully configurable
+```
+
+---
+
+### Prompt 34: Bar Chart - Complete Tests
+
+```text
+You are continuing the D3.js LWC chart library project.
+
+**Context:**
+- Previous: d3BarChart has all features
+- Need comprehensive test coverage
+
+**Task:**
+Complete test suite for d3BarChart.
+
+**Requirements:**
+1. Test all scenarios:
+   - Data loading (collection, SOQL, empty)
+   - Aggregation (Sum, Count, Average)
+   - Rendering (bars, axes, grid, legend)
+   - Interactions (hover, click)
+   - Resize behavior
+   - advancedConfig options
+   - Error handling
+
+2. Target >90% coverage
+
+**Output:** Bar chart complete with full tests
+
+**Wiring:** Ready for donut chart
+```
+
+---
+
+### Prompt 35: Donut Chart - Component Skeleton
+
+```text
+You are continuing the D3.js LWC chart library project.
+
+**Context:**
+- Previous: d3BarChart complete
+- Now building d3-donut-chart
+
+**Task:**
+Create d3DonutChart skeleton.
+
+**Requirements:**
+1. Same folder structure as bar chart
+2. Same @api properties (groupByField, valueField, operation)
+3. Additional donut-specific properties:
+   - innerRadiusRatio (Number, default 0.6)
+   - showLabels (Boolean)
+
+**Reuses:** Pattern from Steps 15, 24
+
+**Wiring:** Foundation for donut
+```
+
+---
+
+### Prompt 36: Donut Chart - Pie Generator
+
+```text
+You are continuing the D3.js LWC chart library project.
+
+**Context:**
+- Previous: d3DonutChart skeleton
+- Need pie/arc rendering
+
+**Task:**
+Implement D3 pie generator for donut.
+
+**Requirements:**
+1. Use d3.pie() to generate arc data:
+   ```javascript
+   const pie = d3.pie()
+       .value(d => d.value)
+       .sort(null);
+   
+   const arc = d3.arc()
+       .innerRadius(radius * this.innerRadiusRatio)
+       .outerRadius(radius);
+   
+   const arcs = pie(this.chartData);
+   ```
+
+2. Render arcs with theme colors
+3. Add center text showing total
+
+**Reuses:** themeService.getColors
+
+**Wiring:** Donut renders circular chart
+```
+
+---
+
+### Prompt 37: Donut Chart - Slice Interactions
+
+```text
+You are continuing the D3.js LWC chart library project.
+
+**Context:**
+- Previous: d3DonutChart renders arcs
+- Need slice interactions
+
+**Task:**
+Add hover and click interactions.
+
+**Requirements:**
+1. Hover: 
+   - Expand slice slightly (scale transform)
+   - Show tooltip with label/value/percentage
+
+2. Click:
+   - Dispatch 'slicedrill' custom event
+   - Optional: "explode" slice outward
+
+3. Calculate percentages for tooltip
+
+**Reuses:** chartUtils.createTooltip, formatPercent
+
+**Wiring:** Donut has slice interactions
+```
+
+---
+
+### Prompt 38: Donut Chart - Legend
+
+```text
+You are continuing the D3.js LWC chart library project.
+
+**Context:**
+- Previous: d3DonutChart has slice interactions
+- Need legend display
+
+**Task:**
+Implement legend component.
+
+**Requirements:**
+1. Legend positions: top, bottom, right, none
+2. Legend items show:
+   - Color swatch
+   - Label (truncated)
+   - Value or percentage
+
+3. Click legend item to toggle slice visibility
+4. Responsive: hide legend in compact mode
+
+**Wiring:** Donut has complete legend
+```
+
+---
+
+### Prompt 39: Donut Chart - Full Integration
+
+```text
+You are continuing the D3.js LWC chart library project.
+
+**Context:**
+- Previous: d3DonutChart has legend
+- Need complete integration
+
+**Task:**
+Complete donut chart with all features.
+
+**Requirements:**
+1. Wire up:
+   - Data loading (same as bar)
+   - App Builder XML
+   - Resize handling
+   - advancedConfig support
+
+2. Full test suite
+3. Verify in App Builder
+
+**Reuses:** All shared modules
+
+**Wiring:** Donut chart complete
+```
+
+---
+
+### Prompt 40: Line Chart - Component Skeleton
+
+```text
+You are continuing the D3.js LWC chart library project.
+
+**Context:**
+- Previous: d3DonutChart complete
+- Now building d3-line-chart for time series
+
+**Task:**
+Create d3LineChart skeleton.
+
+**Requirements:**
+1. Line-specific @api properties:
+   - dateField (String) - X axis
+   - valueField (String) - Y axis
+   - seriesField (String, optional) - for multiple lines
+   - dateFormat (String) - parsing format
+
+2. No aggregation needed for line chart (raw data)
+
+**Wiring:** Foundation for line chart
+```
+
+---
+
+### Prompt 41: Line Chart - Time Scale
+
+```text
+You are continuing the D3.js LWC chart library project.
+
+**Context:**
+- Previous: d3LineChart skeleton
+- Need time scale handling
+
+**Task:**
+Implement D3 time scale for X axis.
+
+**Requirements:**
+1. Parse dates from dateField:
+   ```javascript
+   const parseDate = d3.timeParse(this.dateFormat || '%Y-%m-%d');
+   this.chartData = rawData.map(d => ({
+       date: parseDate(d[this.dateField]),
+       value: +d[this.valueField],
+       series: d[this.seriesField] || 'default'
+   })).filter(d => d.date);
+   ```
+
+2. Create time scale:
+   ```javascript
+   const x = d3.scaleTime()
+       .domain(d3.extent(this.chartData, d => d.date))
+       .range([0, width]);
+   ```
+
+3. Format axis ticks appropriately
+
+**Wiring:** Line chart handles dates
+```
+
+---
+
+### Prompt 42: Line Chart - Path Render
+
+```text
+You are continuing the D3.js LWC chart library project.
+
+**Context:**
+- Previous: d3LineChart has time scale
+- Need line path rendering
+
+**Task:**
+Render line path with D3.
+
+**Requirements:**
+1. Create line generator:
+   ```javascript
+   const line = d3.line()
+       .x(d => x(d.date))
+       .y(d => y(d.value))
+       .curve(d3.curveMonotoneX);
+   ```
+
+2. Draw path
+3. Add optional area fill
+4. Add data points (circles) at each value
+
+**Wiring:** Line chart renders path
+```
+
+---
+
+### Prompt 43: Line Chart - Multi-Series
+
+```text
+You are continuing the D3.js LWC chart library project.
+
+**Context:**
+- Previous: d3LineChart renders single line
+- Need multi-series support
+
+**Task:**
+Support multiple lines by series field.
+
+**Requirements:**
+1. Group data by seriesField
+2. Render one line per series with different colors
+3. Add legend for series
+4. Handle series toggle (click legend to hide/show)
+
+**Reuses:** themeService.getColors
+
+**Wiring:** Line chart supports multiple series
+```
+
+---
+
+### Prompt 44: Line Chart - Full Integration
+
+```text
+You are continuing the D3.js LWC chart library project.
+
+**Context:**
+- Previous: d3LineChart has multi-series
+- Need complete integration
+
+**Task:**
+Complete line chart with all features.
+
+**Requirements:**
+1. Wire up: tooltips, resize, App Builder XML, advancedConfig
+2. Drill-down: click point to highlight/filter
+3. Full test suite
+
+**Reuses:** All shared modules
+
+**Wiring:** Line chart complete
+```
+
+---
+
+### Prompt 45: Histogram - Component Skeleton
+
+```text
+You are continuing the D3.js LWC chart library project.
+
+**Context:**
+- Previous: d3LineChart complete
+- Now building d3-histogram for distributions
+
+**Task:**
+Create d3Histogram skeleton.
+
+**Requirements:**
+1. Histogram-specific @api properties:
+   - valueField (String) - numeric field to bin
+   - binCount (Integer, default 10)
+   - binThresholds (String, JSON array of custom thresholds)
+
+2. No groupByField - histogram auto-bins numeric data
+
+**Wiring:** Foundation for histogram
+```
+
+---
+
+### Prompt 46: Histogram - Bin Generator
+
+```text
+You are continuing the D3.js LWC chart library project.
+
+**Context:**
+- Previous: d3Histogram skeleton
+- Need binning logic
+
+**Task:**
+Implement D3 histogram binning.
+
+**Requirements:**
+1. Create histogram generator:
+   ```javascript
+   const values = rawData.map(d => +d[this.valueField]).filter(v => !isNaN(v));
+   
+   const histogram = d3.histogram()
+       .domain(d3.extent(values))
+       .thresholds(this.binCount);
+   
+   this.chartData = histogram(values).map(bin => ({
+       x0: bin.x0,
+       x1: bin.x1,
+       count: bin.length
+   }));
+   ```
+
+2. Support custom thresholds from binThresholds
+3. Render as bar chart (bins on X, count on Y)
+
+**Wiring:** Histogram bins data correctly
+```
+
+---
+
+### Prompt 47: Histogram - Full Integration
+
+```text
+You are continuing the D3.js LWC chart library project.
+
+**Context:**
+- Previous: d3Histogram has binning
+- Need complete integration
+
+**Task:**
+Complete histogram with all features.
+
+**Requirements:**
+1. Render bins as bars
+2. Tooltips showing range and count
+3. Click bin to navigate to filtered list
+4. Full test suite
+
+**Reuses:** Bar chart rendering pattern
+
+**Wiring:** Histogram complete
+```
+
+---
+
+### Prompt 48: Scatter Plot - Component Skeleton
+
+```text
+You are continuing the D3.js LWC chart library project.
+
+**Context:**
+- Previous: d3Histogram complete
+- Now building d3-scatter-plot
+
+**Task:**
+Create d3ScatterPlot skeleton.
+
+**Requirements:**
+1. Scatter-specific @api properties:
+   - xField (String) - X axis numeric field
+   - yField (String) - Y axis numeric field
+   - sizeField (String, optional) - bubble size
+   - colorField (String, optional) - color by category
+   - recordIdField (String, default 'Id') - for navigation
+
+**Wiring:** Foundation for scatter plot
+```
+
+---
+
+### Prompt 49: Scatter Plot - Dual Axis
+
+```text
+You are continuing the D3.js LWC chart library project.
+
+**Context:**
+- Previous: d3ScatterPlot skeleton
+- Need dual axis rendering
+
+**Task:**
+Implement X and Y axes for correlation display.
+
+**Requirements:**
+1. Both axes numeric (linear scale)
+2. Support log scale option
+3. Render dots at (x, y) coordinates
+4. Size by sizeField if provided
+5. Color by colorField if provided
+
+**Wiring:** Scatter renders correlation view
+```
+
+---
+
+### Prompt 50: Scatter Plot - Full Integration
+
+```text
+You are continuing the D3.js LWC chart library project.
+
+**Context:**
+- Previous: d3ScatterPlot has dual axis
+- Need complete integration
+
+**Task:**
+Complete scatter plot with all features.
+
+**Requirements:**
+1. Click dot: navigate to record
+2. Hover: tooltip with all field values
+3. Performance limit: 2000 points max
+4. Full test suite
+
+**Wiring:** Scatter plot complete
+```
+
+---
+
+### Prompt 51: Treemap - Component Skeleton
+
+```text
+You are continuing the D3.js LWC chart library project.
+
+**Context:**
+- Previous: d3ScatterPlot complete
+- Now building d3-treemap for hierarchies
+
+**Task:**
+Create d3Treemap skeleton.
+
+**Requirements:**
+1. Treemap-specific @api properties:
+   - hierarchyFields (String) - comma-separated field names for levels
+   - valueField (String) - size of rectangles
+   - Example: hierarchyFields="Industry,StageName" creates nested view
+
+**Wiring:** Foundation for treemap
+```
+
+---
+
+### Prompt 52: Treemap - Hierarchy Generation
+
+```text
+You are continuing the D3.js LWC chart library project.
+
+**Context:**
+- Previous: d3Treemap skeleton
+- Need hierarchy data structure
+
+**Task:**
+Convert flat data to D3 hierarchy.
+
+**Requirements:**
+1. Build nested structure from hierarchyFields:
+   ```javascript
+   const root = d3.hierarchy(nestedData)
+       .sum(d => d.value)
+       .sort((a, b) => b.value - a.value);
+   
+   d3.treemap()
+       .size([width, height])
+       .padding(2)
+       (root);
+   ```
+
+2. Render rectangles with labels
+3. Color by top-level category
+
+**Wiring:** Treemap renders nested rectangles
+```
+
+---
+
+### Prompt 53: Treemap - Full Integration
+
+```text
+You are continuing the D3.js LWC chart library project.
+
+**Context:**
+- Previous: d3Treemap has hierarchy
+- Need complete integration
+
+**Task:**
+Complete treemap with all features.
+
+**Requirements:**
+1. Click: zoom into sub-category (drill-down)
+2. Breadcrumb navigation to zoom out
+3. Tooltips with full hierarchy path
+4. Full test suite
+
+**Wiring:** Treemap complete
+```
+
+---
+
+### Prompt 54: Sankey - Component Skeleton
+
+```text
+You are continuing the D3.js LWC chart library project.
+
+**Context:**
+- Previous: d3Treemap complete
+- Now building d3-sankey for flow visualization
+
+**Task:**
+Create d3Sankey skeleton.
+
+**Requirements:**
+1. Sankey-specific @api properties:
+   - sourceField (String) - source node field
+   - targetField (String) - target node field
+   - valueField (String) - flow value/weight
+
+**Note:** Sankey requires d3-sankey plugin - add as separate static resource
+
+**Wiring:** Foundation for sankey
+```
+
+---
+
+### Prompt 55: Sankey - Links and Nodes
+
+```text
+You are continuing the D3.js LWC chart library project.
+
+**Context:**
+- Previous: d3Sankey skeleton
+- Need sankey layout
+
+**Task:**
+Implement sankey diagram rendering.
+
+**Requirements:**
+1. Transform data to nodes/links format:
+   ```javascript
+   // Unique nodes
+   const nodes = [...new Set([
+       ...data.map(d => d[this.sourceField]),
+       ...data.map(d => d[this.targetField])
+   ])].map(name => ({ name }));
+   
+   // Links with values
+   const links = data.map(d => ({
+       source: d[this.sourceField],
+       target: d[this.targetField],
+       value: d[this.valueField]
+   }));
+   ```
+
+2. Use d3-sankey layout
+3. Render nodes as rectangles, links as paths
+
+**Wiring:** Sankey renders flow diagram
+```
+
+---
+
+### Prompt 56: Sankey - Full Integration
+
+```text
+You are continuing the D3.js LWC chart library project.
+
+**Context:**
+- Previous: d3Sankey has layout
+- Need complete integration
+
+**Task:**
+Complete sankey with all features.
+
+**Requirements:**
+1. Click link: navigate to junction records
+2. Hover: highlight connected paths
+3. Full test suite
+
+**Wiring:** Sankey complete
+```
+
+---
+
+### Prompt 57: Force Graph - Component Skeleton
+
+```text
+You are continuing the D3.js LWC chart library project.
+
+**Context:**
+- Previous: d3Sankey complete
+- Now building d3-force-graph (most complex)
+
+**Task:**
+Create d3ForceGraph skeleton.
+
+**Requirements:**
+1. Force-specific @api properties:
+   - nodeIdField (String)
+   - nodeLabelField (String)
+   - sourceField (String) - for relationships
+   - targetField (String)
+   - nodeTypeField (String, optional) - for coloring
+
+**Performance:** Lower default limit (500 nodes)
+
+**Wiring:** Foundation for force graph
+```
+
+---
+
+### Prompt 58: Force Graph - Simulation
+
+```text
+You are continuing the D3.js LWC chart library project.
+
+**Context:**
+- Previous: d3ForceGraph skeleton
+- Need force simulation
+
+**Task:**
+Implement D3 force simulation.
+
+**Requirements:**
+1. Create simulation:
+   ```javascript
+   this.simulation = d3.forceSimulation(nodes)
+       .force('link', d3.forceLink(links).id(d => d.id))
+       .force('charge', d3.forceManyBody().strength(-100))
+       .force('center', d3.forceCenter(width/2, height/2))
+       .on('tick', () => this.updatePositions());
+   ```
+
+2. Render nodes as circles, links as lines
+3. Enable drag behavior
+4. Stop simulation on disconnect
+
+**Wiring:** Force graph simulates
+```
+
+---
+
+### Prompt 59: Force Graph - Full Integration
+
+```text
+You are continuing the D3.js LWC chart library project.
+
+**Context:**
+- Previous: d3ForceGraph has simulation
+- Need complete integration
+
+**Task:**
+Complete force graph with all features.
+
+**Requirements:**
+1. Click node: navigate to record
+2. Hover: highlight connected nodes
+3. Zoom/pan support
+4. Performance tuning (use DevTools profiler)
+5. Full test suite
+
+**Wiring:** Force graph complete
+```
+
+---
+
+### Prompt 60: Choropleth - Component Skeleton
+
+```text
+You are continuing the D3.js LWC chart library project.
+
+**Context:**
+- Previous: d3ForceGraph complete
+- Now building d3-choropleth (geo)
+
+**Task:**
+Create d3Choropleth skeleton.
+
+**Requirements:**
+1. Choropleth-specific @api properties:
+   - regionField (String) - matches TopoJSON region IDs
+   - valueField (String) - color intensity
+   - geoType (String) - 'us-states', 'world', 'custom'
+
+**Note:** Need TopoJSON static resources for map data
+
+**Wiring:** Foundation for choropleth
+```
+
+---
+
+### Prompt 61: Choropleth - TopoJSON Rendering
+
+```text
+You are continuing the D3.js LWC chart library project.
+
+**Context:**
+- Previous: d3Choropleth skeleton
+- Need geo rendering
+
+**Task:**
+Implement map rendering with TopoJSON.
+
+**Requirements:**
+1. Add TopoJSON static resources:
+   - us-states.json (US state boundaries)
+   - world.json (country boundaries)
+
+2. Load and render:
+   ```javascript
+   import { loadScript } from 'lightning/platformResourceLoader';
+   import TOPOJSON from '@salesforce/resourceUrl/topojson';
+   import US_STATES from '@salesforce/resourceUrl/usStates';
+   
+   // Use d3.geoPath() with appropriate projection
+   const projection = d3.geoAlbersUsa().fitSize([width, height], geoData);
+   const path = d3.geoPath().projection(projection);
+   ```
+
+3. Color regions by value using color scale
+
+**Wiring:** Choropleth renders map
+```
+
+---
+
+### Prompt 62: Choropleth - Full Integration
+
+```text
+You are continuing the D3.js LWC chart library project.
+
+**Context:**
+- Previous: d3Choropleth renders map
+- Need complete integration
+
+**Task:**
+Complete choropleth with all features.
+
+**Requirements:**
+1. Click region: zoom to sub-regions or filter
+2. Hover: tooltip with region name and value
+3. Color legend
+4. Full test suite
+
+**Wiring:** Choropleth complete - all 10 charts done!
+```
+
+---
+
+### Prompt 63: Showcase FlexiPage
+
+```text
+You are continuing the D3.js LWC chart library project.
+
+**Context:**
+- Previous: All 10 chart components complete
+- Need showcase page
+
+**Task:**
+Create FlexiPage with all charts.
+
+**Requirements:**
+1. Create: force-app/main/default/flexipages/D3_Chart_Showcase.flexipage-meta.xml
+2. Layout: 2-column grid
+3. Include one instance of each chart:
+   - d3Gauge (with sample value)
+   - d3BarChart (Opportunity by Stage)
+   - d3DonutChart (Account by Industry)
+   - d3LineChart (Opportunity by CloseDate)
+   - d3Histogram (Opportunity Amount distribution)
+   - d3ScatterPlot (Amount vs Probability)
+   - d3Treemap (Account hierarchy)
+   - d3Sankey (Lead to Opportunity flow)
+   - d3ForceGraph (Contact relationships)
+   - d3Choropleth (Account by BillingState)
+
+4. Each chart pre-configured with sample SOQL
+
+**Wiring:** Showcase demonstrates all components
+```
+
+---
+
+### Prompt 64: Showcase Sample Data
+
+```text
+You are continuing the D3.js LWC chart library project.
+
+**Context:**
+- Previous: Showcase FlexiPage created
+- Need sample data for demo
+
+**Task:**
+Create sample data and queries for showcase.
+
+**Requirements:**
+1. Create Apex data factory for sample records (optional)
+2. Or use standard objects with common queries:
+   ```
+   Gauge: SELECT COUNT() FROM Lead WHERE Status = 'Open'
+   Bar: SELECT StageName, SUM(Amount) FROM Opportunity GROUP BY StageName
+   Donut: SELECT Industry, COUNT(Id) FROM Account GROUP BY Industry
+   etc.
+   ```
+
+3. Document sample queries in README
+
+**Wiring:** Showcase has working demo data
+```
+
+---
+
+### Prompt 65: Final Integration Tests
+
+```text
+You are continuing the D3.js LWC chart library project.
+
+**Context:**
+- Previous: Showcase with sample data
+- Need final verification
+
+**Task:**
+Run full integration test suite.
+
+**Requirements:**
+1. All Jest tests pass: npm test
+2. All Apex tests pass: sf apex run test
+3. Deploy to scratch org: sf project deploy start
+4. Manual verification in App Builder
+5. Performance check with Chrome DevTools
+
+**Output:** All tests green, deployment successful
+
+**Wiring:** Project ready for release
+```
+
+---
+
+### Prompt 66: Documentation
+
+```text
+You are continuing the D3.js LWC chart library project.
+
+**Context:**
+- Previous: All tests pass, deployment works
+- Need user documentation
+
+**Task:**
+Create comprehensive README and docs.
+
+**Requirements:**
+1. Update README.md:
+   - Project overview
+   - Installation instructions
+   - Component reference (all 10 charts)
+   - Configuration options
+   - advancedConfig JSON reference
+   - Examples for each chart
+
+2. Create CHANGELOG.md
+3. Create CONTRIBUTING.md (if open source)
+
+4. Add JSDoc comments to all JS files
+5. Add ApexDoc comments to Apex classes
+
+**Output:** Complete documentation
+
+**Wiring:** Project complete!
+```
 
 ---
 
