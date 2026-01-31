@@ -1,31 +1,32 @@
 # Salesforce D3.js Chart Component Library
 
-A suite of Lightning Web Components (LWC) that wrap D3.js charts for use in Salesforce App Builder, Experience Builder, and Screen Flows. Components are drag-and-drop ready, capable of ingesting raw Salesforce record collections, and intelligently handle aggregation client-side.
+A complete suite of 10 Lightning Web Components (LWC) that wrap D3.js charts for use in Salesforce App Builder, Experience Builder, and Screen Flows. Components are drag-and-drop ready, capable of ingesting raw Salesforce record collections, and intelligently handle aggregation client-side.
 
 ## 🎯 Features
 
-- **10 Chart Types** (planned): Bar, Line, Donut, Gauge, Scatter, Histogram, Treemap, Sankey, Force Graph, Choropleth
+- **10 Chart Types**: Bar, Line, Donut, Gauge, Scatter, Histogram, Treemap, Sankey, Force Graph, Choropleth
 - **Drag-and-Drop Ready**: Fully configurable in Lightning App Builder
 - **Smart Aggregation**: Pass raw records, components handle Sum/Count/Average
 - **Responsive**: Uses ResizeObserver for adaptive reflow
 - **SLDS Styled**: Consistent with Salesforce Lightning Design System
 - **Theme Support**: 4 built-in palettes + custom colors via JSON config
 - **Performance Guardrails**: 2,000 record limit with user feedback
+- **671 Tests**: Comprehensive Jest test coverage
 
-## 📦 Current Status
+## 📦 Components
 
-| Component | Status | Description |
-|-----------|--------|-------------|
-| `c-d3-gauge` | ✅ Complete | Single KPI gauge with zones and thresholds |
-| `c-d3-bar-chart` | ✅ Complete | Aggregated bar chart with drill-down |
-| `c-d3-donut-chart` | 🚧 Planned | Part-to-whole with slice interactions |
-| `c-d3-line-chart` | 🚧 Planned | Time series with multi-series support |
-| `c-d3-scatter-plot` | 🚧 Planned | Correlation with record navigation |
-| `c-d3-histogram` | 🚧 Planned | Distribution with binning |
-| `c-d3-treemap` | 🚧 Planned | Hierarchical data visualization |
-| `c-d3-sankey` | 🚧 Planned | Flow/process visualization |
-| `c-d3-force-graph` | 🚧 Planned | Network graph with simulation |
-| `c-d3-choropleth` | 🚧 Planned | Geographic data visualization |
+| Component | Description | Key Features |
+|-----------|-------------|--------------|
+| `c-d3-gauge` | Single KPI gauge | Zones, thresholds, color coding |
+| `c-d3-bar-chart` | Aggregated bar chart | Vertical bars, drill-down, grid |
+| `c-d3-donut-chart` | Part-to-whole | Animated slices, center total, legend |
+| `c-d3-line-chart` | Time series | Multi-series, date parsing, curve types |
+| `c-d3-scatter-plot` | Correlation | Trend line, Pearson coefficient, point sizing |
+| `c-d3-histogram` | Distribution | Auto-binning, normal curve overlay, statistics |
+| `c-d3-treemap` | Hierarchical | Nested rectangles, zoom/drill, breadcrumbs |
+| `c-d3-sankey` | Flow/process | Nodes + links, gradient colors, flow values |
+| `c-d3-force-graph` | Network graph | Force simulation, drag, zoom/pan, node sizing |
+| `c-d3-choropleth` | Geographic map | US states, world, custom GeoJSON, color scales |
 
 ## 🏗️ Architecture
 
@@ -35,7 +36,7 @@ A suite of Lightning Web Components (LWC) that wrap D3.js charts for use in Sale
 ├─────────────────────────────────────────────────────────────────┤
 │  ┌──────────────────┐    ┌──────────────────────────────────┐  │
 │  │  Static Resource │    │         Apex Controller          │  │
-│  │     (D3.js)      │    │   D3ChartController.cls          │  │
+│  │   (D3.js v7)     │    │   D3ChartController.cls          │  │
 │  └────────┬─────────┘    │   - executeQuery(soql)           │  │
 │           │              │   - with sharing (security)      │  │
 │           │              └──────────────┬───────────────────┘  │
@@ -52,9 +53,12 @@ A suite of Lightning Web Components (LWC) that wrap D3.js charts for use in Sale
 │                             │                                   │
 │  ┌──────────────────────────▼───────────────────────────────┐  │
 │  │                    CHART COMPONENTS                       │  │
-│  │  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐        │  │
-│  │  │  Gauge  │ │   Bar   │ │  Donut  │ │  Line   │  ...   │  │
-│  │  └─────────┘ └─────────┘ └─────────┘ └─────────┘        │  │
+│  │  ┌───────┐ ┌─────┐ ┌───────┐ ┌──────┐ ┌─────────┐       │  │
+│  │  │ Gauge │ │ Bar │ │ Donut │ │ Line │ │ Scatter │       │  │
+│  │  └───────┘ └─────┘ └───────┘ └──────┘ └─────────┘       │  │
+│  │  ┌───────────┐ ┌─────────┐ ┌────────┐ ┌───────┐ ┌─────┐ │  │
+│  │  │ Histogram │ │ Treemap │ │ Sankey │ │ Force │ │ Map │ │  │
+│  │  └───────────┘ └─────────┘ └────────┘ └───────┘ └─────┘ │  │
 │  └──────────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -71,7 +75,7 @@ A suite of Lightning Web Components (LWC) that wrap D3.js charts for use in Sale
 
 ```bash
 # Clone the repository
-git clone <repo-url>
+git clone https://github.com/weytani/d3-lwc.git
 cd d3-lwc
 
 # Install dependencies
@@ -99,65 +103,60 @@ sf lightning dev app -o <your-org-alias>
 
 ## 📊 Component Usage
 
-### D3 Bar Chart
-
-Aggregates data by a category field and displays as vertical bars.
-
-**App Builder Configuration:**
+### Common Properties (All Charts)
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `soqlQuery` | String | SOQL query to fetch data |
-| `groupByField` | String | Field to group by (e.g., `StageName`) |
-| `valueField` | String | Numeric field to aggregate (e.g., `Amount`) |
-| `operation` | Picklist | `Sum`, `Count`, or `Average` |
-| `height` | Integer | Chart height in pixels (default: 300) |
-| `theme` | Picklist | Color theme |
-| `objectApiName` | String | Object for drill-down navigation |
+| `recordCollection` | Object[] | Data from Flow or parent component |
+| `soqlQuery` | String | SOQL query (used if recordCollection empty) |
+| `height` | Integer | Chart height in pixels |
+| `theme` | String | Color theme (Salesforce Standard, Warm, Cool, Vibrant) |
 | `advancedConfig` | String | JSON for advanced options |
 
-**Example SOQL:**
-```sql
-SELECT StageName, Amount FROM Opportunity
+### D3 Bar Chart
+
+```html
+<c-d3-bar-chart
+    record-collection={records}
+    group-by-field="StageName"
+    value-field="Amount"
+    operation="Sum"
+    height="300">
+</c-d3-bar-chart>
 ```
 
-**Advanced Config JSON:**
-```json
-{
-  "showGrid": true,
-  "showLegend": false,
-  "customColors": ["#FF5733", "#33FF57", "#3357FF"]
-}
+### D3 Line Chart
+
+```html
+<c-d3-line-chart
+    soql-query="SELECT CloseDate, Amount FROM Opportunity"
+    date-field="CloseDate"
+    value-field="Amount"
+    curve-type="monotone"
+    show-points="true">
+</c-d3-line-chart>
 ```
 
-### D3 Gauge Chart
+### D3 Scatter Plot
 
-Displays a single KPI value with optional zones and thresholds.
+```html
+<c-d3-scatter-plot
+    record-collection={records}
+    x-field="AnnualRevenue"
+    y-field="NumberOfEmployees"
+    show-trend-line="true">
+</c-d3-scatter-plot>
+```
 
-**App Builder Configuration:**
+### D3 Choropleth (US States)
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `soqlQuery` | String | Aggregate query (e.g., `SELECT COUNT(Id) total FROM Lead`) |
-| `valueField` | String | Field containing the value |
-| `minValue` | Integer | Minimum gauge value (default: 0) |
-| `maxValue` | Integer | Maximum gauge value (default: 100) |
-| `height` | Integer | Chart height in pixels (default: 200) |
-| `theme` | Picklist | Color theme |
-| `targetRecordId` | String | Record ID for click navigation |
-| `advancedConfig` | String | JSON for zones, colors, labels |
-
-**Advanced Config JSON:**
-```json
-{
-  "label": "Lead Count",
-  "valueFormat": "number",
-  "zones": [
-    { "min": 0, "max": 30, "color": "#ff4d4d" },
-    { "min": 30, "max": 70, "color": "#ffcc00" },
-    { "min": 70, "max": 100, "color": "#4CAF50" }
-  ]
-}
+```html
+<c-d3-choropleth
+    record-collection={records}
+    region-field="BillingState"
+    value-field="Amount"
+    map-type="us-states">
+</c-d3-choropleth>
 ```
 
 ## 🎨 Themes
@@ -166,12 +165,12 @@ Four built-in color palettes:
 
 | Theme | Colors |
 |-------|--------|
-| **Salesforce Standard** | Brand blue, orange, green, red, purple, pink, cyan, lime, yellow, light blue |
+| **Salesforce Standard** | Brand blue, orange, green, red, purple, pink, cyan, lime |
 | **Warm** | Reds, oranges, yellows |
 | **Cool** | Blues, purples, cyans |
 | **Vibrant** | High-contrast mixed colors |
 
-Custom colors can be specified via `advancedConfig`:
+Custom colors via `advancedConfig`:
 ```json
 {
   "customColors": ["#FF5733", "#33FF57", "#3357FF"]
@@ -182,55 +181,29 @@ Custom colors can be specified via `advancedConfig`:
 
 ### dataService
 
-Handles data validation, truncation, and aggregation.
-
 ```javascript
 import { validateData, prepareData, aggregateData, OPERATIONS } from 'c/dataService';
 
-// Validate data
-const { isValid, error } = validateData(records);
-
-// Prepare with truncation (2000 record limit)
 const { data, truncated } = prepareData(records, { requiredFields: ['Amount'] });
-
-// Aggregate
 const chartData = aggregateData(records, 'StageName', 'Amount', OPERATIONS.SUM);
-// Returns: [{ label: 'Closed Won', value: 50000 }, ...]
 ```
 
 ### themeService
 
-Provides color palettes and color scale generation.
-
 ```javascript
-import { getColors, createColorScale, PALETTES, THEMES } from 'c/themeService';
+import { getColors, createColorScale, THEMES } from 'c/themeService';
 
-// Get colors for a dataset
-const colors = getColors('Warm', 5); // Returns 5 warm colors
-
-// Create a color scale function
-const colorScale = createColorScale('Salesforce Standard', ['A', 'B', 'C']);
-colorScale('A'); // Returns first color
+const colors = getColors('Warm', 5);
+const colorScale = createColorScale('Salesforce Standard', categories);
 ```
 
 ### chartUtils
 
-Shared utilities for formatting, tooltips, and resize handling.
-
 ```javascript
-import { 
-  formatNumber, 
-  formatCurrency, 
-  formatPercent,
-  truncateLabel,
-  createTooltip,
-  createResizeHandler 
-} from 'c/chartUtils';
+import { formatNumber, formatCurrency, formatPercent, createTooltip } from 'c/chartUtils';
 
 formatNumber(1500000);  // "1.5M"
 formatCurrency(50000);  // "$50,000"
-formatPercent(0.75);    // "75.0%"
-truncateLabel('Very Long Label', 10); // "Very Lo..."
 ```
 
 ## 📁 Project Structure
@@ -239,72 +212,53 @@ truncateLabel('Very Long Label', 10); // "Very Lo..."
 d3-lwc/
 ├── force-app/main/default/
 │   ├── classes/
-│   │   ├── D3ChartController.cls       # Apex controller for SOQL
-│   │   └── D3ChartControllerTest.cls   # Apex tests
+│   │   ├── D3ChartController.cls
+│   │   └── D3ChartControllerTest.cls
 │   ├── lwc/
-│   │   ├── d3Lib/                      # D3.js loader utility
-│   │   ├── dataService/                # Data processing utilities
-│   │   ├── themeService/               # Color palette management
-│   │   ├── chartUtils/                 # Shared chart utilities
-│   │   ├── d3Gauge/                    # Gauge chart component
-│   │   ├── d3BarChart/                 # Bar chart component
-│   │   └── __mocks__/                  # Jest mocks for SF modules
+│   │   ├── d3Lib/              # D3.js loader
+│   │   ├── dataService/        # Data processing
+│   │   ├── themeService/       # Color palettes
+│   │   ├── chartUtils/         # Shared utilities
+│   │   ├── d3Gauge/
+│   │   ├── d3BarChart/
+│   │   ├── d3DonutChart/
+│   │   ├── d3LineChart/
+│   │   ├── d3ScatterPlot/
+│   │   ├── d3Histogram/
+│   │   ├── d3Treemap/
+│   │   ├── d3Sankey/
+│   │   ├── d3ForceGraph/
+│   │   └── d3Choropleth/
 │   └── staticresources/
-│       └── d3.js                       # D3.js v7 library
-├── jest.config.js                      # Jest configuration
+│       ├── d3.js               # D3.js v7
+│       └── usStates.js         # US states GeoJSON
+├── jest.config.js
 ├── package.json
-├── PROJECT-SPEC.md                     # Full technical specification
-├── IMPLEMENTATION-BLUEPRINT.md         # Step-by-step build plan
-└── README.md                           # This file
+├── PROJECT-SPEC.md
+├── IMPLEMENTATION-BLUEPRINT.md
+└── README.md
 ```
 
 ## 🧪 Testing
-
-The project uses Jest with `@salesforce/sfdx-lwc-jest` for unit testing.
 
 ```bash
 # Run all tests
 npm test
 
-# Run tests for a specific component
+# Run specific component tests
 npm test -- --testPathPattern=d3BarChart
 
 # Run with coverage
 npm test -- --coverage
 ```
 
-**Current Test Coverage:** 145 tests across 6 test suites
-
-## 🔧 Development Notes
-
-### Node.js Version
-
-Salesforce CLI has compatibility issues with Node.js v25. Use Node.js v20:
-
-```bash
-# If using Homebrew
-export PATH="/opt/homebrew/opt/node@20/bin:$PATH"
-
-# Or install via nvm/fnm
-fnm use 20
-```
-
-### Local Dev Server
-
-Enable "Local Development" in your org's Session Settings, then:
-
-```bash
-sf lightning dev app -o <org-alias>
-```
-
-This provides hot reload for LWC changes without redeploying.
+**Test Coverage:** 671 tests across 14 test suites
 
 ## 📚 References
 
 - [D3.js Documentation](https://d3js.org/)
 - [Lightning Web Components Guide](https://developer.salesforce.com/docs/component-library/documentation/en/lwc)
 - [SLDS Design Tokens](https://www.lightningdesignsystem.com/design-tokens/)
-- [LWC Local Development](https://developer.salesforce.com/docs/platform/lwc/guide/get-started-test-components.html)
 
 ## 📄 License
 
