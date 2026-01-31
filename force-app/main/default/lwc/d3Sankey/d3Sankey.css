@@ -1,0 +1,43 @@
+/* D3 Sankey Component Styles */
+
+.chart-container {
+    width: 100%;
+    position: relative;
+    overflow: hidden;
+}
+
+/* SVG container */
+.sankey-svg {
+    display: block;
+}
+
+/* Node rectangles */
+.node {
+    transition: opacity 0.2s ease;
+}
+
+.node:hover {
+    opacity: 0.85;
+}
+
+/* Link paths */
+.link {
+    fill: none;
+    transition: stroke-opacity 0.2s ease;
+}
+
+/* Labels */
+.labels text {
+    font-family: 'Salesforce Sans', Arial, sans-serif;
+    pointer-events: none;
+}
+
+/* Tooltip enhancements */
+.tooltip-content {
+    line-height: 1.4;
+}
+
+.tooltip-hint {
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    padding-top: 4px;
+}
