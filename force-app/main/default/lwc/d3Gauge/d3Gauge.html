@@ -1,0 +1,17 @@
+<template>
+    <div class="chart-container slds-is-relative" lwc:ref="container">
+        <!-- Loading State -->
+        <div class="chart-loading" if:true={isLoading}>
+            <lightning-spinner alternative-text="Loading chart" size="medium"></lightning-spinner>
+        </div>
+        
+        <!-- Error State -->
+        <div class="chart-error slds-text-color_error slds-p-around_medium" if:true={error}>
+            <lightning-icon icon-name="utility:error" size="small" variant="error" class="slds-m-right_x-small"></lightning-icon>
+            {error}
+        </div>
+        
+        <!-- Chart SVG -->
+        <svg lwc:ref="svg" class="chart-svg" if:false={hasError}></svg>
+    </div>
+</template>

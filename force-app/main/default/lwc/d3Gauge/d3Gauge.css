@@ -1,0 +1,48 @@
+/**
+ * D3 Gauge Chart Styles
+ */
+
+.chart-container {
+    width: 100%;
+    min-height: 100px;
+    overflow: hidden;
+}
+
+.chart-svg {
+    width: 100%;
+    display: block;
+}
+
+.chart-loading {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 150px;
+}
+
+.chart-error {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    text-align: center;
+    min-height: 100px;
+}
+
+/* Gauge specific styles */
+.gauge-value {
+    font-family: 'Salesforce Sans', Arial, sans-serif;
+}
+
+.gauge-label {
+    font-family: 'Salesforce Sans', Arial, sans-serif;
+}
+
+/* Hover effects */
+:host path {
+    transition: opacity 0.2s ease-in-out;
+}
+
+:host path:hover {
+    opacity: 0.85;
+}
