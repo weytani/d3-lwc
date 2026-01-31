@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<LightningComponentBundle xmlns="http://soap.sforce.com/2006/04/metadata">
+    <apiVersion>59.0</apiVersion>
+    <isExposed>true</isExposed>
+    <masterLabel>D3 Bar Chart</masterLabel>
+    <description>Interactive bar chart powered by D3.js with aggregation and drill-down support.</description>
+    <targets>
+        <target>lightning__AppPage</target>
+        <target>lightning__RecordPage</target>
+        <target>lightning__HomePage</target>
+    </targets>
+    <targetConfigs>
+        <targetConfig targets="lightning__AppPage,lightning__RecordPage,lightning__HomePage">
+            <!-- Data Source -->
+            <property name="soqlQuery" type="String" label="SOQL Query" 
+                description="SOQL query to fetch data"
+                placeholder="SELECT StageName, Amount FROM Opportunity"/>
+            
+            <!-- Field Mapping -->
+            <property name="groupByField" type="String" label="Group By Field" required="true"
+                description="API name of the category field (e.g., StageName)"
+                placeholder="StageName"/>
+            <property name="valueField" type="String" label="Value Field"
+                description="API name of the numeric field to aggregate (not required for Count)"
+                placeholder="Amount"/>
+            <property name="operation" type="String" label="Aggregation" default="Sum"
+                datasource="Sum,Count,Average"
+                description="How to aggregate the values"/>
+            
+            <!-- Appearance -->
+            <property name="height" type="Integer" label="Height (px)" default="300"
+                description="Chart height in pixels" min="150" max="800"/>
+            <property name="theme" type="String" label="Color Theme" default="Salesforce Standard"
+                datasource="Salesforce Standard,Warm,Cool,Vibrant"
+                description="Color palette for the chart"/>
+            
+            <!-- Drill-Down -->
+            <property name="objectApiName" type="String" label="Drill-Down Object"
+                description="Object API name for navigation on bar click"
+                placeholder="Opportunity"/>
+            <property name="filterField" type="String" label="Filter Field"
+                description="Field to filter by on drill-down (defaults to Group By Field)"/>
+            
+            <!-- Advanced -->
+            <property name="advancedConfig" type="String" label="Advanced Config (JSON)"
+                description='{"showGrid": true, "showLegend": false, "customColors": ["#FF5733"]}'/>
+        </targetConfig>
+    </targetConfigs>
+</LightningComponentBundle>

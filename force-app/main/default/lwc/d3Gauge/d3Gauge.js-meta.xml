@@ -8,12 +8,9 @@
         <target>lightning__AppPage</target>
         <target>lightning__RecordPage</target>
         <target>lightning__HomePage</target>
-        <target>lightningCommunity__Page</target>
-        <target>lightningCommunity__Default</target>
-        <target>lightning__FlowScreen</target>
     </targets>
     <targetConfigs>
-        <targetConfig targets="lightning__AppPage,lightning__RecordPage,lightning__HomePage,lightningCommunity__Page,lightningCommunity__Default">
+        <targetConfig targets="lightning__AppPage,lightning__RecordPage,lightning__HomePage">
             <!-- Data Source -->
             <property name="soqlQuery" type="String" label="SOQL Query" 
                 description="Query to fetch data. Use aggregate query for single value (e.g., SELECT COUNT(Id) total FROM Lead)"/>
@@ -40,24 +37,6 @@
             <!-- Navigation -->
             <property name="targetRecordId" type="String" label="Target Record ID"
                 description="Record ID to navigate to on click"/>
-        </targetConfig>
-        
-        <targetConfig targets="lightning__FlowScreen">
-            <!-- Flow Data Source -->
-            <property name="recordCollection" type="@salesforce/schema/SObject[]" label="Record Collection" 
-                role="inputOnly" description="Collection of records from Flow"/>
-            
-            <!-- Field Configuration -->
-            <property name="valueField" type="String" label="Value Field" required="true"/>
-            
-            <!-- Display Configuration -->
-            <property name="height" type="Integer" label="Height (px)" default="200"/>
-            <property name="minValue" type="Integer" label="Minimum Value" default="0"/>
-            <property name="maxValue" type="Integer" label="Maximum Value" default="100"/>
-            <property name="theme" type="String" label="Color Theme" default="Salesforce Standard"/>
-            
-            <!-- Advanced -->
-            <property name="advancedConfig" type="String" label="Advanced Config (JSON)"/>
         </targetConfig>
     </targetConfigs>
 </LightningComponentBundle>
