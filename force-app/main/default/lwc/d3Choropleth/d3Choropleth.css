@@ -1,0 +1,64 @@
+/* D3 Choropleth Map Styles */
+.chart-container {
+    width: 100%;
+    position: relative;
+    overflow: hidden;
+}
+
+.choropleth-svg {
+    display: block;
+}
+
+/* Region styles */
+.region {
+    transition: stroke 0.1s ease-in-out, stroke-width 0.1s ease-in-out;
+}
+
+.region:hover {
+    filter: brightness(0.95);
+}
+
+/* Region label styles */
+.region-label {
+    font-family: 'Salesforce Sans', Arial, sans-serif;
+    user-select: none;
+    text-shadow: 0 1px 2px rgba(255,255,255,0.8);
+}
+
+/* Legend styles */
+.legend {
+    font-family: 'Salesforce Sans', Arial, sans-serif;
+}
+
+/* Zoom controls */
+.zoom-controls {
+    user-select: none;
+}
+
+.zoom-button rect {
+    transition: fill 0.15s ease;
+}
+
+.zoom-button:hover rect {
+    fill: #f4f4f4;
+}
+
+.zoom-button:active rect {
+    fill: #e0e0e0;
+}
+
+/* Warning alert styling */
+.slds-alert_warning {
+    padding: 0.5rem 1rem;
+    font-size: 0.75rem;
+}
+
+/* No data state */
+.slds-text-color_weak {
+    color: #706e6b;
+}
+
+/* Tooltip styles */
+.tooltip-content {
+    line-height: 1.4;
+}
