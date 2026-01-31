@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<LightningComponentBundle xmlns="http://soap.sforce.com/2006/04/metadata">
+    <apiVersion>59.0</apiVersion>
+    <isExposed>true</isExposed>
+    <masterLabel>D3 Scatter Plot</masterLabel>
+    <description>Interactive scatter plot for visualizing correlation between two numeric fields. Click points to navigate to records.</description>
+    <targets>
+        <target>lightning__AppPage</target>
+        <target>lightning__RecordPage</target>
+        <target>lightning__HomePage</target>
+        <target>lightning__FlowScreen</target>
+        <target>lightningCommunity__Page</target>
+        <target>lightningCommunity__Default</target>
+    </targets>
+    <targetConfigs>
+        <targetConfig targets="lightning__AppPage,lightning__RecordPage,lightning__HomePage,lightningCommunity__Page,lightningCommunity__Default">
+            <!-- Data Source -->
+            <property name="soqlQuery" type="String" label="SOQL Query" 
+                description="SOQL query to fetch scatter plot data"
+                placeholder="SELECT Id, Amount, Probability FROM Opportunity WHERE Amount > 0"/>
+            
+            <!-- Field Mapping - X Axis -->
+            <property name="xAxisField" type="String" label="X-Axis Field" required="true"
+                description="API name of the numeric field for X-axis"
+                placeholder="Amount"/>
+            <property name="xAxisLabel" type="String" label="X-Axis Label"
+                description="Display label for X-axis (defaults to field name)"
+                placeholder="Deal Amount"/>
+            
+            <!-- Field Mapping - Y Axis -->
+            <property name="yAxisField" type="String" label="Y-Axis Field" required="true"
+                description="API name of the numeric field for Y-axis"
+                placeholder="Probability"/>
+            <property name="yAxisLabel" type="String" label="Y-Axis Label"
+                description="Display label for Y-axis (defaults to field name)"
+                placeholder="Win Probability"/>
+            
+            <!-- Grouping -->
+            <property name="groupByField" type="String" label="Group By Field"
+                description="Optional field to color-code points by category (e.g., StageName)"
+                placeholder="StageName"/>
+            
+            <!-- Navigation -->
+            <property name="recordIdField" type="String" label="Record ID Field" default="Id"
+                description="Field containing the record ID for navigation"/>
+            <property name="objectApiName" type="String" label="Object API Name"
+                description="Object API name for record navigation on click"
+                placeholder="Opportunity"/>
+            
+            <!-- Appearance -->
+            <property name="height" type="Integer" label="Height (px)" default="300"
+                description="Chart height in pixels" min="150" max="800"/>
+            <property name="theme" type="String" label="Color Theme" default="Salesforce Standard"
+                datasource="Salesforce Standard,Warm,Cool,Vibrant"
+                description="Color palette for the chart"/>
+            <property name="pointSize" type="Integer" label="Point Size" default="6"
+                description="Size of data points in pixels" min="3" max="15"/>
+            
+            <!-- Correlation Features -->
+            <property name="showTrendLine" type="Boolean" label="Show Trend Line" default="false"
+                description="Display linear regression trend line"/>
+            <property name="showCorrelation" type="Boolean" label="Show Correlation" default="false"
+                description="Display Pearson correlation coefficient"/>
+            
+            <!-- Advanced -->
+            <property name="advancedConfig" type="String" label="Advanced Config (JSON)"
+                description='{"showGrid": true, "customColors": ["#1589EE", "#FF5D2D"]}'/>
+        </targetConfig>
+        
+        <!-- Flow Screen Configuration -->
+        <targetConfig targets="lightning__FlowScreen">
+            <property name="recordCollection" type="@salesforce/schema/SObject[]" label="Record Collection"
+                description="Collection of records from Flow"/>
+            <property name="xAxisField" type="String" label="X-Axis Field" required="true"
+                description="API name of the numeric field for X-axis"/>
+            <property name="yAxisField" type="String" label="Y-Axis Field" required="true"
+                description="API name of the numeric field for Y-axis"/>
+            <property name="xAxisLabel" type="String" label="X-Axis Label"
+                description="Display label for X-axis"/>
+            <property name="yAxisLabel" type="String" label="Y-Axis Label"
+                description="Display label for Y-axis"/>
+            <property name="groupByField" type="String" label="Group By Field"
+                description="Optional field for color grouping"/>
+            <property name="recordIdField" type="String" label="Record ID Field" default="Id"/>
+            <property name="objectApiName" type="String" label="Object API Name"
+                description="Object for navigation on click"/>
+            <property name="height" type="Integer" label="Height (px)" default="300"/>
+            <property name="theme" type="String" label="Color Theme" default="Salesforce Standard"/>
+            <property name="pointSize" type="Integer" label="Point Size" default="6"/>
+            <property name="showTrendLine" type="Boolean" label="Show Trend Line" default="false"/>
+            <property name="showCorrelation" type="Boolean" label="Show Correlation" default="false"/>
+        </targetConfig>
+    </targetConfigs>
+</LightningComponentBundle>

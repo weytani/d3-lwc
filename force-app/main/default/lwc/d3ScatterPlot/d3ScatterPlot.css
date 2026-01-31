@@ -1,0 +1,144 @@
+/* D3 Scatter Plot Styles */
+
+.chart-container {
+    position: relative;
+    width: 100%;
+    overflow: hidden;
+}
+
+/* SVG Styles */
+.scatter-plot-svg {
+    font-family: 'Salesforce Sans', Arial, sans-serif;
+}
+
+/* Axis Styles */
+.x-axis text,
+.y-axis text {
+    font-size: 12px;
+    fill: #706e6b;
+}
+
+.x-axis path,
+.x-axis line,
+.y-axis path,
+.y-axis line {
+    stroke: #dddbda;
+}
+
+/* Axis Labels */
+.axis-label {
+    font-size: 12px;
+    fill: #706e6b;
+    font-weight: 500;
+}
+
+/* Grid Styles */
+.grid line {
+    stroke: #e0e0e0;
+    stroke-opacity: 0.7;
+    shape-rendering: crispEdges;
+}
+
+.grid path {
+    stroke-width: 0;
+}
+
+/* Point Styles */
+.point {
+    transition: r 0.15s ease, opacity 0.15s ease;
+}
+
+.point:hover {
+    filter: brightness(1.1);
+}
+
+/* Trend Line */
+.trend-line {
+    pointer-events: none;
+}
+
+/* Correlation Info */
+.correlation-info {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 16px;
+    padding-top: 8px;
+    border-top: 1px solid #e0e0e0;
+    font-size: 12px;
+    color: #706e6b;
+}
+
+.trend-line-legend {
+    display: inline-flex;
+    align-items: center;
+}
+
+.trend-line-indicator {
+    display: inline-block;
+    width: 24px;
+    height: 2px;
+    background: #FF6B6B;
+    margin-right: 8px;
+    border-radius: 1px;
+}
+
+.trend-line-label {
+    color: #706e6b;
+}
+
+.correlation-value {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.correlation-value strong {
+    color: #16325c;
+    font-family: monospace;
+    font-size: 14px;
+}
+
+.correlation-strength {
+    color: #9faab7;
+    font-style: italic;
+}
+
+/* Legend Styles */
+.legend-item {
+    cursor: default;
+}
+
+.legend-item text {
+    font-size: 11px;
+    fill: #706e6b;
+}
+
+/* Tooltip hint */
+.tooltip-hint {
+    margin-top: 8px;
+    font-size: 11px;
+    color: #9faab7;
+    font-style: italic;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    padding-top: 4px;
+}
+
+/* Warning Banner */
+.slds-alert_warning {
+    font-size: 12px;
+    padding: 0.5rem 1rem;
+}
+
+/* Responsive adjustments */
+@media (max-width: 480px) {
+    .correlation-info {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .axis-label {
+        font-size: 10px;
+    }
+}
