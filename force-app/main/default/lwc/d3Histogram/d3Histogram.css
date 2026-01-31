@@ -1,0 +1,90 @@
+/**
+ * Styles for D3 Histogram component
+ */
+
+.chart-container {
+    position: relative;
+    width: 100%;
+}
+
+/* Axis styling */
+.x-axis text,
+.y-axis text {
+    font-size: 11px;
+    fill: #706e6b;
+}
+
+.x-axis path,
+.x-axis line,
+.y-axis path,
+.y-axis line {
+    stroke: #c9c9c9;
+}
+
+.axis-label {
+    font-size: 12px;
+    fill: #706e6b;
+}
+
+/* Grid lines */
+.grid line {
+    stroke: #e0e0e0;
+    stroke-opacity: 0.7;
+}
+
+.grid path {
+    stroke-width: 0;
+}
+
+/* Bar styling */
+.bar {
+    transition: opacity 0.15s ease-in-out;
+}
+
+.bar:hover {
+    opacity: 0.8;
+}
+
+/* Normal curve */
+.normal-curve {
+    pointer-events: none;
+}
+
+/* Mean line */
+.mean-line {
+    pointer-events: none;
+}
+
+.mean-label {
+    pointer-events: none;
+    font-weight: 600;
+}
+
+/* Statistics info panel */
+.statistics-info {
+    background-color: #f3f3f3;
+    font-size: 12px;
+}
+
+.stat-label {
+    color: #706e6b;
+    margin-right: 4px;
+}
+
+.stat-value {
+    font-weight: 600;
+    color: #16325c;
+}
+
+/* Tooltip hint */
+.tooltip-hint {
+    font-size: 11px;
+    color: #706e6b;
+    font-style: italic;
+}
+
+/* SVG responsive */
+.histogram-svg {
+    display: block;
+    max-width: 100%;
+}
