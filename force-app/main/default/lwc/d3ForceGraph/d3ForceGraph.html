@@ -1,0 +1,47 @@
+<template>
+    <div class="slds-card">
+        <!-- Loading State -->
+        <template lwc:if={isLoading}>
+            <div class="slds-align_absolute-center" style="height: 200px;">
+                <lightning-spinner alternative-text="Loading chart..." size="medium"></lightning-spinner>
+            </div>
+        </template>
+
+        <!-- Error State -->
+        <template lwc:elseif={hasError}>
+            <div class="slds-align_absolute-center slds-text-color_error" style="height: 200px; padding: 1rem;">
+                <div class="slds-text-align_center">
+                    <lightning-icon icon-name="utility:error" alternative-text="Error" size="large" variant="error"></lightning-icon>
+                    <p class="slds-m-top_small">{error}</p>
+                </div>
+            </div>
+        </template>
+
+        <!-- Chart Container (has data) -->
+        <template lwc:elseif={hasData}>
+            <!-- Truncation Warning -->
+            <template lwc:if={truncatedWarning}>
+                <div class="slds-notify slds-notify_alert slds-alert_warning slds-m-bottom_x-small" role="alert">
+                    <span class="slds-assistive-text">warning</span>
+                    <span class="slds-icon_container slds-m-right_x-small">
+                        <lightning-icon icon-name="utility:warning" size="x-small" variant="warning"></lightning-icon>
+                    </span>
+                    <h2>{truncatedWarning}</h2>
+                </div>
+            </template>
+
+            <!-- Chart -->
+            <div class="chart-container" style={containerStyle}></div>
+        </template>
+
+        <!-- No Data State -->
+        <template lwc:else>
+            <div class="slds-align_absolute-center slds-text-color_weak" style="height: 200px;">
+                <div class="slds-text-align_center">
+                    <lightning-icon icon-name="utility:world" alternative-text="No data" size="large"></lightning-icon>
+                    <p class="slds-m-top_small">No network data available</p>
+                </div>
+            </div>
+        </template>
+    </div>
+</template>

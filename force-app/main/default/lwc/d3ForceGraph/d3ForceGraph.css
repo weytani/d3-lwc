@@ -1,0 +1,63 @@
+/* D3 Force Graph Styles */
+.chart-container {
+    width: 100%;
+    position: relative;
+    overflow: hidden;
+}
+
+.force-graph-svg {
+    display: block;
+    cursor: grab;
+}
+
+.force-graph-svg:active {
+    cursor: grabbing;
+}
+
+/* Node styles */
+.node circle {
+    transition: opacity 0.15s ease-in-out;
+}
+
+.node circle:hover {
+    stroke-width: 2.5;
+}
+
+.node-label {
+    font-family: 'Salesforce Sans', Arial, sans-serif;
+    user-select: none;
+    transition: opacity 0.15s ease-in-out;
+}
+
+/* Link styles */
+.link {
+    stroke-linecap: round;
+    transition: stroke-opacity 0.15s ease-in-out, stroke-width 0.15s ease-in-out;
+}
+
+/* Legend styles */
+.legend {
+    font-family: 'Salesforce Sans', Arial, sans-serif;
+}
+
+.legend-item {
+    cursor: default;
+}
+
+/* Tooltip hint */
+.tooltip-hint {
+    margin-top: 4px;
+    font-size: 11px;
+    color: #aaa;
+}
+
+/* Warning alert styling */
+.slds-alert_warning {
+    padding: 0.5rem 1rem;
+    font-size: 0.75rem;
+}
+
+/* No data state */
+.slds-text-color_weak {
+    color: #706e6b;
+}
