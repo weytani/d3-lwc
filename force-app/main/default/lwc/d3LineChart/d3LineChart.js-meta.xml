@@ -8,12 +8,10 @@
         <target>lightning__AppPage</target>
         <target>lightning__RecordPage</target>
         <target>lightning__HomePage</target>
-        <target>lightning__FlowScreen</target>
-        <target>lightningCommunity__Page</target>
         <target>lightningCommunity__Default</target>
     </targets>
     <targetConfigs>
-        <targetConfig targets="lightning__AppPage,lightning__RecordPage,lightning__HomePage,lightningCommunity__Page,lightningCommunity__Default">
+        <targetConfig targets="lightning__AppPage,lightning__RecordPage,lightning__HomePage,lightningCommunity__Default">
             <!-- Data Source -->
             <property name="soqlQuery" type="String" label="SOQL Query" 
                 description="SOQL query to fetch time series data"
@@ -59,24 +57,6 @@
             <!-- Advanced -->
             <property name="advancedConfig" type="String" label="Advanced Config (JSON)"
                 description='{"showGrid": true, "customColors": ["#1589EE", "#FF5D2D"]}'/>
-        </targetConfig>
-        
-        <!-- Flow Screen Configuration -->
-        <targetConfig targets="lightning__FlowScreen">
-            <property name="recordCollection" type="@salesforce/schema/SObject[]" label="Record Collection"
-                description="Collection of records from Flow"/>
-            <property name="dateField" type="String" label="Date Field" required="true"
-                description="API name of the date field"/>
-            <property name="valueField" type="String" label="Value Field" required="true"
-                description="API name of the numeric field"/>
-            <property name="seriesField" type="String" label="Series Field"
-                description="Optional field for multi-series"/>
-            <property name="dateFormat" type="String" label="Date Format" default="ISO"/>
-            <property name="height" type="Integer" label="Height (px)" default="300"/>
-            <property name="theme" type="String" label="Color Theme" default="Salesforce Standard"/>
-            <property name="curveType" type="String" label="Line Style" default="monotone"/>
-            <property name="showPoints" type="Boolean" label="Show Data Points" default="true"/>
-            <property name="showLegend" type="Boolean" label="Show Legend"/>
         </targetConfig>
     </targetConfigs>
 </LightningComponentBundle>

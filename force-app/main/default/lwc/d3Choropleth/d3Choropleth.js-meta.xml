@@ -8,12 +8,10 @@
         <target>lightning__AppPage</target>
         <target>lightning__RecordPage</target>
         <target>lightning__HomePage</target>
-        <target>lightningCommunity__Page</target>
         <target>lightningCommunity__Default</target>
-        <target>lightning__FlowScreen</target>
     </targets>
     <targetConfigs>
-        <targetConfig targets="lightning__AppPage,lightning__RecordPage,lightning__HomePage,lightningCommunity__Page,lightningCommunity__Default">
+        <targetConfig targets="lightning__AppPage,lightning__RecordPage,lightning__HomePage,lightningCommunity__Default">
             <!-- Data Source -->
             <property name="soqlQuery" type="String" label="SOQL Query" 
                 description="Query to fetch data (e.g., SELECT BillingState, COUNT(Id) FROM Account GROUP BY BillingState)"/>
@@ -82,20 +80,6 @@
             <!-- Advanced -->
             <property name="advancedConfig" type="String" label="Advanced Config (JSON)"
                 description="JSON object for additional customization"/>
-        </targetConfig>
-        
-        <targetConfig targets="lightning__FlowScreen">
-            <property name="recordCollection" type="@salesforce/schema/SObject[]" label="Record Collection" role="inputOnly"
-                description="Collection of records to display on map"/>
-            <property name="regionField" type="String" label="Region Field" default="BillingState"/>
-            <property name="valueField" type="String" label="Value Field"/>
-            <property name="operation" type="String" label="Aggregation" default="Sum"/>
-            <property name="mapType" type="String" label="Map Type" default="us-states"/>
-            <property name="height" type="Integer" label="Height (px)" default="400"/>
-            <property name="lowColor" type="String" label="Low Value Color" default="#f7fbff"/>
-            <property name="highColor" type="String" label="High Value Color" default="#08519c"/>
-            <property name="showLegend" type="Boolean" label="Show Legend" default="true"/>
-            <property name="enableZoom" type="Boolean" label="Enable Zoom/Pan" default="true"/>
         </targetConfig>
     </targetConfigs>
 </LightningComponentBundle>

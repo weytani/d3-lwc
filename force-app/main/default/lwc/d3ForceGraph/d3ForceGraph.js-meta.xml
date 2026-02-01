@@ -8,12 +8,10 @@
         <target>lightning__AppPage</target>
         <target>lightning__RecordPage</target>
         <target>lightning__HomePage</target>
-        <target>lightningCommunity__Page</target>
         <target>lightningCommunity__Default</target>
-        <target>lightning__FlowScreen</target>
     </targets>
     <targetConfigs>
-        <targetConfig targets="lightning__AppPage,lightning__RecordPage,lightning__HomePage,lightningCommunity__Page,lightningCommunity__Default">
+        <targetConfig targets="lightning__AppPage,lightning__RecordPage,lightning__HomePage,lightningCommunity__Default">
             <!-- Data Source -->
             <property name="soqlQuery" type="String" label="SOQL Query" 
                 description="Query to fetch relationship data (e.g., SELECT Id, AccountId, ContactId FROM AccountContactRelation)"/>
@@ -75,20 +73,6 @@
             <!-- Advanced -->
             <property name="advancedConfig" type="String" label="Advanced Config (JSON)"
                 description="JSON object for additional customization"/>
-        </targetConfig>
-        
-        <targetConfig targets="lightning__FlowScreen">
-            <property name="recordCollection" type="@salesforce/schema/SObject[]" label="Record Collection" role="inputOnly"
-                description="Collection of relationship records"/>
-            <property name="sourceField" type="String" label="Source Field" default="ParentId"/>
-            <property name="targetField" type="String" label="Target Field" default="Id"/>
-            <property name="nodeLabelField" type="String" label="Node Label Field" default="Name"/>
-            <property name="nodeTypeField" type="String" label="Node Type Field"/>
-            <property name="height" type="Integer" label="Height (px)" default="400"/>
-            <property name="theme" type="String" label="Color Theme" default="Salesforce Standard"/>
-            <property name="showLabels" type="Boolean" label="Show Labels" default="true"/>
-            <property name="enableZoom" type="Boolean" label="Enable Zoom/Pan" default="true"/>
-            <property name="enableDrag" type="Boolean" label="Enable Drag" default="true"/>
         </targetConfig>
     </targetConfigs>
 </LightningComponentBundle>

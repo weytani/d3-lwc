@@ -8,12 +8,10 @@
         <target>lightning__AppPage</target>
         <target>lightning__RecordPage</target>
         <target>lightning__HomePage</target>
-        <target>lightning__FlowScreen</target>
-        <target>lightningCommunity__Page</target>
         <target>lightningCommunity__Default</target>
     </targets>
     <targetConfigs>
-        <targetConfig targets="lightning__AppPage,lightning__RecordPage,lightning__HomePage,lightningCommunity__Page,lightningCommunity__Default">
+        <targetConfig targets="lightning__AppPage,lightning__RecordPage,lightning__HomePage,lightningCommunity__Default">
             <!-- Data Source -->
             <property name="soqlQuery" type="String" label="SOQL Query" 
                 description="SOQL query to fetch scatter plot data"
@@ -65,30 +63,6 @@
             <!-- Advanced -->
             <property name="advancedConfig" type="String" label="Advanced Config (JSON)"
                 description='{"showGrid": true, "customColors": ["#1589EE", "#FF5D2D"]}'/>
-        </targetConfig>
-        
-        <!-- Flow Screen Configuration -->
-        <targetConfig targets="lightning__FlowScreen">
-            <property name="recordCollection" type="@salesforce/schema/SObject[]" label="Record Collection"
-                description="Collection of records from Flow"/>
-            <property name="xAxisField" type="String" label="X-Axis Field" required="true"
-                description="API name of the numeric field for X-axis"/>
-            <property name="yAxisField" type="String" label="Y-Axis Field" required="true"
-                description="API name of the numeric field for Y-axis"/>
-            <property name="xAxisLabel" type="String" label="X-Axis Label"
-                description="Display label for X-axis"/>
-            <property name="yAxisLabel" type="String" label="Y-Axis Label"
-                description="Display label for Y-axis"/>
-            <property name="groupByField" type="String" label="Group By Field"
-                description="Optional field for color grouping"/>
-            <property name="recordIdField" type="String" label="Record ID Field" default="Id"/>
-            <property name="objectApiName" type="String" label="Object API Name"
-                description="Object for navigation on click"/>
-            <property name="height" type="Integer" label="Height (px)" default="300"/>
-            <property name="theme" type="String" label="Color Theme" default="Salesforce Standard"/>
-            <property name="pointSize" type="Integer" label="Point Size" default="6"/>
-            <property name="showTrendLine" type="Boolean" label="Show Trend Line" default="false"/>
-            <property name="showCorrelation" type="Boolean" label="Show Correlation" default="false"/>
         </targetConfig>
     </targetConfigs>
 </LightningComponentBundle>
