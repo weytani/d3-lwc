@@ -520,9 +520,10 @@ export default class D3Choropleth extends NavigationMixin(LightningElement) {
         const projection = this.createProjection(width, height, margin);
         const path = d3.geoPath().projection(projection);
 
-        // Draw regions
+        // Draw regions - use full geoData for geoAlbersUsa (it handles AK/HI positioning)
+        const geoFeatures = this.geoData.features;
         const regions = g.selectAll('path.region')
-            .data(this.geoData.features.filter(f => f.geometry))
+            .data(geoFeatures.filter(f => f.geometry))
             .join('path')
             .attr('class', 'region')
             .attr('d', path)
@@ -572,9 +573,32 @@ export default class D3Choropleth extends NavigationMixin(LightningElement) {
         const innerHeight = height - margin.top - margin.bottom;
 
         if (this.mapType === 'us-states') {
-            // Use Albers USA projection for US maps (includes Alaska/Hawaii)
-            return d3.geoAlbersUsa()
-                .fitSize([innerWidth, innerHeight], this.geoData);
+            // Filter to continental US (exclude AK, HI, PR which have problematic coordinates)
+            const continentalUS = {
+                type: 'FeatureCollection',
+                features: this.geoData.features.filter(f => {
+                    const id = f.id || f.properties?.id || f.properties?.abbrev;
+                    return !['02', 'AK', '15', 'HI', '72', 'PR'].includes(id);
+                })
+            };
+            // Store filtered data for rendering
+            this._filteredGeoData = continentalUS;
+
+            // Use standard D3 geoAlbersUsa projection for US maps
+            // For best results, return projection and let fitExtent handle scaling
+            const projection = d3.geoAlbersUsa();
+
+            // Manually set scale based on expected US map dimensions
+            // geoAlbersUsa at scale 1070 fits roughly 960x600
+            const targetWidth = innerWidth * 0.95;
+            const targetHeight = innerHeight * 0.95;
+            const scaleX = targetWidth / 960 * 1070;
+            const scaleY = targetHeight / 600 * 1070;
+            const scale = Math.min(scaleX, scaleY);
+
+            return projection
+                .scale(scale)
+                .translate([innerWidth / 2, innerHeight / 2]);
         } else if (this.mapType === 'world') {
             // Use Natural Earth projection for world maps
             return d3.geoNaturalEarth1()
