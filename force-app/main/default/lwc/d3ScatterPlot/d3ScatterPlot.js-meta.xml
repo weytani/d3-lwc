@@ -20,7 +20,7 @@
                 placeholder="SELECT Id, Amount, Probability FROM Opportunity WHERE Amount > 0"/>
             
             <!-- Field Mapping - X Axis -->
-            <property name="xAxisField" type="String" label="X-Axis Field" required="true"
+            <property name="xAxisField" type="String" label="X-Axis Field" default="Amount"
                 description="API name of the numeric field for X-axis"
                 placeholder="Amount"/>
             <property name="xAxisLabel" type="String" label="X-Axis Label"
@@ -28,7 +28,7 @@
                 placeholder="Deal Amount"/>
             
             <!-- Field Mapping - Y Axis -->
-            <property name="yAxisField" type="String" label="Y-Axis Field" required="true"
+            <property name="yAxisField" type="String" label="Y-Axis Field" default="Probability"
                 description="API name of the numeric field for Y-axis"
                 placeholder="Probability"/>
             <property name="yAxisLabel" type="String" label="Y-Axis Label"

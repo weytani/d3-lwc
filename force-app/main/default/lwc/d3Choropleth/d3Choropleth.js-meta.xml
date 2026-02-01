@@ -19,7 +19,7 @@
                 description="Query to fetch data (e.g., SELECT BillingState, COUNT(Id) FROM Account GROUP BY BillingState)"/>
             
             <!-- Field Mapping -->
-            <property name="regionField" type="String" label="Region Field" required="true"
+            <property name="regionField" type="String" label="Region Field" default="BillingState"
                 description="Field containing region identifier (state code, country code, etc.)"/>
             <property name="valueField" type="String" label="Value Field"
                 description="Field containing the value to aggregate (not needed for Count)"/>
@@ -87,7 +87,7 @@
         <targetConfig targets="lightning__FlowScreen">
             <property name="recordCollection" type="@salesforce/schema/SObject[]" label="Record Collection" role="inputOnly"
                 description="Collection of records to display on map"/>
-            <property name="regionField" type="String" label="Region Field" required="true"/>
+            <property name="regionField" type="String" label="Region Field" default="BillingState"/>
             <property name="valueField" type="String" label="Value Field"/>
             <property name="operation" type="String" label="Aggregation" default="Sum"/>
             <property name="mapType" type="String" label="Map Type" default="us-states"/>

@@ -20,10 +20,10 @@
                 placeholder="SELECT LeadSource, Status, COUNT(Id) cnt FROM Lead GROUP BY LeadSource, Status"/>
             
             <!-- Field Mapping -->
-            <property name="sourceField" type="String" label="Source Field" required="true"
+            <property name="sourceField" type="String" label="Source Field" default="LeadSource"
                 description="API name of the field containing the source node name"
                 placeholder="LeadSource"/>
-            <property name="targetField" type="String" label="Target Field" required="true"
+            <property name="targetField" type="String" label="Target Field" default="StageName"
                 description="API name of the field containing the target node name"
                 placeholder="Status"/>
             <property name="valueField" type="String" label="Value Field"
@@ -81,9 +81,9 @@
         <targetConfig targets="lightning__FlowScreen">
             <property name="recordCollection" type="@salesforce/schema/SObject[]" label="Record Collection"
                 description="Collection of records from Flow with source, target, and value fields"/>
-            <property name="sourceField" type="String" label="Source Field" required="true"
+            <property name="sourceField" type="String" label="Source Field" default="LeadSource"
                 description="API name of the field containing the source node name"/>
-            <property name="targetField" type="String" label="Target Field" required="true"
+            <property name="targetField" type="String" label="Target Field" default="StageName"
                 description="API name of the field containing the target node name"/>
             <property name="valueField" type="String" label="Value Field"
                 description="API name of the numeric field for flow value"/>

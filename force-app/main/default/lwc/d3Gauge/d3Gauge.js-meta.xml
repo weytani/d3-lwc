@@ -16,7 +16,7 @@
                 description="Query to fetch data. Use aggregate query for single value (e.g., SELECT COUNT(Id) total FROM Lead)"/>
             
             <!-- Field Configuration -->
-            <property name="valueField" type="String" label="Value Field" required="true" 
+            <property name="valueField" type="String" label="Value Field" default="Amount" 
                 description="API name of the numeric field to display"/>
             
             <!-- Display Configuration -->

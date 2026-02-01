@@ -20,7 +20,7 @@
                 placeholder="SELECT Amount FROM Opportunity WHERE Amount > 0"/>
             
             <!-- Field Mapping -->
-            <property name="valueField" type="String" label="Value Field" required="true"
+            <property name="valueField" type="String" label="Value Field" default="Amount"
                 description="API name of the numeric field to analyze"
                 placeholder="Amount"/>
             <property name="xAxisLabel" type="String" label="X-Axis Label"
@@ -61,7 +61,7 @@
         <targetConfig targets="lightning__FlowScreen">
             <property name="recordCollection" type="@salesforce/schema/SObject[]" label="Record Collection"
                 description="Collection of records from Flow"/>
-            <property name="valueField" type="String" label="Value Field" required="true"
+            <property name="valueField" type="String" label="Value Field" default="Amount"
                 description="API name of the numeric field to analyze"/>
             <property name="xAxisLabel" type="String" label="X-Axis Label"
                 description="Display label for X-axis"/>

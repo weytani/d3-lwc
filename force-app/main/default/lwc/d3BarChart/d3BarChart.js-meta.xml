@@ -17,10 +17,10 @@
                 placeholder="SELECT StageName, Amount FROM Opportunity"/>
             
             <!-- Field Mapping -->
-            <property name="groupByField" type="String" label="Group By Field" required="true"
+            <property name="groupByField" type="String" label="Group By Field" default="Name"
                 description="API name of the category field (e.g., StageName)"
                 placeholder="StageName"/>
-            <property name="valueField" type="String" label="Value Field"
+            <property name="valueField" type="String" label="Value Field" default="Amount"
                 description="API name of the numeric field to aggregate (not required for Count)"
                 placeholder="Amount"/>
             <property name="operation" type="String" label="Aggregation" default="Sum"

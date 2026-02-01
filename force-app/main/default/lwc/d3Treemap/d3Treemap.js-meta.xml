@@ -20,7 +20,7 @@
                 placeholder="SELECT StageName, Type, Amount FROM Opportunity WHERE Amount > 0"/>
             
             <!-- Field Mapping -->
-            <property name="groupByField" type="String" label="Group By Field" required="true"
+            <property name="groupByField" type="String" label="Group By Field" default="Name"
                 description="API name of the field to group by (primary hierarchy level)"
                 placeholder="StageName"/>
             <property name="secondaryGroupByField" type="String" label="Secondary Group Field"
@@ -75,7 +75,7 @@
         <targetConfig targets="lightning__FlowScreen">
             <property name="recordCollection" type="@salesforce/schema/SObject[]" label="Record Collection"
                 description="Collection of records from Flow"/>
-            <property name="groupByField" type="String" label="Group By Field" required="true"
+            <property name="groupByField" type="String" label="Group By Field" default="Name"
                 description="API name of the field to group by"/>
             <property name="secondaryGroupByField" type="String" label="Secondary Group Field"
                 description="Optional second field for nested hierarchy"/>

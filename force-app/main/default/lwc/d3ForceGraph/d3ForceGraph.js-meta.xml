@@ -23,9 +23,9 @@
                 description="Field containing the unique node identifier"/>
             <property name="nodeLabelField" type="String" label="Node Label Field" default="Name"
                 description="Field containing the node display label"/>
-            <property name="sourceField" type="String" label="Source Field" required="true"
+            <property name="sourceField" type="String" label="Source Field" default="ParentId"
                 description="Field containing the source node ID in relationships"/>
-            <property name="targetField" type="String" label="Target Field" required="true"
+            <property name="targetField" type="String" label="Target Field" default="Id"
                 description="Field containing the target node ID in relationships"/>
             <property name="nodeSizeField" type="String" label="Node Size Field"
                 description="Optional numeric field for varying node sizes"/>
@@ -80,8 +80,8 @@
         <targetConfig targets="lightning__FlowScreen">
             <property name="recordCollection" type="@salesforce/schema/SObject[]" label="Record Collection" role="inputOnly"
                 description="Collection of relationship records"/>
-            <property name="sourceField" type="String" label="Source Field" required="true"/>
-            <property name="targetField" type="String" label="Target Field" required="true"/>
+            <property name="sourceField" type="String" label="Source Field" default="ParentId"/>
+            <property name="targetField" type="String" label="Target Field" default="Id"/>
             <property name="nodeLabelField" type="String" label="Node Label Field" default="Name"/>
             <property name="nodeTypeField" type="String" label="Node Type Field"/>
             <property name="height" type="Integer" label="Height (px)" default="400"/>

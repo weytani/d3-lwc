@@ -20,10 +20,10 @@
                 placeholder="SELECT CloseDate, Amount, StageName FROM Opportunity ORDER BY CloseDate"/>
             
             <!-- Field Mapping -->
-            <property name="dateField" type="String" label="Date Field" required="true"
+            <property name="dateField" type="String" label="Date Field" default="CreatedDate"
                 description="API name of the date/datetime field for X-axis"
                 placeholder="CloseDate"/>
-            <property name="valueField" type="String" label="Value Field" required="true"
+            <property name="valueField" type="String" label="Value Field" default="Amount"
                 description="API name of the numeric field for Y-axis"
                 placeholder="Amount"/>
             <property name="seriesField" type="String" label="Series Field"
