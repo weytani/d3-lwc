@@ -2,7 +2,11 @@
 
 A complete suite of 10 Lightning Web Components (LWC) that wrap D3.js charts for use in Salesforce App Builder, Experience Builder, and Screen Flows. Components are drag-and-drop ready, capable of ingesting raw Salesforce record collections, and intelligently handle aggregation client-side.
 
-## 🎯 Features
+## Screenshot
+
+![D3 LWC Charts in Salesforce](d3-lwc-smoke-test.png)
+
+## Features
 
 - **10 Chart Types**: Bar, Line, Donut, Gauge, Scatter, Histogram, Treemap, Sankey, Force Graph, Choropleth
 - **Drag-and-Drop Ready**: Fully configurable in Lightning App Builder
