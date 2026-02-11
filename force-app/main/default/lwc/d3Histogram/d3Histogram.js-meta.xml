@@ -1,9 +1,10 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <LightningComponentBundle xmlns="http://soap.sforce.com/2006/04/metadata">
     <apiVersion>59.0</apiVersion>
     <isExposed>true</isExposed>
     <masterLabel>D3 Histogram</masterLabel>
-    <description>Distribution visualization for numeric fields using automatic binning. Click bins to navigate to filtered records.</description>
+    <description
+  >Distribution visualization for numeric fields using automatic binning. Click bins to navigate to filtered records.</description>
     <targets>
         <target>lightning__AppPage</target>
         <target>lightning__RecordPage</target>
@@ -11,48 +12,170 @@
         <target>lightningCommunity__Default</target>
     </targets>
     <targetConfigs>
-        <targetConfig targets="lightning__AppPage,lightning__RecordPage,lightning__HomePage,lightningCommunity__Default">
+        <targetConfig
+      targets="lightning__AppPage,lightning__RecordPage,lightning__HomePage,lightningCommunity__Default"
+    >
             <!-- Data Source -->
-            <property name="soqlQuery" type="String" label="SOQL Query" 
-                description="SOQL query to fetch data for distribution analysis"
-                placeholder="SELECT Amount FROM Opportunity WHERE Amount > 0"/>
+            <property
+        name="soqlQuery"
+        type="String"
+        label="SOQL Query"
+        description="SOQL query to fetch data for distribution analysis"
+        placeholder="SELECT Amount FROM Opportunity WHERE Amount > 0"
+      />
             
             <!-- Field Mapping -->
-            <property name="valueField" type="String" label="Value Field" default="Amount"
-                description="API name of the numeric field to analyze"
-                placeholder="Amount"/>
-            <property name="xAxisLabel" type="String" label="X-Axis Label"
-                description="Display label for X-axis (defaults to field name)"
-                placeholder="Deal Amount"/>
+            <property
+        name="valueField"
+        type="String"
+        label="Value Field"
+        default="Amount"
+        description="API name of the numeric field to analyze"
+        placeholder="Amount"
+      />
+            <property
+        name="xAxisLabel"
+        type="String"
+        label="X-Axis Label"
+        description="Display label for X-axis (defaults to field name)"
+        placeholder="Deal Amount"
+      />
             
             <!-- Binning Configuration -->
-            <property name="binCount" type="Integer" label="Number of Bins" default="0"
-                description="Number of histogram bins (0 = auto-calculate based on data)"
-                min="0" max="50"/>
+            <property
+        name="binCount"
+        type="Integer"
+        label="Number of Bins"
+        default="0"
+        description="Number of histogram bins (0 = auto-calculate based on data)"
+        min="0"
+        max="50"
+      />
             
             <!-- Appearance -->
-            <property name="height" type="Integer" label="Height (px)" default="300"
-                description="Chart height in pixels" min="150" max="800"/>
-            <property name="theme" type="String" label="Color Theme" default="Salesforce Standard"
-                datasource="Salesforce Standard,Warm,Cool,Vibrant"
-                description="Color palette for the chart"/>
+            <property
+        name="height"
+        type="Integer"
+        label="Height (px)"
+        default="300"
+        description="Chart height in pixels"
+        min="150"
+        max="800"
+      />
+            <property
+        name="theme"
+        type="String"
+        label="Color Theme"
+        default="Salesforce Standard"
+        datasource="Salesforce Standard,Warm,Cool,Vibrant"
+        description="Color palette for the chart"
+      />
             
             <!-- Statistical Features -->
-            <property name="showNormalCurve" type="Boolean" label="Show Normal Curve" default="false"
-                description="Overlay a normal distribution curve on the histogram"/>
-            <property name="showStatistics" type="Boolean" label="Show Statistics" default="false"
-                description="Display mean, median, standard deviation, and count"/>
+            <property
+        name="showNormalCurve"
+        type="Boolean"
+        label="Show Normal Curve"
+        default="false"
+        description="Overlay a normal distribution curve on the histogram"
+      />
+            <property
+        name="showStatistics"
+        type="Boolean"
+        label="Show Statistics"
+        default="false"
+        description="Display mean, median, standard deviation, and count"
+      />
             
             <!-- Navigation -->
-            <property name="objectApiName" type="String" label="Object API Name"
-                description="Object API name for navigation on bin click"
-                placeholder="Opportunity"/>
-            <property name="filterField" type="String" label="Filter Field"
-                description="Field to use for filtering when navigating (defaults to valueField)"/>
+            <property
+        name="objectApiName"
+        type="String"
+        label="Object API Name"
+        description="Object API name for navigation on bin click"
+        placeholder="Opportunity"
+      />
+            <property
+        name="filterField"
+        type="String"
+        label="Filter Field"
+        description="Field to use for filtering when navigating (defaults to valueField)"
+      />
             
             <!-- Advanced -->
-            <property name="advancedConfig" type="String" label="Advanced Config (JSON)"
-                description='{"showGrid": true, "showMeanLine": true, "customColors": ["#1589EE"]}'/>
+            <property
+        name="advancedConfig"
+        type="String"
+        label="Advanced Config (JSON)"
+        description='{"showGrid": true, "showMeanLine": true, "customColors": ["#1589EE"]}'
+      />
+        </targetConfig>
+        
+        <!-- Flow Screen Configuration -->
+        <targetConfig targets="lightning__FlowScreen">
+            <propertyType
+        name="T"
+        extends="SObject"
+        label="Record Type"
+        description="SObject type for the record collection"
+      />
+            <property
+        name="recordCollection"
+        type="{T[]}"
+        label="Record Collection"
+        role="inputOnly"
+        description="Collection of records from Flow"
+      />
+            <property
+        name="valueField"
+        type="String"
+        label="Value Field"
+        default="Amount"
+        description="API name of the numeric field to analyze"
+      />
+            <property
+        name="xAxisLabel"
+        type="String"
+        label="X-Axis Label"
+        description="Display label for X-axis"
+      />
+            <property
+        name="binCount"
+        type="Integer"
+        label="Number of Bins"
+        default="0"
+        description="Number of histogram bins (0 = auto)"
+      />
+            <property
+        name="height"
+        type="Integer"
+        label="Height (px)"
+        default="300"
+      />
+            <property
+        name="theme"
+        type="String"
+        label="Color Theme"
+        default="Salesforce Standard"
+      />
+            <property
+        name="showNormalCurve"
+        type="Boolean"
+        label="Show Normal Curve"
+        default="false"
+      />
+            <property
+        name="showStatistics"
+        type="Boolean"
+        label="Show Statistics"
+        default="false"
+      />
+            <property
+        name="objectApiName"
+        type="String"
+        label="Object API Name"
+        description="Object for navigation on click"
+      />
         </targetConfig>
     </targetConfigs>
 </LightningComponentBundle>
