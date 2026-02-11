@@ -1,9 +1,10 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <LightningComponentBundle xmlns="http://soap.sforce.com/2006/04/metadata">
     <apiVersion>59.0</apiVersion>
     <isExposed>true</isExposed>
     <masterLabel>D3 Treemap</masterLabel>
-    <description>Hierarchical data visualization using nested rectangles sized by value. Supports flat data auto-nesting, color by category/depth, and click-to-zoom drill-down.</description>
+    <description
+  >Hierarchical data visualization using nested rectangles sized by value. Supports flat data auto-nesting, color by category/depth, and click-to-zoom drill-down.</description>
     <targets>
         <target>lightning__AppPage</target>
         <target>lightning__RecordPage</target>
@@ -11,62 +12,224 @@
         <target>lightningCommunity__Default</target>
     </targets>
     <targetConfigs>
-        <targetConfig targets="lightning__AppPage,lightning__RecordPage,lightning__HomePage,lightningCommunity__Default">
+        <targetConfig
+      targets="lightning__AppPage,lightning__RecordPage,lightning__HomePage,lightningCommunity__Default"
+    >
             <!-- Data Source -->
-            <property name="soqlQuery" type="String" label="SOQL Query" 
-                description="SOQL query to fetch data for the treemap"
-                placeholder="SELECT StageName, Type, Amount FROM Opportunity WHERE Amount > 0"/>
+            <property
+        name="soqlQuery"
+        type="String"
+        label="SOQL Query"
+        description="SOQL query to fetch data for the treemap"
+        placeholder="SELECT StageName, Type, Amount FROM Opportunity WHERE Amount > 0"
+      />
             
             <!-- Field Mapping -->
-            <property name="groupByField" type="String" label="Group By Field" default="Name"
-                description="API name of the field to group by (primary hierarchy level)"
-                placeholder="StageName"/>
-            <property name="secondaryGroupByField" type="String" label="Secondary Group Field"
-                description="Optional second field for nested hierarchy (creates two levels)"
-                placeholder="Type"/>
-            <property name="valueField" type="String" label="Value Field"
-                description="API name of the numeric field to aggregate (not needed for Count)"
-                placeholder="Amount"/>
-            <property name="operation" type="String" label="Aggregation" default="Sum"
-                datasource="Sum,Count,Average"
-                description="How to aggregate values within each group"/>
+            <property
+        name="groupByField"
+        type="String"
+        label="Group By Field"
+        default="Name"
+        description="API name of the field to group by (primary hierarchy level)"
+        placeholder="StageName"
+      />
+            <property
+        name="secondaryGroupByField"
+        type="String"
+        label="Secondary Group Field"
+        description="Optional second field for nested hierarchy (creates two levels)"
+        placeholder="Type"
+      />
+            <property
+        name="valueField"
+        type="String"
+        label="Value Field"
+        description="API name of the numeric field to aggregate (not needed for Count)"
+        placeholder="Amount"
+      />
+            <property
+        name="operation"
+        type="String"
+        label="Aggregation"
+        default="Sum"
+        datasource="Sum,Count,Average"
+        description="How to aggregate values within each group"
+      />
             
             <!-- Appearance -->
-            <property name="height" type="Integer" label="Height (px)" default="400"
-                description="Chart height in pixels" min="200" max="1000"/>
-            <property name="theme" type="String" label="Color Theme" default="Salesforce Standard"
-                datasource="Salesforce Standard,Warm,Cool,Vibrant"
-                description="Color palette for the treemap"/>
-            <property name="colorMode" type="String" label="Color Mode" default="category"
-                datasource="category,depth"
-                description="Color by category (group) or by nesting depth"/>
+            <property
+        name="height"
+        type="Integer"
+        label="Height (px)"
+        default="400"
+        description="Chart height in pixels"
+        min="200"
+        max="1000"
+      />
+            <property
+        name="theme"
+        type="String"
+        label="Color Theme"
+        default="Salesforce Standard"
+        datasource="Salesforce Standard,Warm,Cool,Vibrant"
+        description="Color palette for the treemap"
+      />
+            <property
+        name="colorMode"
+        type="String"
+        label="Color Mode"
+        default="category"
+        datasource="category,depth"
+        description="Color by category (group) or by nesting depth"
+      />
             
             <!-- Labels -->
-            <property name="showLabels" type="Boolean" label="Show Labels" default="true"
-                description="Display labels on rectangles"/>
-            <property name="minLabelSize" type="Integer" label="Min Label Size (px)" default="40"
-                description="Minimum rectangle dimension to show labels" min="20" max="100"/>
+            <property
+        name="showLabels"
+        type="Boolean"
+        label="Show Labels"
+        default="true"
+        description="Display labels on rectangles"
+      />
+            <property
+        name="minLabelSize"
+        type="Integer"
+        label="Min Label Size (px)"
+        default="40"
+        description="Minimum rectangle dimension to show labels"
+        min="20"
+        max="100"
+      />
             
             <!-- Layout -->
-            <property name="tilePadding" type="Integer" label="Tile Padding (px)" default="2"
-                description="Padding between rectangles" min="0" max="10"/>
-            <property name="innerPadding" type="Integer" label="Inner Padding (px)" default="4"
-                description="Padding within nested groups" min="0" max="20"/>
+            <property
+        name="tilePadding"
+        type="Integer"
+        label="Tile Padding (px)"
+        default="2"
+        description="Padding between rectangles"
+        min="0"
+        max="10"
+      />
+            <property
+        name="innerPadding"
+        type="Integer"
+        label="Inner Padding (px)"
+        default="4"
+        description="Padding within nested groups"
+        min="0"
+        max="20"
+      />
             
             <!-- Interaction -->
-            <property name="enableZoom" type="Boolean" label="Enable Zoom" default="false"
-                description="Allow click-to-zoom into nested groups"/>
+            <property
+        name="enableZoom"
+        type="Boolean"
+        label="Enable Zoom"
+        default="false"
+        description="Allow click-to-zoom into nested groups"
+      />
             
             <!-- Navigation -->
-            <property name="objectApiName" type="String" label="Object API Name"
-                description="Object API name for navigation on click"
-                placeholder="Opportunity"/>
-            <property name="filterField" type="String" label="Filter Field"
-                description="Field to use for filtering when navigating (defaults to groupByField)"/>
+            <property
+        name="objectApiName"
+        type="String"
+        label="Object API Name"
+        description="Object API name for navigation on click"
+        placeholder="Opportunity"
+      />
+            <property
+        name="filterField"
+        type="String"
+        label="Filter Field"
+        description="Field to use for filtering when navigating (defaults to groupByField)"
+      />
             
             <!-- Advanced -->
-            <property name="advancedConfig" type="String" label="Advanced Config (JSON)"
-                description='{"customColors": ["#FF5733", "#33FF57"], "showTotal": true}'/>
+            <property
+        name="advancedConfig"
+        type="String"
+        label="Advanced Config (JSON)"
+        description='{"customColors": ["#FF5733", "#33FF57"], "showTotal": true}'
+      />
+        </targetConfig>
+        
+        <!-- Flow Screen Configuration -->
+        <targetConfig targets="lightning__FlowScreen">
+            <propertyType
+        name="T"
+        extends="SObject"
+        label="Record Type"
+        description="SObject type for the record collection"
+      />
+            <property
+        name="recordCollection"
+        type="{T[]}"
+        label="Record Collection"
+        role="inputOnly"
+        description="Collection of records from Flow"
+      />
+            <property
+        name="groupByField"
+        type="String"
+        label="Group By Field"
+        default="Name"
+        description="API name of the field to group by"
+      />
+            <property
+        name="secondaryGroupByField"
+        type="String"
+        label="Secondary Group Field"
+        description="Optional second field for nested hierarchy"
+      />
+            <property
+        name="valueField"
+        type="String"
+        label="Value Field"
+        description="API name of the numeric field to aggregate"
+      />
+            <property
+        name="operation"
+        type="String"
+        label="Aggregation"
+        default="Sum"
+      />
+            <property
+        name="height"
+        type="Integer"
+        label="Height (px)"
+        default="400"
+      />
+            <property
+        name="theme"
+        type="String"
+        label="Color Theme"
+        default="Salesforce Standard"
+      />
+            <property
+        name="colorMode"
+        type="String"
+        label="Color Mode"
+        default="category"
+      />
+            <property
+        name="showLabels"
+        type="Boolean"
+        label="Show Labels"
+        default="true"
+      />
+            <property
+        name="enableZoom"
+        type="Boolean"
+        label="Enable Zoom"
+        default="false"
+      />
+            <property
+        name="objectApiName"
+        type="String"
+        label="Object API Name"
+        description="Object for navigation on click"
+      />
         </targetConfig>
     </targetConfigs>
 </LightningComponentBundle>
