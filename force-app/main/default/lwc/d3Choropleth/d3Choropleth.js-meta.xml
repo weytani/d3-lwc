@@ -1,9 +1,10 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <LightningComponentBundle xmlns="http://soap.sforce.com/2006/04/metadata">
     <apiVersion>59.0</apiVersion>
     <isExposed>true</isExposed>
     <masterLabel>D3 Choropleth Map</masterLabel>
-    <description>Geographic map visualization with region coloring by value. Supports US states, world countries, or custom GeoJSON.</description>
+    <description
+  >Geographic map visualization with region coloring by value. Supports US states, world countries, or custom GeoJSON.</description>
     <targets>
         <target>lightning__AppPage</target>
         <target>lightning__RecordPage</target>
@@ -11,75 +12,262 @@
         <target>lightningCommunity__Default</target>
     </targets>
     <targetConfigs>
-        <targetConfig targets="lightning__AppPage,lightning__RecordPage,lightning__HomePage,lightningCommunity__Default">
+        <targetConfig
+      targets="lightning__AppPage,lightning__RecordPage,lightning__HomePage,lightningCommunity__Default"
+    >
             <!-- Data Source -->
-            <property name="soqlQuery" type="String" label="SOQL Query" 
-                description="Query to fetch data (e.g., SELECT BillingState, COUNT(Id) FROM Account GROUP BY BillingState)"/>
+            <property
+        name="soqlQuery"
+        type="String"
+        label="SOQL Query"
+        description="Query to fetch data (e.g., SELECT BillingState, COUNT(Id) FROM Account GROUP BY BillingState)"
+      />
             
             <!-- Field Mapping -->
-            <property name="regionField" type="String" label="Region Field" default="BillingState"
-                description="Field containing region identifier (state code, country code, etc.)"/>
-            <property name="valueField" type="String" label="Value Field"
-                description="Field containing the value to aggregate (not needed for Count)"/>
-            <property name="operation" type="String" label="Aggregation" default="Sum"
-                datasource="Sum,Count,Average"
-                description="How to aggregate values for each region"/>
+            <property
+        name="regionField"
+        type="String"
+        label="Region Field"
+        default="BillingState"
+        description="Field containing region identifier (state code, country code, etc.)"
+      />
+            <property
+        name="valueField"
+        type="String"
+        label="Value Field"
+        description="Field containing the value to aggregate (not needed for Count)"
+      />
+            <property
+        name="operation"
+        type="String"
+        label="Aggregation"
+        default="Sum"
+        datasource="Sum,Count,Average"
+        description="How to aggregate values for each region"
+      />
             
             <!-- Map Configuration -->
-            <property name="mapType" type="String" label="Map Type" default="us-states"
-                datasource="us-states,world,custom"
-                description="Type of map to display"/>
-            <property name="geoJsonData" type="String" label="Custom GeoJSON"
-                description="Custom GeoJSON data (for mapType=custom). Can be JSON string or URL."/>
-            <property name="geoJsonIdProperty" type="String" label="GeoJSON ID Property" default="id"
-                description="Property name in GeoJSON features for region identification"/>
-            <property name="geoJsonNameProperty" type="String" label="GeoJSON Name Property" default="name"
-                description="Property name in GeoJSON features for region display name"/>
+            <property
+        name="mapType"
+        type="String"
+        label="Map Type"
+        default="us-states"
+        datasource="us-states,world,custom"
+        description="Type of map to display"
+      />
+            <property
+        name="geoJsonData"
+        type="String"
+        label="Custom GeoJSON"
+        description="Custom GeoJSON data (for mapType=custom). Can be JSON string or URL."
+      />
+            <property
+        name="geoJsonIdProperty"
+        type="String"
+        label="GeoJSON ID Property"
+        default="id"
+        description="Property name in GeoJSON features for region identification"
+      />
+            <property
+        name="geoJsonNameProperty"
+        type="String"
+        label="GeoJSON Name Property"
+        default="name"
+        description="Property name in GeoJSON features for region display name"
+      />
             
             <!-- Dimensions -->
-            <property name="height" type="Integer" label="Height (px)" default="400"/>
+            <property
+        name="height"
+        type="Integer"
+        label="Height (px)"
+        default="400"
+      />
             
             <!-- Color Configuration -->
-            <property name="colorScaleType" type="String" label="Color Scale" default="sequential"
-                datasource="sequential,diverging"
-                description="Sequential (light-to-dark) or Diverging (for +/- values)"/>
-            <property name="lowColor" type="String" label="Low Value Color" default="#f7fbff"
-                description="Color for low values (sequential scale)"/>
-            <property name="highColor" type="String" label="High Value Color" default="#08519c"
-                description="Color for high values (sequential scale)"/>
-            <property name="negativeColor" type="String" label="Negative Color" default="#b2182b"
-                description="Color for negative values (diverging scale)"/>
-            <property name="positiveColor" type="String" label="Positive Color" default="#2166ac"
-                description="Color for positive values (diverging scale)"/>
+            <property
+        name="colorScaleType"
+        type="String"
+        label="Color Scale"
+        default="sequential"
+        datasource="sequential,diverging"
+        description="Sequential (light-to-dark) or Diverging (for +/- values)"
+      />
+            <property
+        name="lowColor"
+        type="String"
+        label="Low Value Color"
+        default="#f7fbff"
+        description="Color for low values (sequential scale)"
+      />
+            <property
+        name="highColor"
+        type="String"
+        label="High Value Color"
+        default="#08519c"
+        description="Color for high values (sequential scale)"
+      />
+            <property
+        name="negativeColor"
+        type="String"
+        label="Negative Color"
+        default="#b2182b"
+        description="Color for negative values (diverging scale)"
+      />
+            <property
+        name="positiveColor"
+        type="String"
+        label="Positive Color"
+        default="#2166ac"
+        description="Color for positive values (diverging scale)"
+      />
             
             <!-- Theme -->
-            <property name="theme" type="String" label="Color Theme" default="Salesforce Standard"
-                datasource="Salesforce Standard,Warm,Cool,Vibrant"
-                description="Color theme for categorical elements"/>
+            <property
+        name="theme"
+        type="String"
+        label="Color Theme"
+        default="Salesforce Standard"
+        datasource="Salesforce Standard,Warm,Cool,Vibrant"
+        description="Color theme for categorical elements"
+      />
             
             <!-- Display Options -->
-            <property name="showLegend" type="Boolean" label="Show Legend" default="true"/>
-            <property name="legendPosition" type="String" label="Legend Position" default="bottom-right"
-                datasource="bottom-right,bottom-left,top-right,top-left"/>
-            <property name="showLabels" type="Boolean" label="Show Region Labels" default="false"/>
+            <property
+        name="showLegend"
+        type="Boolean"
+        label="Show Legend"
+        default="true"
+      />
+            <property
+        name="legendPosition"
+        type="String"
+        label="Legend Position"
+        default="bottom-right"
+        datasource="bottom-right,bottom-left,top-right,top-left"
+      />
+            <property
+        name="showLabels"
+        type="Boolean"
+        label="Show Region Labels"
+        default="false"
+      />
             
             <!-- Border Styling -->
-            <property name="borderColor" type="String" label="Border Color" default="#ffffff"/>
-            <property name="borderWidth" type="Integer" label="Border Width" default="1"/>
-            <property name="hoverBorderColor" type="String" label="Hover Border Color" default="#333333"/>
+            <property
+        name="borderColor"
+        type="String"
+        label="Border Color"
+        default="#ffffff"
+      />
+            <property
+        name="borderWidth"
+        type="Integer"
+        label="Border Width"
+        default="1"
+      />
+            <property
+        name="hoverBorderColor"
+        type="String"
+        label="Hover Border Color"
+        default="#333333"
+      />
             
             <!-- Interaction -->
-            <property name="enableZoom" type="Boolean" label="Enable Zoom/Pan" default="true"/>
+            <property
+        name="enableZoom"
+        type="Boolean"
+        label="Enable Zoom/Pan"
+        default="true"
+      />
             
             <!-- Navigation -->
-            <property name="objectApiName" type="String" label="Object API Name"
-                description="Object API name for navigation on region click"/>
-            <property name="recordIdField" type="String" label="Record ID Field" default="Id"
-                description="Field containing record ID for navigation"/>
+            <property
+        name="objectApiName"
+        type="String"
+        label="Object API Name"
+        description="Object API name for navigation on region click"
+      />
+            <property
+        name="recordIdField"
+        type="String"
+        label="Record ID Field"
+        default="Id"
+        description="Field containing record ID for navigation"
+      />
             
             <!-- Advanced -->
-            <property name="advancedConfig" type="String" label="Advanced Config (JSON)"
-                description="JSON object for additional customization"/>
+            <property
+        name="advancedConfig"
+        type="String"
+        label="Advanced Config (JSON)"
+        description="JSON object for additional customization"
+      />
+        </targetConfig>
+        
+        <targetConfig targets="lightning__FlowScreen">
+            <propertyType
+        name="T"
+        extends="SObject"
+        label="Record Type"
+        description="SObject type for the record collection"
+      />
+            <property
+        name="recordCollection"
+        type="{T[]}"
+        label="Record Collection"
+        role="inputOnly"
+        description="Collection of records to display on map"
+      />
+            <property
+        name="regionField"
+        type="String"
+        label="Region Field"
+        default="BillingState"
+      />
+            <property name="valueField" type="String" label="Value Field" />
+            <property
+        name="operation"
+        type="String"
+        label="Aggregation"
+        default="Sum"
+      />
+            <property
+        name="mapType"
+        type="String"
+        label="Map Type"
+        default="us-states"
+      />
+            <property
+        name="height"
+        type="Integer"
+        label="Height (px)"
+        default="400"
+      />
+            <property
+        name="lowColor"
+        type="String"
+        label="Low Value Color"
+        default="#f7fbff"
+      />
+            <property
+        name="highColor"
+        type="String"
+        label="High Value Color"
+        default="#08519c"
+      />
+            <property
+        name="showLegend"
+        type="Boolean"
+        label="Show Legend"
+        default="true"
+      />
+            <property
+        name="enableZoom"
+        type="Boolean"
+        label="Enable Zoom/Pan"
+        default="true"
+      />
         </targetConfig>
     </targetConfigs>
 </LightningComponentBundle>
