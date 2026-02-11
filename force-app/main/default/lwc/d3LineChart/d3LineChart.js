@@ -1,578 +1,631 @@
 /**
- * D3 Line Chart Lightning Web Component
- * Displays time series data as lines with multi-series and drill-down support.
+ * ABOUTME: D3 Line Chart Lightning Web Component.
+ * ABOUTME: Displays time series data as lines with multi-series and drill-down support.
  */
-import { LightningElement, api, track } from 'lwc';
-import { loadD3 } from 'c/d3Lib';
-import { prepareData, OPERATIONS } from 'c/dataService';
-import { getColors, DEFAULT_THEME } from 'c/themeService';
-import { formatNumber, truncateLabel, createTooltip, createResizeHandler } from 'c/chartUtils';
-import { NavigationMixin } from 'lightning/navigation';
-import { ShowToastEvent } from 'lightning/platformShowToastEvent';
-import executeQuery from '@salesforce/apex/D3ChartController.executeQuery';
+import { LightningElement, api, track } from "lwc";
+import { loadD3 } from "c/d3Lib";
+import { prepareData } from "c/dataService";
+import { getColors, DEFAULT_THEME } from "c/themeService";
+import {
+  formatNumber,
+  truncateLabel,
+  createTooltip,
+  createResizeHandler,
+  createLayoutRetry
+} from "c/chartUtils";
+import { NavigationMixin } from "lightning/navigation";
+import { ShowToastEvent } from "lightning/platformShowToastEvent";
+import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
 
 export default class D3LineChart extends NavigationMixin(LightningElement) {
-    // ═══════════════════════════════════════════════════════════════
-    // PUBLIC API PROPERTIES
-    // ═══════════════════════════════════════════════════════════════
-    
-    /** Data collection from Flow or parent component */
-    @api recordCollection = [];
-    
-    /** SOQL query string (used if recordCollection is empty) */
-    @api soqlQuery = '';
-    
-    /** Date field for X-axis (time series) */
-    @api dateField = '';
-    
-    /** Value field for Y-axis */
-    @api valueField = '';
-    
-    /** Optional series field for multi-line support */
-    @api seriesField = '';
-    
-    /** Date format for parsing (ISO, US, EU, or custom) */
-    @api dateFormat = 'ISO';
-    
-    /** Chart height in pixels */
-    @api height = 300;
-    
-    /** Color theme */
-    @api theme = DEFAULT_THEME;
-    
-    /** Show data points on line (defaults to true via getter) */
-    @api showPoints;
-    
-    /** Show legend (defaults to true for multi-series) */
-    @api showLegend;
-    
-    /** Curve type: linear, monotone, step */
-    @api curveType = 'monotone';
-    
-    /** Advanced configuration JSON */
-    @api advancedConfig = '{}';
-    
-    /** Object API name for drill-down navigation */
-    @api objectApiName = '';
-    
-    /** Filter field for drill-down */
-    @api filterField = '';
+  // ═══════════════════════════════════════════════════════════════
+  // PUBLIC API PROPERTIES
+  // ═══════════════════════════════════════════════════════════════
 
-    // ═══════════════════════════════════════════════════════════════
-    // TRACKED STATE
-    // ═══════════════════════════════════════════════════════════════
-    
-    @track isLoading = true;
-    @track error = null;
-    @track chartData = [];
-    @track seriesData = [];
-    @track truncatedWarning = null;
+  /** Data collection from Flow or parent component */
+  @api recordCollection = [];
 
-    // ═══════════════════════════════════════════════════════════════
-    // PRIVATE PROPERTIES
-    // ═══════════════════════════════════════════════════════════════
-    
-    d3 = null;
-    svg = null;
-    tooltip = null;
-    resizeHandler = null;
-    chartRendered = false;
-    _config = {};
-    _configParsed = false;
+  /** SOQL query string (used if recordCollection is empty) */
+  @api soqlQuery =
+    "SELECT CloseDate, Amount FROM Opportunity ORDER BY CloseDate";
 
-    // ═══════════════════════════════════════════════════════════════
-    // GETTERS
-    // ═══════════════════════════════════════════════════════════════
-    
-    get containerStyle() {
-        return `height: ${this.height}px;`;
+  /** Date field for X-axis (time series) */
+  @api dateField = "CloseDate";
+
+  /** Value field for Y-axis */
+  @api valueField = "Amount";
+
+  /** Optional series field for multi-line support */
+  @api seriesField = "";
+
+  /** Date format for parsing (ISO, US, EU, or custom) */
+  @api dateFormat = "ISO";
+
+  /** Chart height in pixels */
+  @api height = 300;
+
+  /** Color theme */
+  @api theme = DEFAULT_THEME;
+
+  /** Show data points on line (defaults to true via getter) */
+  @api showPoints;
+
+  /** Show legend (defaults to true for multi-series) */
+  @api showLegend;
+
+  /** Curve type: linear, monotone, step */
+  @api curveType = "monotone";
+
+  /** Advanced configuration JSON */
+  @api advancedConfig = "{}";
+
+  /** Object API name for drill-down navigation */
+  @api objectApiName = "";
+
+  /** Filter field for drill-down */
+  @api filterField = "";
+
+  // ═══════════════════════════════════════════════════════════════
+  // TRACKED STATE
+  // ═══════════════════════════════════════════════════════════════
+
+  @track isLoading = true;
+  @track error = null;
+  @track chartData = [];
+  @track seriesData = [];
+  @track truncatedWarning = null;
+
+  // ═══════════════════════════════════════════════════════════════
+  // PRIVATE PROPERTIES
+  // ═══════════════════════════════════════════════════════════════
+
+  d3 = null;
+  svg = null;
+  tooltip = null;
+  resizeHandler = null;
+  chartRendered = false;
+  _layoutRetry = null;
+  _config = {};
+  _configParsed = false;
+
+  // ═══════════════════════════════════════════════════════════════
+  // GETTERS
+  // ═══════════════════════════════════════════════════════════════
+
+  get containerStyle() {
+    return `height: ${this.height}px;`;
+  }
+
+  get hasError() {
+    return !!this.error;
+  }
+
+  get hasData() {
+    return this.seriesData && this.seriesData.length > 0;
+  }
+
+  get showChart() {
+    return !this.isLoading && !this.hasError && this.hasData;
+  }
+
+  get effectiveShowPoints() {
+    // Default to true unless explicitly set to false
+    return this.showPoints !== false;
+  }
+
+  get effectiveShowLegend() {
+    // Show legend if explicitly set, or if multi-series
+    if (this.showLegend !== undefined) {
+      return this.showLegend;
     }
+    return this.seriesData.length > 1;
+  }
 
-    get hasError() {
-        return !!this.error;
+  get legendItems() {
+    if (!this.seriesData || !this.effectiveShowLegend) return [];
+    const colors = getColors(
+      this.theme,
+      this.seriesData.length,
+      this.config.customColors
+    );
+    return this.seriesData.map((series, i) => ({
+      name: series.name,
+      color: colors[i],
+      colorStyle: `background-color: ${colors[i]};`
+    }));
+  }
+
+  get config() {
+    if (!this._configParsed) {
+      try {
+        this._config = JSON.parse(this.advancedConfig || "{}");
+      } catch {
+        this._config = {};
+      }
+      this._configParsed = true;
     }
+    return this._config;
+  }
 
-    get hasData() {
-        return this.seriesData && this.seriesData.length > 0;
+  // ═══════════════════════════════════════════════════════════════
+  // LIFECYCLE HOOKS
+  // ═══════════════════════════════════════════════════════════════
+
+  async connectedCallback() {
+    try {
+      this.d3 = await loadD3(this);
+      await this.loadData();
+    } catch (e) {
+      this.error = e.message || "Failed to initialize chart";
+      console.error("D3LineChart initialization error:", e);
+    } finally {
+      this.isLoading = false;
     }
+  }
 
-    get showChart() {
-        return !this.isLoading && !this.hasError && this.hasData;
-    }
-
-    get effectiveShowPoints() {
-        // Default to true unless explicitly set to false
-        return this.showPoints !== false;
-    }
-
-    get effectiveShowLegend() {
-        // Show legend if explicitly set, or if multi-series
-        if (this.showLegend !== undefined) {
-            return this.showLegend;
-        }
-        return this.seriesData.length > 1;
-    }
-
-    get legendItems() {
-        if (!this.seriesData || !this.effectiveShowLegend) return [];
-        const colors = getColors(this.theme, this.seriesData.length, this.config.customColors);
-        return this.seriesData.map((series, i) => ({
-            name: series.name,
-            color: colors[i],
-            colorStyle: `background-color: ${colors[i]};`
-        }));
-    }
-
-    get config() {
-        if (!this._configParsed) {
-            try {
-                this._config = JSON.parse(this.advancedConfig || '{}');
-            } catch (e) {
-                this._config = {};
+  renderedCallback() {
+    if (this.showChart && !this.chartRendered) {
+      this.chartRendered = this.initializeChart();
+      if (!this.chartRendered && !this._layoutRetry) {
+        const container = this.template.querySelector(".chart-container");
+        if (container) {
+          this._layoutRetry = createLayoutRetry(container, () => {
+            this._layoutRetry = null;
+            if (!this.chartRendered) {
+              this.chartRendered = this.initializeChart();
             }
-            this._configParsed = true;
+          });
         }
-        return this._config;
+      }
+    }
+  }
+
+  disconnectedCallback() {
+    if (this._layoutRetry) {
+      this._layoutRetry.cancel();
+      this._layoutRetry = null;
+    }
+    this.cleanup();
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // DATA LOADING
+  // ═══════════════════════════════════════════════════════════════
+
+  async loadData() {
+    let rawData = [];
+
+    if (this.recordCollection && this.recordCollection.length > 0) {
+      rawData = [...this.recordCollection];
+    } else if (this.soqlQuery) {
+      try {
+        rawData = await executeQuery({ queryString: this.soqlQuery });
+      } catch (e) {
+        throw new Error(`SOQL Error: ${e.body?.message || e.message}`);
+      }
+    } else {
+      throw new Error(
+        "No data source provided. Set recordCollection or soqlQuery."
+      );
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // LIFECYCLE HOOKS
-    // ═══════════════════════════════════════════════════════════════
-    
-    async connectedCallback() {
-        try {
-            this.d3 = await loadD3(this);
-            await this.loadData();
-        } catch (e) {
-            this.error = e.message || 'Failed to initialize chart';
-            console.error('D3LineChart initialization error:', e);
-        } finally {
-            this.isLoading = false;
-        }
+    // Required fields for line chart
+    const requiredFields = [this.dateField, this.valueField];
+
+    const prepared = prepareData(rawData, { requiredFields });
+
+    if (!prepared.valid) {
+      throw new Error(prepared.error);
     }
 
-    renderedCallback() {
-        if (this.showChart && !this.chartRendered) {
-            this.initializeChart();
-            this.chartRendered = true;
-        }
+    if (prepared.truncated) {
+      this.truncatedWarning = `Displaying first 2,000 of ${prepared.originalCount} records`;
+      this.dispatchEvent(
+        new ShowToastEvent({
+          title: "Data Truncated",
+          message: this.truncatedWarning,
+          variant: "warning"
+        })
+      );
     }
 
-    disconnectedCallback() {
-        this.cleanup();
+    // Process into time series format
+    this.processTimeSeriesData(prepared.data);
+
+    if (this.seriesData.length === 0) {
+      throw new Error("No data after processing");
     }
+  }
 
-    // ═══════════════════════════════════════════════════════════════
-    // DATA LOADING
-    // ═══════════════════════════════════════════════════════════════
-    
-    async loadData() {
-        let rawData = [];
+  /**
+   * Processes raw data into time series format with optional multi-series support.
+   * @param {Array} data - Raw data records
+   */
+  processTimeSeriesData(data) {
+    const parseDate = this.getDateParser();
 
-        if (this.recordCollection && this.recordCollection.length > 0) {
-            rawData = [...this.recordCollection];
-        } else if (this.soqlQuery) {
-            try {
-                rawData = await executeQuery({ queryString: this.soqlQuery });
-            } catch (e) {
-                throw new Error(`SOQL Error: ${e.body?.message || e.message}`);
-            }
-        } else {
-            throw new Error('No data source provided. Set recordCollection or soqlQuery.');
+    // Parse dates and values
+    const processedData = data
+      .map((record) => {
+        const date = parseDate(record[this.dateField]);
+        const value = Number(record[this.valueField]);
+        const series = this.seriesField
+          ? String(record[this.seriesField] || "Default")
+          : "Default";
+
+        if (date && !isNaN(date.getTime()) && !isNaN(value)) {
+          return { date, value, series, record };
         }
+        return null;
+      })
+      .filter((d) => d !== null);
 
-        // Required fields for line chart
-        const requiredFields = [this.dateField, this.valueField];
-        
-        const prepared = prepareData(rawData, { requiredFields });
-        
-        if (!prepared.valid) {
-            throw new Error(prepared.error);
-        }
+    // Group by series
+    const seriesMap = new Map();
+    processedData.forEach((d) => {
+      if (!seriesMap.has(d.series)) {
+        seriesMap.set(d.series, []);
+      }
+      seriesMap.get(d.series).push(d);
+    });
 
-        if (prepared.truncated) {
-            this.truncatedWarning = `Displaying first 2,000 of ${prepared.originalCount} records`;
-            this.dispatchEvent(new ShowToastEvent({
-                title: 'Data Truncated',
-                message: this.truncatedWarning,
-                variant: 'warning'
-            }));
-        }
+    // Sort each series by date and convert to array
+    this.seriesData = [];
+    seriesMap.forEach((points, name) => {
+      points.sort((a, b) => a.date - b.date);
+      this.seriesData.push({ name, points });
+    });
 
-        // Process into time series format
-        this.processTimeSeriesData(prepared.data);
+    // Store flat data for reference
+    this.chartData = processedData;
+  }
 
-        if (this.seriesData.length === 0) {
-            throw new Error('No data after processing');
-        }
-    }
-
-    /**
-     * Processes raw data into time series format with optional multi-series support.
-     * @param {Array} data - Raw data records
-     */
-    processTimeSeriesData(data) {
-        const parseDate = this.getDateParser();
-        
-        // Parse dates and values
-        const processedData = data
-            .map(record => {
-                const date = parseDate(record[this.dateField]);
-                const value = Number(record[this.valueField]);
-                const series = this.seriesField ? String(record[this.seriesField] || 'Default') : 'Default';
-                
-                if (date && !isNaN(date.getTime()) && !isNaN(value)) {
-                    return { date, value, series, record };
-                }
-                return null;
-            })
-            .filter(d => d !== null);
-
-        // Group by series
-        const seriesMap = new Map();
-        processedData.forEach(d => {
-            if (!seriesMap.has(d.series)) {
-                seriesMap.set(d.series, []);
-            }
-            seriesMap.get(d.series).push(d);
-        });
-
-        // Sort each series by date and convert to array
-        this.seriesData = [];
-        seriesMap.forEach((points, name) => {
-            points.sort((a, b) => a.date - b.date);
-            this.seriesData.push({ name, points });
-        });
-
-        // Store flat data for reference
-        this.chartData = processedData;
-    }
-
-    /**
-     * Returns a date parser function based on dateFormat setting.
-     * @returns {Function} - Date parser function
-     */
-    getDateParser() {
-        switch (this.dateFormat) {
-            case 'US':
-                // MM/DD/YYYY
-                return (str) => {
-                    if (!str) return null;
-                    if (str instanceof Date) return str;
-                    const parts = String(str).split('/');
-                    if (parts.length === 3) {
-                        return new Date(parts[2], parts[0] - 1, parts[1]);
-                    }
-                    return new Date(str);
-                };
-            case 'EU':
-                // DD/MM/YYYY
-                return (str) => {
-                    if (!str) return null;
-                    if (str instanceof Date) return str;
-                    const parts = String(str).split('/');
-                    if (parts.length === 3) {
-                        return new Date(parts[2], parts[1] - 1, parts[0]);
-                    }
-                    return new Date(str);
-                };
-            case 'ISO':
-            default:
-                // ISO 8601 (YYYY-MM-DD or full ISO string)
-                return (str) => {
-                    if (!str) return null;
-                    if (str instanceof Date) return str;
-                    return new Date(str);
-                };
-        }
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    // CHART RENDERING
-    // ═══════════════════════════════════════════════════════════════
-    
-    initializeChart() {
-        const container = this.template.querySelector('.chart-container');
-        if (!container) return;
-
-        const { width } = container.getBoundingClientRect();
-        if (width === 0) return;
-
-        this.tooltip = createTooltip(container);
-        this.renderChart(width);
-
-        this.resizeHandler = createResizeHandler(container, ({ width: newWidth }) => {
-            if (newWidth > 0) {
-                this.renderChart(newWidth);
-            }
-        });
-        this.resizeHandler.observe();
-    }
-
-    renderChart(containerWidth) {
-        const d3 = this.d3;
-        const container = this.template.querySelector('.chart-container');
-        if (!container || !d3) return;
-
-        // Clear existing SVG
-        d3.select(container).select('svg').remove();
-
-        // Margins
-        const legendHeight = this.effectiveShowLegend ? 30 : 0;
-        const margin = {
-            top: 20,
-            right: 30,
-            bottom: 50 + legendHeight,
-            left: 60
+  /**
+   * Returns a date parser function based on dateFormat setting.
+   * @returns {Function} - Date parser function
+   */
+  getDateParser() {
+    switch (this.dateFormat) {
+      case "US":
+        // MM/DD/YYYY
+        return (str) => {
+          if (!str) return null;
+          if (str instanceof Date) return str;
+          const parts = String(str).split("/");
+          if (parts.length === 3) {
+            return new Date(parts[2], parts[0] - 1, parts[1]);
+          }
+          return new Date(str);
         };
+      case "EU":
+        // DD/MM/YYYY
+        return (str) => {
+          if (!str) return null;
+          if (str instanceof Date) return str;
+          const parts = String(str).split("/");
+          if (parts.length === 3) {
+            return new Date(parts[2], parts[1] - 1, parts[0]);
+          }
+          return new Date(str);
+        };
+      case "ISO":
+      default:
+        // ISO 8601 (YYYY-MM-DD or full ISO string)
+        return (str) => {
+          if (!str) return null;
+          if (str instanceof Date) return str;
+          return new Date(str);
+        };
+    }
+  }
 
-        const width = containerWidth - margin.left - margin.right;
-        const height = this.height - margin.top - margin.bottom;
+  // ═══════════════════════════════════════════════════════════════
+  // CHART RENDERING
+  // ═══════════════════════════════════════════════════════════════
 
-        if (width <= 0 || height <= 0) return;
+  /**
+   * Initializes the chart SVG, tooltip, and resize observer.
+   * @returns {boolean} true if the chart was successfully initialized
+   */
+  initializeChart() {
+    const container = this.template.querySelector(".chart-container");
+    if (!container) return false;
 
-        // Create SVG
-        this.svg = d3.select(container)
-            .append('svg')
-            .attr('width', containerWidth)
-            .attr('height', this.height)
-            .attr('class', 'line-chart-svg')
-            .append('g')
-            .attr('transform', `translate(${margin.left},${margin.top})`);
+    const { width } = container.getBoundingClientRect();
+    if (width === 0) return false;
 
-        // Get all data points for scale calculations
-        const allPoints = this.seriesData.flatMap(s => s.points);
-        
-        // X Scale (time)
-        const xExtent = d3.extent(allPoints, d => d.date);
-        const xScale = d3.scaleTime()
-            .domain(xExtent)
-            .range([0, width]);
+    this.tooltip = createTooltip(container);
+    this.renderChart(width);
 
-        // Y Scale
-        const yMax = d3.max(allPoints, d => d.value) || 0;
-        const yMin = d3.min(allPoints, d => d.value) || 0;
-        const yPadding = (yMax - yMin) * 0.1 || 1;
-        
-        const yScale = d3.scaleLinear()
-            .domain([Math.min(0, yMin - yPadding), yMax + yPadding])
-            .nice()
-            .range([height, 0]);
-
-        // Colors
-        const colors = getColors(this.theme, this.seriesData.length, this.config.customColors);
-
-        // Grid lines
-        if (this.config.showGrid !== false) {
-            this.svg.append('g')
-                .attr('class', 'grid grid-y')
-                .call(d3.axisLeft(yScale)
-                    .tickSize(-width)
-                    .tickFormat('')
-                )
-                .selectAll('line')
-                .attr('stroke', '#e0e0e0')
-                .attr('stroke-dasharray', '2,2');
-            
-            this.svg.select('.grid-y .domain').remove();
+    this.resizeHandler = createResizeHandler(
+      container,
+      ({ width: newWidth }) => {
+        if (newWidth > 0) {
+          this.renderChart(newWidth);
         }
+      }
+    );
+    this.resizeHandler.observe();
+    return true;
+  }
 
-        // X Axis
-        const xAxis = this.svg.append('g')
-            .attr('class', 'x-axis')
-            .attr('transform', `translate(0,${height})`)
-            .call(d3.axisBottom(xScale)
-                .ticks(this.getTickCount(width))
-                .tickFormat(d => this.formatDate(d))
-            );
+  renderChart(containerWidth) {
+    const d3 = this.d3;
+    const container = this.template.querySelector(".chart-container");
+    if (!container || !d3) return;
 
-        // Rotate labels if many ticks
-        if (width < 400) {
-            xAxis.selectAll('text')
-                .attr('transform', 'rotate(-45)')
-                .style('text-anchor', 'end')
-                .attr('dx', '-0.5em')
-                .attr('dy', '0.5em');
-        }
+    // Clear existing SVG
+    d3.select(container).select("svg").remove();
 
-        // Y Axis
-        this.svg.append('g')
-            .attr('class', 'y-axis')
-            .call(d3.axisLeft(yScale)
-                .tickFormat(d => formatNumber(d))
-            );
+    // Margins
+    const legendHeight = this.effectiveShowLegend ? 30 : 0;
+    const margin = {
+      top: 20,
+      right: 30,
+      bottom: 50 + legendHeight,
+      left: 60
+    };
 
-        // Line generator
-        const line = d3.line()
-            .x(d => xScale(d.date))
-            .y(d => yScale(d.value))
-            .curve(this.getCurve(d3));
+    const width = containerWidth - margin.left - margin.right;
+    const height = this.height - margin.top - margin.bottom;
 
-        // Draw lines for each series
-        this.seriesData.forEach((series, i) => {
-            const seriesGroup = this.svg.append('g')
-                .attr('class', `series series-${i}`);
+    if (width <= 0 || height <= 0) return;
 
-            // Draw line
-            const path = seriesGroup.append('path')
-                .datum(series.points)
-                .attr('class', 'line')
-                .attr('fill', 'none')
-                .attr('stroke', colors[i])
-                .attr('stroke-width', 2)
-                .attr('d', line);
+    // Create SVG
+    this.svg = d3
+      .select(container)
+      .append("svg")
+      .attr("width", containerWidth)
+      .attr("height", this.height)
+      .attr("class", "line-chart-svg")
+      .append("g")
+      .attr("transform", `translate(${margin.left},${margin.top})`);
 
-            // Animate line drawing
-            const totalLength = path.node()?.getTotalLength() || 0;
-            if (totalLength > 0) {
-                path
-                    .attr('stroke-dasharray', totalLength)
-                    .attr('stroke-dashoffset', totalLength)
-                    .transition()
-                    .duration(1000)
-                    .ease(d3.easeLinear)
-                    .attr('stroke-dashoffset', 0);
-            }
+    // Get all data points for scale calculations
+    const allPoints = this.seriesData.flatMap((s) => s.points);
 
-            // Draw points if enabled
-            if (this.effectiveShowPoints) {
-                seriesGroup.selectAll('.point')
-                    .data(series.points)
-                    .enter()
-                    .append('circle')
-                    .attr('class', 'point')
-                    .attr('cx', d => xScale(d.date))
-                    .attr('cy', d => yScale(d.value))
-                    .attr('r', 0)
-                    .attr('fill', colors[i])
-                    .attr('stroke', 'white')
-                    .attr('stroke-width', 2)
-                    .attr('cursor', this.objectApiName ? 'pointer' : 'default')
-                    .on('mouseenter', (event, d) => {
-                        this.showTooltip(event, d, series.name, colors[i]);
-                        d3.select(event.currentTarget)
-                            .transition()
-                            .duration(100)
-                            .attr('r', 8);
-                    })
-                    .on('mouseleave', (event) => {
-                        this.hideTooltip();
-                        d3.select(event.currentTarget)
-                            .transition()
-                            .duration(100)
-                            .attr('r', 5);
-                    })
-                    .on('click', (event, d) => {
-                        this.handlePointClick(d, series.name);
-                    })
-                    .transition()
-                    .delay((d, idx) => 1000 + idx * 20)
-                    .duration(200)
-                    .attr('r', 5);
-            }
-        });
+    // X Scale (time)
+    const xExtent = d3.extent(allPoints, (d) => d.date);
+    const xScale = d3.scaleTime().domain(xExtent).range([0, width]);
 
-        // Legend
-        if (this.effectiveShowLegend) {
-            this.renderLegend(colors, width, height);
-        }
+    // Y Scale
+    const yMax = d3.max(allPoints, (d) => d.value) || 0;
+    const yMin = d3.min(allPoints, (d) => d.value) || 0;
+    const yPadding = (yMax - yMin) * 0.1 || 1;
+
+    const yScale = d3
+      .scaleLinear()
+      .domain([Math.min(0, yMin - yPadding), yMax + yPadding])
+      .nice()
+      .range([height, 0]);
+
+    // Colors
+    const colors = getColors(
+      this.theme,
+      this.seriesData.length,
+      this.config.customColors
+    );
+
+    // Grid lines
+    if (this.config.showGrid !== false) {
+      this.svg
+        .append("g")
+        .attr("class", "grid grid-y")
+        .call(d3.axisLeft(yScale).tickSize(-width).tickFormat(""))
+        .selectAll("line")
+        .attr("stroke", "#e0e0e0")
+        .attr("stroke-dasharray", "2,2");
+
+      this.svg.select(".grid-y .domain").remove();
     }
 
-    /**
-     * Returns D3 curve function based on curveType setting.
-     * @param {Object} d3 - D3 instance
-     * @returns {Function} - D3 curve function
-     */
-    getCurve(d3) {
-        switch (this.curveType) {
-            case 'linear':
-                return d3.curveLinear;
-            case 'step':
-                return d3.curveStep;
-            case 'monotone':
-            default:
-                return d3.curveMonotoneX;
-        }
+    // X Axis
+    const xAxis = this.svg
+      .append("g")
+      .attr("class", "x-axis")
+      .attr("transform", `translate(0,${height})`)
+      .call(
+        d3
+          .axisBottom(xScale)
+          .ticks(this.getTickCount(width))
+          .tickFormat((d) => this.formatDate(d))
+      );
+
+    // Rotate labels if many ticks
+    if (width < 400) {
+      xAxis
+        .selectAll("text")
+        .attr("transform", "rotate(-45)")
+        .style("text-anchor", "end")
+        .attr("dx", "-0.5em")
+        .attr("dy", "0.5em");
     }
 
-    /**
-     * Returns appropriate tick count based on chart width.
-     * @param {Number} width - Chart width
-     * @returns {Number} - Number of ticks
-     */
-    getTickCount(width) {
-        if (width < 300) return 3;
-        if (width < 500) return 5;
-        return 7;
+    // Y Axis
+    this.svg
+      .append("g")
+      .attr("class", "y-axis")
+      .call(d3.axisLeft(yScale).tickFormat((d) => formatNumber(d)));
+
+    // Line generator
+    const line = d3
+      .line()
+      .x((d) => xScale(d.date))
+      .y((d) => yScale(d.value))
+      .curve(this.getCurve(d3));
+
+    // Draw lines for each series
+    this.seriesData.forEach((series, i) => {
+      const seriesGroup = this.svg
+        .append("g")
+        .attr("class", `series series-${i}`);
+
+      // Draw line
+      const path = seriesGroup
+        .append("path")
+        .datum(series.points)
+        .attr("class", "line")
+        .attr("fill", "none")
+        .attr("stroke", colors[i])
+        .attr("stroke-width", 2)
+        .attr("d", line);
+
+      // Animate line drawing
+      const totalLength = path.node()?.getTotalLength() || 0;
+      if (totalLength > 0) {
+        path
+          .attr("stroke-dasharray", totalLength)
+          .attr("stroke-dashoffset", totalLength)
+          .transition()
+          .duration(1000)
+          .ease(d3.easeLinear)
+          .attr("stroke-dashoffset", 0);
+      }
+
+      // Draw points if enabled
+      if (this.effectiveShowPoints) {
+        seriesGroup
+          .selectAll(".point")
+          .data(series.points)
+          .enter()
+          .append("circle")
+          .attr("class", "point")
+          .attr("cx", (d) => xScale(d.date))
+          .attr("cy", (d) => yScale(d.value))
+          .attr("r", 0)
+          .attr("fill", colors[i])
+          .attr("stroke", "white")
+          .attr("stroke-width", 2)
+          .attr("cursor", this.objectApiName ? "pointer" : "default")
+          .on("mouseenter", (event, d) => {
+            this.showTooltip(event, d, series.name, colors[i]);
+            d3.select(event.currentTarget)
+              .transition()
+              .duration(100)
+              .attr("r", 8);
+          })
+          .on("mouseleave", (event) => {
+            this.hideTooltip();
+            d3.select(event.currentTarget)
+              .transition()
+              .duration(100)
+              .attr("r", 5);
+          })
+          .on("click", (event, d) => {
+            this.handlePointClick(d, series.name);
+          })
+          .transition()
+          .delay((d, idx) => 1000 + idx * 20)
+          .duration(200)
+          .attr("r", 5);
+      }
+    });
+
+    // Legend
+    if (this.effectiveShowLegend) {
+      this.renderLegend(colors, width, height);
     }
+  }
 
-    /**
-     * Formats date for axis display.
-     * @param {Date} date - Date to format
-     * @returns {String} - Formatted date string
-     */
-    formatDate(date) {
-        if (!date) return '';
-        const month = date.toLocaleString('default', { month: 'short' });
-        const day = date.getDate();
-        const year = date.getFullYear();
-        
-        // Show year only if data spans multiple years
-        if (this.chartData.length > 0) {
-            const years = new Set(this.chartData.map(d => d.date.getFullYear()));
-            if (years.size > 1) {
-                return `${month} ${day}, ${year}`;
-            }
-        }
-        return `${month} ${day}`;
+  /**
+   * Returns D3 curve function based on curveType setting.
+   * @param {Object} d3 - D3 instance
+   * @returns {Function} - D3 curve function
+   */
+  getCurve(d3) {
+    switch (this.curveType) {
+      case "linear":
+        return d3.curveLinear;
+      case "step":
+        return d3.curveStep;
+      case "monotone":
+      default:
+        return d3.curveMonotoneX;
     }
+  }
 
-    /**
-     * Renders legend below the chart.
-     * @param {Array} colors - Color array
-     * @param {Number} width - Chart width
-     * @param {Number} height - Chart height
-     */
-    renderLegend(colors, width, height) {
-        const legend = this.svg.append('g')
-            .attr('class', 'legend')
-            .attr('transform', `translate(0, ${height + 35})`);
+  /**
+   * Returns appropriate tick count based on chart width.
+   * @param {Number} width - Chart width
+   * @returns {Number} - Number of ticks
+   */
+  getTickCount(width) {
+    if (width < 300) return 3;
+    if (width < 500) return 5;
+    return 7;
+  }
 
-        let xOffset = 0;
-        this.seriesData.forEach((series, i) => {
-            const item = legend.append('g')
-                .attr('class', 'legend-item')
-                .attr('transform', `translate(${xOffset}, 0)`)
-                .style('cursor', 'pointer');
+  /**
+   * Formats date for axis display.
+   * @param {Date} date - Date to format
+   * @returns {String} - Formatted date string
+   */
+  formatDate(date) {
+    if (!date) return "";
+    const month = date.toLocaleString("default", { month: "short" });
+    const day = date.getDate();
+    const year = date.getFullYear();
 
-            item.append('rect')
-                .attr('width', 12)
-                .attr('height', 12)
-                .attr('rx', 2)
-                .attr('fill', colors[i]);
-
-            item.append('text')
-                .attr('x', 16)
-                .attr('y', 10)
-                .style('font-size', '12px')
-                .style('fill', '#706e6b')
-                .text(truncateLabel(series.name, 15));
-
-            // Update offset for next item
-            const textWidth = series.name.length * 7 + 25;
-            xOffset += Math.min(textWidth, 130);
-        });
+    // Show year only if data spans multiple years
+    if (this.chartData.length > 0) {
+      const years = new Set(this.chartData.map((d) => d.date.getFullYear()));
+      if (years.size > 1) {
+        return `${month} ${day}, ${year}`;
+      }
     }
+    return `${month} ${day}`;
+  }
 
-    // ═══════════════════════════════════════════════════════════════
-    // TOOLTIP HANDLERS
-    // ═══════════════════════════════════════════════════════════════
-    
-    showTooltip(event, d, seriesName, color) {
-        if (!this.tooltip) return;
-        
-        const dateStr = this.formatDate(d.date);
-        const content = `
+  /**
+   * Renders legend below the chart.
+   * @param {Array} colors - Color array
+   * @param {Number} width - Chart width
+   * @param {Number} height - Chart height
+   */
+  renderLegend(colors, width, height) {
+    const legend = this.svg
+      .append("g")
+      .attr("class", "legend")
+      .attr("transform", `translate(0, ${height + 35})`);
+
+    let xOffset = 0;
+    this.seriesData.forEach((series, i) => {
+      const item = legend
+        .append("g")
+        .attr("class", "legend-item")
+        .attr("transform", `translate(${xOffset}, 0)`)
+        .style("cursor", "pointer");
+
+      item
+        .append("rect")
+        .attr("width", 12)
+        .attr("height", 12)
+        .attr("rx", 2)
+        .attr("fill", colors[i]);
+
+      item
+        .append("text")
+        .attr("x", 16)
+        .attr("y", 10)
+        .style("font-size", "12px")
+        .style("fill", "#706e6b")
+        .text(truncateLabel(series.name, 15));
+
+      // Update offset for next item
+      const textWidth = series.name.length * 7 + 25;
+      xOffset += Math.min(textWidth, 130);
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // TOOLTIP HANDLERS
+  // ═══════════════════════════════════════════════════════════════
+
+  showTooltip(event, d, seriesName, color) {
+    if (!this.tooltip) return;
+
+    const dateStr = this.formatDate(d.date);
+    const content = `
             <div style="border-left: 3px solid ${color}; padding-left: 8px;">
                 <div style="font-weight: bold; margin-bottom: 4px;">${seriesName}</div>
                 <div>${dateStr}</div>
@@ -581,71 +634,75 @@ export default class D3LineChart extends NavigationMixin(LightningElement) {
                 </div>
             </div>
         `;
-        
-        this.tooltip.show(content, event.offsetX, event.offsetY);
+
+    this.tooltip.show(content, event.offsetX, event.offsetY);
+  }
+
+  hideTooltip() {
+    if (!this.tooltip) return;
+    this.tooltip.hide();
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // CLICK HANDLER - DRILL DOWN
+  // ═══════════════════════════════════════════════════════════════
+
+  handlePointClick(d, seriesName) {
+    if (!this.objectApiName) return;
+
+    const filterFieldName = this.filterField || this.dateField;
+
+    this[NavigationMixin.Navigate]({
+      type: "standard__objectPage",
+      attributes: {
+        objectApiName: this.objectApiName,
+        actionName: "list"
+      }
+    });
+
+    this.dispatchEvent(
+      new CustomEvent("pointclick", {
+        detail: {
+          date: d.date,
+          value: d.value,
+          series: seriesName,
+          record: d.record,
+          filterField: filterFieldName
+        },
+        bubbles: true,
+        composed: true
+      })
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // LEGEND CLICK
+  // ═══════════════════════════════════════════════════════════════
+
+  handleLegendClick(event) {
+    const seriesName = event.currentTarget.dataset.series;
+
+    this.dispatchEvent(
+      new CustomEvent("legendclick", {
+        detail: { series: seriesName },
+        bubbles: true,
+        composed: true
+      })
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // CLEANUP
+  // ═══════════════════════════════════════════════════════════════
+
+  cleanup() {
+    if (this.resizeHandler) {
+      this.resizeHandler.disconnect();
+      this.resizeHandler = null;
     }
-
-    hideTooltip() {
-        if (!this.tooltip) return;
-        this.tooltip.hide();
+    if (this.tooltip) {
+      this.tooltip.destroy();
+      this.tooltip = null;
     }
-
-    // ═══════════════════════════════════════════════════════════════
-    // CLICK HANDLER - DRILL DOWN
-    // ═══════════════════════════════════════════════════════════════
-    
-    handlePointClick(d, seriesName) {
-        if (!this.objectApiName) return;
-
-        const filterFieldName = this.filterField || this.dateField;
-        
-        this[NavigationMixin.Navigate]({
-            type: 'standard__objectPage',
-            attributes: {
-                objectApiName: this.objectApiName,
-                actionName: 'list'
-            }
-        });
-
-        this.dispatchEvent(new CustomEvent('pointclick', {
-            detail: {
-                date: d.date,
-                value: d.value,
-                series: seriesName,
-                record: d.record,
-                filterField: filterFieldName
-            },
-            bubbles: true,
-            composed: true
-        }));
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    // LEGEND CLICK
-    // ═══════════════════════════════════════════════════════════════
-    
-    handleLegendClick(event) {
-        const seriesName = event.currentTarget.dataset.series;
-        
-        this.dispatchEvent(new CustomEvent('legendclick', {
-            detail: { series: seriesName },
-            bubbles: true,
-            composed: true
-        }));
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    // CLEANUP
-    // ═══════════════════════════════════════════════════════════════
-    
-    cleanup() {
-        if (this.resizeHandler) {
-            this.resizeHandler.disconnect();
-            this.resizeHandler = null;
-        }
-        if (this.tooltip) {
-            this.tooltip.destroy();
-            this.tooltip = null;
-        }
-    }
+  }
 }
