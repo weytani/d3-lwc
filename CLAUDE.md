@@ -4,28 +4,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a Salesforce Lightning Web Component (LWC) library that wraps D3.js v7 charts for use in Salesforce App Builder, Experience Builder, and Screen Flows. It includes 10 chart components (gauge, bar, donut, line, scatter, histogram, treemap, sankey, force graph, choropleth) plus shared utility modules.
+Salesforce LWC library providing 10 D3.js chart components for use in Lightning App Builder, Flows, and Experience Builder. Each chart accepts data via `recordCollection` (from Flow/parent) or `soqlQuery` (Apex-backed SOQL).
 
 ## Commands
 
 ```bash
-# Install dependencies
-npm install
-
-# Run all tests
-npm test
-
-# Run tests for a specific component
-npm test -- --testPathPattern=d3BarChart
-
-# Run tests with coverage
-npm run test:unit:coverage
-
-# Lint JavaScript files
-npm run lint
-
-# Format all files
-npm run prettier
+npm test                                        # Run all unit tests
+npm test -- --testPathPattern=d3BarChart         # Run tests for a specific component
+npm run test:unit:watch                         # Watch mode
+npm run test:unit:coverage                      # With coverage report
+npm run lint                                    # ESLint
+npm run prettier                                # Format all files
+npm run prettier:verify                         # Check formatting
 
 # Deploy to Salesforce org
 sf project deploy start --source-dir force-app -o <org-alias>
@@ -35,34 +25,49 @@ export PATH="/opt/homebrew/opt/node@20/bin:$PATH"
 sf lightning dev app -o <org-alias>
 ```
 
+Pre-commit hook (husky + lint-staged) auto-runs Prettier, ESLint, and related Jest tests on staged files.
+
 ## Architecture
 
-**Data Flow:**
-1. Components accept data via `recordCollection` (from Flow/parent) OR `soqlQuery` (SOQL string)
-2. If SOQL provided, Apex controller (`D3ChartController.cls`) executes query with sharing
-3. JavaScript aggregates raw records client-side using dataService (Sum/Count/Average)
-4. D3 renders charts with SLDS styling
+### Data Flow
 
-**Shared Modules (in `force-app/main/default/lwc/`):**
-- `d3Lib` - Loads D3.js from static resource
-- `dataService` - Data validation, aggregation, truncation (MAX_RECORDS: 2,000)
-- `themeService` - 4 color palettes (Salesforce Standard, Warm, Cool, Vibrant) + custom colors
-- `chartUtils` - Number formatting, tooltips, resize handling
+1. `recordCollection` (direct data) or `soqlQuery` → Apex `D3ChartController.executeQuery()`
+2. `dataService.validateData()` → `validateFields()` → `truncateData()` (2,000 record limit) → `aggregateData()`
+3. Processed data → D3 renders into an empty `<div>` in the component template
 
-**Component Pattern:**
-- All chart components use `@api` properties for App Builder configuration
-- `advancedConfig` property accepts JSON for advanced options not exposed in UI
-- ResizeObserver handles responsive reflow
-- Drill-down navigation uses `objectApiName` and `filterField` properties
+### Shared Modules
 
-## Testing
+- `d3Lib` — D3.js loader with singleton pattern and fetch+eval fallback for CSP-restricted environments. Use `loadD3(this)` first call, `getD3()` after, `resetD3()` in tests.
+- `dataService` — Data validation, aggregation (Sum/Count/Average), truncation (MAX_RECORDS: 2,000)
+- `themeService` — 4 color palettes (Salesforce Standard, Warm, Cool, Vibrant) + custom colors
+- `chartUtils` — Number formatting, tooltips, resize handling, layout retry
 
-Tests use `sfdx-lwc-jest` (not vanilla Jest). Mocks for Salesforce APIs are in `__mocks__/` and configured in `jest.config.js`. The mock for `@salesforce/apex/D3ChartController.executeQuery` must be set up per-test.
+### Chart Component Pattern
+
+Every chart component follows this structure:
+- **@api properties**: `recordCollection`, `soqlQuery`, field mappings (`groupByField`/`valueField` or `xField`/`yField`), `operation`, `height`, `theme`, `advancedConfig` (JSON string), `objectApiName`/`filterField` for drill-down
+- **Lifecycle**: `connectedCallback` loads D3 + fetches data; `renderedCallback` initializes chart with layout retry for container measurement; `disconnectedCallback` cleans up ResizeObserver
+- **State guards**: `chartRendered` flag prevents re-rendering; `_layoutRetry` handles cases where container has no dimensions yet
+
+### Apex Controller
+
+`D3ChartController` (`with sharing`) — `executeQuery(queryString)` is `@AuraEnabled(cacheable=true)`. Validates SOQL starts with SELECT, auto-adds LIMIT 2000 (skips for aggregates), enforces FLS via `Security.stripInaccessible()`.
+
+### Testing
+
+- Mocks in `__mocks__/` for `lightning/platformResourceLoader`, `lightning/navigation`, `lightning/platformShowToastEvent`, and `@salesforce/apex/D3ChartController.executeQuery`
+- Tests create a mock D3 factory with chainable method stubs (since D3 isn't available in jsdom)
+- Jest config extends `@salesforce/sfdx-lwc-jest/config` with custom `moduleNameMapper` for the mocks above
+
+### Conventions
+
+- Component names prefixed with `d3` (e.g., `d3BarChart`)
+- `// ABOUTME:` comments at top of component files for component-level documentation
+- Constants use UPPER_SNAKE_CASE (`MAX_RECORDS`, `OPERATIONS`, `PALETTES`)
+- HTML templates use SLDS classes with conditional rendering for loading/error/no-data/chart states
 
 ## Key Constraints
 
 - Node.js v20 required for Salesforce CLI compatibility (v25 has issues)
-- 2,000 record limit enforced by dataService to prevent browser freezing
-- Salesforce API version: 65.0
 - D3.js v7 loaded from `staticresources/d3.js`
-- All components use SLDS classes for Salesforce UI consistency
+- Salesforce API version: 65.0
