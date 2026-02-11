@@ -1,79 +1,83 @@
 /* D3 Bar Chart Styles */
 
+:host {
+  display: block;
+}
+
 .chart-container {
-    position: relative;
-    width: 100%;
-    overflow: hidden;
+  position: relative;
+  width: 100%;
+  overflow: hidden;
 }
 
 /* SVG Styles */
 .bar-chart-svg {
-    font-family: 'Salesforce Sans', Arial, sans-serif;
+  font-family: "Salesforce Sans", Arial, sans-serif;
 }
 
 /* Axis Styles */
 .x-axis text,
 .y-axis text {
-    font-size: 12px;
-    fill: #706e6b;
+  font-size: 12px;
+  fill: #706e6b;
 }
 
 .x-axis path,
 .x-axis line,
 .y-axis path,
 .y-axis line {
-    stroke: #dddbda;
+  stroke: #dddbda;
 }
 
 /* Bar Styles */
 .bar {
-    transition: opacity 0.2s ease;
+  transition: opacity 0.2s ease;
 }
 
 .bar:hover {
-    opacity: 0.8;
+  opacity: 0.8;
 }
 
 /* Grid Styles */
 .grid line {
-    stroke: #e0e0e0;
-    stroke-opacity: 0.7;
-    shape-rendering: crispEdges;
+  stroke: #e0e0e0;
+  stroke-opacity: 0.7;
+  shape-rendering: crispEdges;
 }
 
 .grid path {
-    stroke-width: 0;
+  stroke-width: 0;
 }
 
 /* Tooltip Styles */
 .chart-tooltip {
-    position: absolute;
-    background: #16325c;
-    color: white;
-    padding: 8px 12px;
-    border-radius: 4px;
-    font-size: 12px;
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity 0.2s ease;
-    z-index: 1000;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-    max-width: 200px;
+  position: absolute;
+  background: #16325c;
+  color: white;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  z-index: 1000;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  max-width: 200px;
 }
 
 .chart-tooltip::after {
-    content: '';
-    position: absolute;
-    top: 100%;
-    left: 50%;
-    margin-left: -5px;
-    border-width: 5px;
-    border-style: solid;
-    border-color: #16325c transparent transparent transparent;
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  margin-left: -5px;
+  border-width: 5px;
+  border-style: solid;
+  border-color: #16325c transparent transparent transparent;
 }
 
 /* Warning Banner */
 .slds-alert_warning {
-    font-size: 12px;
-    padding: 0.5rem 1rem;
+  font-size: 12px;
+  padding: 0.5rem 1rem;
 }
