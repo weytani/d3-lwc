@@ -1,9 +1,10 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <LightningComponentBundle xmlns="http://soap.sforce.com/2006/04/metadata">
     <apiVersion>59.0</apiVersion>
     <isExposed>true</isExposed>
     <masterLabel>D3 Sankey Diagram</masterLabel>
-    <description>Flow/process visualization showing how values flow between nodes. Perfect for visualizing lead conversion paths, opportunity stage progressions, or any source-to-target relationships.</description>
+    <description
+  >Flow/process visualization showing how values flow between nodes. Perfect for visualizing lead conversion paths, opportunity stage progressions, or any source-to-target relationships.</description>
     <targets>
         <target>lightning__AppPage</target>
         <target>lightning__RecordPage</target>
@@ -11,68 +12,248 @@
         <target>lightningCommunity__Default</target>
     </targets>
     <targetConfigs>
-        <targetConfig targets="lightning__AppPage,lightning__RecordPage,lightning__HomePage,lightningCommunity__Default">
+        <targetConfig
+      targets="lightning__AppPage,lightning__RecordPage,lightning__HomePage,lightningCommunity__Default"
+    >
             <!-- Data Source -->
-            <property name="soqlQuery" type="String" label="SOQL Query" 
-                description="SOQL query to fetch flow data. Results should have source, target, and value fields."
-                placeholder="SELECT LeadSource, Status, COUNT(Id) cnt FROM Lead GROUP BY LeadSource, Status"/>
+            <property
+        name="soqlQuery"
+        type="String"
+        label="SOQL Query"
+        description="SOQL query to fetch flow data. Results should have source, target, and value fields."
+        placeholder="SELECT LeadSource, Status, COUNT(Id) cnt FROM Lead GROUP BY LeadSource, Status"
+      />
             
             <!-- Field Mapping -->
-            <property name="sourceField" type="String" label="Source Field" default="LeadSource"
-                description="API name of the field containing the source node name"
-                placeholder="LeadSource"/>
-            <property name="targetField" type="String" label="Target Field" default="StageName"
-                description="API name of the field containing the target node name"
-                placeholder="Status"/>
-            <property name="valueField" type="String" label="Value Field"
-                description="API name of the numeric field for flow value (defaults to 1 per record)"
-                placeholder="cnt"/>
+            <property
+        name="sourceField"
+        type="String"
+        label="Source Field"
+        default="LeadSource"
+        description="API name of the field containing the source node name"
+        placeholder="LeadSource"
+      />
+            <property
+        name="targetField"
+        type="String"
+        label="Target Field"
+        default="StageName"
+        description="API name of the field containing the target node name"
+        placeholder="Status"
+      />
+            <property
+        name="valueField"
+        type="String"
+        label="Value Field"
+        description="API name of the numeric field for flow value (defaults to 1 per record)"
+        placeholder="cnt"
+      />
             
             <!-- Appearance -->
-            <property name="height" type="Integer" label="Height (px)" default="400"
-                description="Chart height in pixels" min="200" max="1000"/>
-            <property name="theme" type="String" label="Color Theme" default="Salesforce Standard"
-                datasource="Salesforce Standard,Warm,Cool,Vibrant"
-                description="Color palette for nodes"/>
+            <property
+        name="height"
+        type="Integer"
+        label="Height (px)"
+        default="400"
+        description="Chart height in pixels"
+        min="200"
+        max="1000"
+      />
+            <property
+        name="theme"
+        type="String"
+        label="Color Theme"
+        default="Salesforce Standard"
+        datasource="Salesforce Standard,Warm,Cool,Vibrant"
+        description="Color palette for nodes"
+      />
             
             <!-- Node Configuration -->
-            <property name="nodeWidth" type="Integer" label="Node Width (px)" default="20"
-                description="Width of node rectangles" min="10" max="50"/>
-            <property name="nodePadding" type="Integer" label="Node Padding (px)" default="10"
-                description="Vertical spacing between nodes" min="2" max="50"/>
+            <property
+        name="nodeWidth"
+        type="Integer"
+        label="Node Width (px)"
+        default="20"
+        description="Width of node rectangles"
+        min="10"
+        max="50"
+      />
+            <property
+        name="nodePadding"
+        type="Integer"
+        label="Node Padding (px)"
+        default="10"
+        description="Vertical spacing between nodes"
+        min="2"
+        max="50"
+      />
             
             <!-- Link Configuration -->
-            <property name="linkColorMode" type="String" label="Link Color Mode" default="gradient"
-                datasource="gradient,source,target,solid"
-                description="How to color the flow links"/>
-            <property name="linkOpacity" type="String" label="Link Opacity" default="0.5"
-                description="Default opacity of links (0-1)"/>
-            <property name="linkHoverOpacity" type="String" label="Link Hover Opacity" default="0.8"
-                description="Opacity of links on hover (0-1)"/>
+            <property
+        name="linkColorMode"
+        type="String"
+        label="Link Color Mode"
+        default="gradient"
+        datasource="gradient,source,target,solid"
+        description="How to color the flow links"
+      />
+            <property
+        name="linkOpacity"
+        type="String"
+        label="Link Opacity"
+        default="0.5"
+        description="Default opacity of links (0-1)"
+      />
+            <property
+        name="linkHoverOpacity"
+        type="String"
+        label="Link Hover Opacity"
+        default="0.8"
+        description="Opacity of links on hover (0-1)"
+      />
             
             <!-- Labels -->
-            <property name="showLabels" type="Boolean" label="Show Labels" default="true"
-                description="Display node labels"/>
-            <property name="showValues" type="Boolean" label="Show Values" default="true"
-                description="Display values in node labels"/>
-            <property name="labelPosition" type="String" label="Label Position" default="auto"
-                datasource="auto,inside,outside"
-                description="Position of node labels"/>
+            <property
+        name="showLabels"
+        type="Boolean"
+        label="Show Labels"
+        default="true"
+        description="Display node labels"
+      />
+            <property
+        name="showValues"
+        type="Boolean"
+        label="Show Values"
+        default="true"
+        description="Display values in node labels"
+      />
+            <property
+        name="labelPosition"
+        type="String"
+        label="Label Position"
+        default="auto"
+        datasource="auto,inside,outside"
+        description="Position of node labels"
+      />
             
             <!-- Layout -->
-            <property name="iterations" type="Integer" label="Layout Iterations" default="32"
-                description="Number of layout iterations (higher = better layout)" min="6" max="100"/>
+            <property
+        name="iterations"
+        type="Integer"
+        label="Layout Iterations"
+        default="32"
+        description="Number of layout iterations (higher = better layout)"
+        min="6"
+        max="100"
+      />
             
             <!-- Navigation -->
-            <property name="objectApiName" type="String" label="Object API Name"
-                description="Object API name for navigation on click"
-                placeholder="Lead"/>
-            <property name="filterField" type="String" label="Filter Field"
-                description="Field to use for filtering when navigating"/>
+            <property
+        name="objectApiName"
+        type="String"
+        label="Object API Name"
+        description="Object API name for navigation on click"
+        placeholder="Lead"
+      />
+            <property
+        name="filterField"
+        type="String"
+        label="Filter Field"
+        description="Field to use for filtering when navigating"
+      />
             
             <!-- Advanced -->
-            <property name="advancedConfig" type="String" label="Advanced Config (JSON)"
-                description='{"customColors": ["#FF5733", "#33FF57"], "linkColor": "#999"}'/>
+            <property
+        name="advancedConfig"
+        type="String"
+        label="Advanced Config (JSON)"
+        description='{"customColors": ["#FF5733", "#33FF57"], "linkColor": "#999"}'
+      />
+        </targetConfig>
+        
+        <!-- Flow Screen Configuration -->
+        <targetConfig targets="lightning__FlowScreen">
+            <propertyType
+        name="T"
+        extends="SObject"
+        label="Record Type"
+        description="SObject type for the record collection"
+      />
+            <property
+        name="recordCollection"
+        type="{T[]}"
+        label="Record Collection"
+        role="inputOnly"
+        description="Collection of records from Flow with source, target, and value fields"
+      />
+            <property
+        name="sourceField"
+        type="String"
+        label="Source Field"
+        default="LeadSource"
+        description="API name of the field containing the source node name"
+      />
+            <property
+        name="targetField"
+        type="String"
+        label="Target Field"
+        default="StageName"
+        description="API name of the field containing the target node name"
+      />
+            <property
+        name="valueField"
+        type="String"
+        label="Value Field"
+        description="API name of the numeric field for flow value"
+      />
+            <property
+        name="height"
+        type="Integer"
+        label="Height (px)"
+        default="400"
+      />
+            <property
+        name="theme"
+        type="String"
+        label="Color Theme"
+        default="Salesforce Standard"
+      />
+            <property
+        name="nodeWidth"
+        type="Integer"
+        label="Node Width (px)"
+        default="20"
+      />
+            <property
+        name="nodePadding"
+        type="Integer"
+        label="Node Padding (px)"
+        default="10"
+      />
+            <property
+        name="linkColorMode"
+        type="String"
+        label="Link Color Mode"
+        default="gradient"
+      />
+            <property
+        name="showLabels"
+        type="Boolean"
+        label="Show Labels"
+        default="true"
+      />
+            <property
+        name="showValues"
+        type="Boolean"
+        label="Show Values"
+        default="true"
+      />
+            <property
+        name="objectApiName"
+        type="String"
+        label="Object API Name"
+        description="Object for navigation on click"
+      />
         </targetConfig>
     </targetConfigs>
 </LightningComponentBundle>
