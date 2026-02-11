@@ -42,6 +42,10 @@ $RECYCLE.BIN/
 # Local environment variables
 .env
 
+# Internal planning documents
+IMPLEMENTATION-BLUEPRINT.md
+PROJECT-SPEC.md
+
 # Python Salesforce Functions
 **/__pycache__/
 **/.venv/
