@@ -10,6 +10,7 @@
         <target>lightning__RecordPage</target>
         <target>lightning__HomePage</target>
         <target>lightningCommunity__Default</target>
+        <target>lightning__FlowScreen</target>
     </targets>
     <targetConfigs>
         <targetConfig
