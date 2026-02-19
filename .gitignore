@@ -45,6 +45,7 @@ $RECYCLE.BIN/
 # Internal planning documents
 IMPLEMENTATION-BLUEPRINT.md
 PROJECT-SPEC.md
+ROADMAP.md
 
 # Python Salesforce Functions
 **/__pycache__/
