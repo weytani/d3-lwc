@@ -19,18 +19,18 @@ A complete suite of 10 Lightning Web Components (LWC) that wrap D3.js charts for
 
 ## 📦 Components
 
-| Component | Description | Key Features |
-|-----------|-------------|--------------|
-| `c-d3-gauge` | Single KPI gauge | Zones, thresholds, color coding |
-| `c-d3-bar-chart` | Aggregated bar chart | Vertical bars, drill-down, grid |
-| `c-d3-donut-chart` | Part-to-whole | Animated slices, center total, legend |
-| `c-d3-line-chart` | Time series | Multi-series, date parsing, curve types |
-| `c-d3-scatter-plot` | Correlation | Trend line, Pearson coefficient, point sizing |
-| `c-d3-histogram` | Distribution | Auto-binning, normal curve overlay, statistics |
-| `c-d3-treemap` | Hierarchical | Nested rectangles, zoom/drill, breadcrumbs |
-| `c-d3-sankey` | Flow/process | Nodes + links, gradient colors, flow values |
-| `c-d3-force-graph` | Network graph | Force simulation, drag, zoom/pan, node sizing |
-| `c-d3-choropleth` | Geographic map | US states, world, custom GeoJSON, color scales |
+| Component | Description | Status | Key Features |
+|-----------|-------------|--------|--------------|
+| `c-d3-gauge` | Single KPI gauge | Done | Zones, thresholds, color coding |
+| `c-d3-bar-chart` | Aggregated bar chart | Done | Vertical bars, drill-down, grid |
+| `c-d3-donut-chart` | Part-to-whole | Done | Animated slices, center total, legend |
+| `c-d3-line-chart` | Time series | Done | Multi-series, date parsing, curve types |
+| `c-d3-scatter-plot` | Correlation | Done | Trend line, Pearson coefficient, point sizing |
+| `c-d3-histogram` | Distribution | Done | Auto-binning, normal curve overlay, statistics |
+| `c-d3-treemap` | Hierarchical | Done | Nested rectangles, zoom/drill, breadcrumbs |
+| `c-d3-sankey` | Flow/process | Done | Nodes + links, gradient colors, flow values |
+| `c-d3-force-graph` | Network graph | Done | Force simulation, drag, zoom/pan, node sizing |
+| `c-d3-choropleth` | Geographic map | **In Progress** | US states, world, custom GeoJSON, color scales |
 
 ## 🏗️ Architecture
 
