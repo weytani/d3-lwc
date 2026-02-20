@@ -4,6 +4,7 @@ import { createElement } from "lwc";
 import D3Histogram from "c/d3Histogram";
 import { loadD3 } from "c/d3Lib";
 import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
+import getStatistics from "@salesforce/apex/D3ChartController.getStatistics";
 
 // Mock d3Lib
 jest.mock("c/d3Lib", () => ({
@@ -13,6 +14,14 @@ jest.mock("c/d3Lib", () => ({
 // Mock Apex
 jest.mock(
   "@salesforce/apex/D3ChartController.executeQuery",
+  () => ({
+    default: jest.fn()
+  }),
+  { virtual: true }
+);
+
+jest.mock(
+  "@salesforce/apex/D3ChartController.getStatistics",
   () => ({
     default: jest.fn()
   }),
@@ -143,6 +152,14 @@ describe("c-d3-histogram", () => {
     mockD3 = createMockD3();
     loadD3.mockResolvedValue(mockD3);
     executeQuery.mockResolvedValue(SAMPLE_DATA);
+    getStatistics.mockResolvedValue({
+      mean: 54000,
+      median: 52500,
+      stdDev: 26500,
+      count: 10,
+      min: 10000,
+      max: 100000
+    });
 
     // Mock getBoundingClientRect
     Element.prototype.getBoundingClientRect = jest.fn(() => ({
@@ -653,6 +670,86 @@ describe("c-d3-histogram", () => {
       document.body.removeChild(element);
 
       expect(mockDisconnect).toHaveBeenCalled();
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════
+  // SERVER STATISTICS TESTS
+  // ═══════════════════════════════════════════════════════════════
+
+  describe("server statistics", () => {
+    it("calls getStatistics when using soqlQuery path", async () => {
+      await createChart({
+        recordCollection: [],
+        soqlQuery: "SELECT Amount FROM Opportunity",
+        valueField: "Amount"
+      });
+
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(getStatistics).toHaveBeenCalledWith({
+        queryString: "SELECT Amount FROM Opportunity",
+        valueField: "Amount"
+      });
+    });
+
+    it("does not call getStatistics when using recordCollection", async () => {
+      await createChart({
+        recordCollection: SAMPLE_DATA,
+        valueField: "Amount"
+      });
+
+      await Promise.resolve();
+
+      expect(getStatistics).not.toHaveBeenCalled();
+    });
+
+    it("renders chart with server-provided statistics", async () => {
+      await createChart({
+        recordCollection: [],
+        soqlQuery: "SELECT Amount FROM Opportunity",
+        valueField: "Amount",
+        showStatistics: true
+      });
+
+      await Promise.resolve();
+      await Promise.resolve();
+
+      const container = element.shadowRoot.querySelector(".chart-container");
+      expect(container).toBeTruthy();
+      const errorElement = element.shadowRoot.querySelector(
+        ".slds-text-color_error"
+      );
+      expect(errorElement).toBeFalsy();
+    });
+
+    it("falls back to client-side statistics when server call fails", async () => {
+      const consoleWarnSpy = jest
+        .spyOn(console, "warn")
+        .mockImplementation(() => {});
+
+      getStatistics.mockRejectedValue(new Error("Server stats failed"));
+
+      await createChart({
+        recordCollection: [],
+        soqlQuery: "SELECT Amount FROM Opportunity",
+        valueField: "Amount",
+        showStatistics: true
+      });
+
+      await Promise.resolve();
+      await Promise.resolve();
+
+      // Component should still render (fallback to client-side stats)
+      const container = element.shadowRoot.querySelector(".chart-container");
+      expect(container).toBeTruthy();
+      const errorElement = element.shadowRoot.querySelector(
+        ".slds-text-color_error"
+      );
+      expect(errorElement).toBeFalsy();
+
+      consoleWarnSpy.mockRestore();
     });
   });
 

@@ -13,6 +13,7 @@ import {
 import { NavigationMixin } from "lightning/navigation";
 import { ShowToastEvent } from "lightning/platformShowToastEvent";
 import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
+import getCorrelation from "@salesforce/apex/D3ChartController.getCorrelation";
 
 export default class D3ScatterPlot extends NavigationMixin(LightningElement) {
   // ═══════════════════════════════════════════════════════════════
@@ -87,6 +88,8 @@ export default class D3ScatterPlot extends NavigationMixin(LightningElement) {
   _config = {};
   _configParsed = false;
   _groupNames = [];
+  _serverCorrelation = null;
+  _usedRecordCollection = false;
 
   // ═══════════════════════════════════════════════════════════════
   // GETTERS
@@ -199,7 +202,9 @@ export default class D3ScatterPlot extends NavigationMixin(LightningElement) {
 
     if (this.recordCollection && this.recordCollection.length > 0) {
       rawData = [...this.recordCollection];
+      this._usedRecordCollection = true;
     } else if (this.soqlQuery) {
+      this._usedRecordCollection = false;
       try {
         rawData = await executeQuery({ queryString: this.soqlQuery });
       } catch (e) {
@@ -238,9 +243,26 @@ export default class D3ScatterPlot extends NavigationMixin(LightningElement) {
       throw new Error("No valid data points after processing");
     }
 
-    // Calculate correlation if needed
+    // Calculate correlation — prefer server-side when using SOQL path
     if (this.showTrendLine || this.showCorrelation) {
-      this.calculateCorrelation();
+      if (this.soqlQuery && !this._usedRecordCollection) {
+        try {
+          const serverResult = await getCorrelation({
+            queryString: this.soqlQuery,
+            xField: this.xAxisField,
+            yField: this.yAxisField
+          });
+          this.correlationCoefficient = serverResult.r;
+          this._serverCorrelation = serverResult;
+        } catch (e) {
+          // Fall back to client-side calculation on server error
+          console.warn('Server correlation failed, falling back to client-side:', e);
+          this.calculateCorrelation();
+          this._serverCorrelation = null;
+        }
+      } else {
+        this.calculateCorrelation();
+      }
     }
   }
 
@@ -545,7 +567,15 @@ export default class D3ScatterPlot extends NavigationMixin(LightningElement) {
    * @param {Function} yScale - D3 y scale
    */
   drawTrendLine(xScale, yScale) {
-    const { slope, intercept } = this.calculateLinearRegression();
+    let slope, intercept;
+    if (this._serverCorrelation && this._serverCorrelation.slope != null) {
+      slope = this._serverCorrelation.slope;
+      intercept = this._serverCorrelation.intercept;
+    } else {
+      const regression = this.calculateLinearRegression();
+      slope = regression.slope;
+      intercept = regression.intercept;
+    }
 
     const xDomain = xScale.domain();
     const x1 = xDomain[0];

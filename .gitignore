@@ -46,6 +46,7 @@ $RECYCLE.BIN/
 IMPLEMENTATION-BLUEPRINT.md
 PROJECT-SPEC.md
 ROADMAP.md
+prompt_plan_*.json
 
 # Python Salesforce Functions
 **/__pycache__/

@@ -31,9 +31,15 @@ Pre-commit hook (husky + lint-staged) auto-runs Prettier, ESLint, and related Je
 
 ### Data Flow
 
-1. `recordCollection` (direct data) or `soqlQuery` → Apex `D3ChartController.executeQuery()`
-2. `dataService.validateData()` → `validateFields()` → `truncateData()` (2,000 record limit) → `aggregateData()`
-3. Processed data → D3 renders into an empty `<div>` in the component template
+1. **Server-preferred path** (when `objectApiName` + field config available):
+   - Aggregation charts (bar, donut, treemap): `getAggregatedData` → server-side GROUP BY → pre-bucketed results
+   - Histogram statistics: `getStatistics` → server-side mean/median/stdDev (raw values still fetched for binning)
+   - Scatter correlation: `getCorrelation` → server-side Pearson r, slope, intercept (raw points still fetched for rendering)
+
+2. **Client-side path** (recordCollection or soqlQuery-only fallback):
+   - `recordCollection` or `soqlQuery` → Apex `D3ChartController.executeQuery()`
+   - `dataService.validateData()` → `validateFields()` → `truncateData()` (2,000 record limit) → `aggregateData()`
+   - Processed data → D3 renders into an empty `<div>`
 
 ### Shared Modules
 
@@ -51,7 +57,11 @@ Every chart component follows this structure:
 
 ### Apex Controller
 
-`D3ChartController` (`with sharing`) — `executeQuery(queryString)` is `@AuraEnabled(cacheable=true)`. Validates SOQL starts with SELECT, auto-adds LIMIT 2000 (skips for aggregates), enforces FLS via `Security.stripInaccessible()`.
+`D3ChartController` (`with sharing`) — four `@AuraEnabled(cacheable=true)` methods:
+- `executeQuery(queryString)` — Raw SOQL execution with FLS enforcement. Auto-adds LIMIT 2000.
+- `getAggregatedData(objectName, groupByField, valueField, operation, filterClause)` — Server-side GROUP BY aggregation. Validates object/field existence via Schema describe. Returns label/value pairs. LIMIT 200 groups.
+- `getStatistics(queryString, valueField)` — Computes count, min, max, mean, median, and population stdDev server-side.
+- `getCorrelation(queryString, xField, yField)` — Computes Pearson correlation coefficient, linear regression slope and intercept.
 
 ### Testing
 

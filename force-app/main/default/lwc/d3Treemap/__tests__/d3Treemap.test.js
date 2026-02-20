@@ -5,6 +5,7 @@ import { createElement } from "lwc";
 import D3Treemap from "c/d3Treemap";
 import { loadD3 } from "c/d3Lib";
 import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
+import getAggregatedData from "@salesforce/apex/D3ChartController.getAggregatedData";
 
 // Mock d3Lib
 jest.mock("c/d3Lib", () => ({
@@ -14,6 +15,14 @@ jest.mock("c/d3Lib", () => ({
 // Mock Apex
 jest.mock(
   "@salesforce/apex/D3ChartController.executeQuery",
+  () => ({
+    default: jest.fn()
+  }),
+  { virtual: true }
+);
+
+jest.mock(
+  "@salesforce/apex/D3ChartController.getAggregatedData",
   () => ({
     default: jest.fn()
   }),
@@ -223,6 +232,11 @@ describe("c-d3-treemap", () => {
     mockD3 = createMockD3();
     loadD3.mockResolvedValue(mockD3);
     executeQuery.mockResolvedValue(SAMPLE_FLAT_DATA);
+    getAggregatedData.mockResolvedValue([
+      { label: "Prospecting", value: 30000 },
+      { label: "Closed Won", value: 105000 },
+      { label: "Negotiation", value: 60000 }
+    ]);
 
     // Mock getBoundingClientRect
     Element.prototype.getBoundingClientRect = jest.fn(() => ({
@@ -1203,6 +1217,154 @@ describe("c-d3-treemap", () => {
         element.shadowRoot.querySelector(".slds-text-color_error") ||
         element.shadowRoot.querySelector(".slds-text-color_weak");
       expect(hasState).toBeTruthy();
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════
+  // SERVER AGGREGATION TESTS
+  // ═══════════════════════════════════════════════════════════════
+
+  describe("server aggregation", () => {
+    it("calls getAggregatedData when objectApiName is set without secondaryGroupByField", async () => {
+      await createChart({
+        recordCollection: [],
+        soqlQuery: "",
+        objectApiName: "Opportunity",
+        groupByField: "StageName",
+        valueField: "Amount",
+        operation: "Sum",
+        secondaryGroupByField: ""
+      });
+
+      await Promise.resolve();
+
+      expect(getAggregatedData).toHaveBeenCalledWith({
+        objectName: "Opportunity",
+        groupByField: "StageName",
+        valueField: "Amount",
+        operation: "Sum",
+        filterClause: null
+      });
+      expect(executeQuery).not.toHaveBeenCalled();
+    });
+
+    it("passes filterClause to getAggregatedData when set", async () => {
+      await createChart({
+        recordCollection: [],
+        soqlQuery: "",
+        objectApiName: "Opportunity",
+        groupByField: "StageName",
+        valueField: "Amount",
+        operation: "Sum",
+        filterClause: "Amount > 10000"
+      });
+
+      await Promise.resolve();
+
+      expect(getAggregatedData).toHaveBeenCalledWith({
+        objectName: "Opportunity",
+        groupByField: "StageName",
+        valueField: "Amount",
+        operation: "Sum",
+        filterClause: "Amount > 10000"
+      });
+    });
+
+    it("falls back to soqlQuery when secondaryGroupByField is set", async () => {
+      await createChart({
+        recordCollection: [],
+        soqlQuery: "SELECT StageName, Type, Amount FROM Opportunity",
+        objectApiName: "Opportunity",
+        groupByField: "StageName",
+        secondaryGroupByField: "Type",
+        valueField: "Amount",
+        operation: "Sum"
+      });
+
+      await Promise.resolve();
+
+      expect(getAggregatedData).not.toHaveBeenCalled();
+      expect(executeQuery).toHaveBeenCalledWith({
+        queryString: "SELECT StageName, Type, Amount FROM Opportunity"
+      });
+    });
+
+    it("renders chart from server aggregated data", async () => {
+      await createChart({
+        recordCollection: [],
+        soqlQuery: "",
+        objectApiName: "Opportunity",
+        groupByField: "StageName",
+        valueField: "Amount",
+        operation: "Sum"
+      });
+
+      await Promise.resolve();
+      await Promise.resolve();
+
+      const container = element.shadowRoot.querySelector(".chart-container");
+      expect(container).toBeTruthy();
+      const errorElement = element.shadowRoot.querySelector(
+        ".slds-text-color_error"
+      );
+      expect(errorElement).toBeFalsy();
+    });
+
+    it("shows error when getAggregatedData fails", async () => {
+      getAggregatedData.mockRejectedValue({
+        body: { message: "Server aggregation error" }
+      });
+
+      await createChart({
+        recordCollection: [],
+        soqlQuery: "",
+        objectApiName: "Opportunity",
+        groupByField: "StageName",
+        valueField: "Amount",
+        operation: "Sum"
+      });
+
+      await flushPromises();
+
+      const errorElement = element.shadowRoot.querySelector(
+        ".slds-text-color_error"
+      );
+      expect(errorElement).toBeTruthy();
+    });
+
+    it("shows error when getAggregatedData returns empty array", async () => {
+      getAggregatedData.mockResolvedValue([]);
+
+      await createChart({
+        recordCollection: [],
+        soqlQuery: "",
+        objectApiName: "Opportunity",
+        groupByField: "StageName",
+        valueField: "Amount",
+        operation: "Sum"
+      });
+
+      await flushPromises();
+
+      const errorElement = element.shadowRoot.querySelector(
+        ".slds-text-color_error"
+      );
+      expect(errorElement).toBeTruthy();
+    });
+
+    it("prefers recordCollection over server aggregation", async () => {
+      await createChart({
+        recordCollection: SAMPLE_FLAT_DATA,
+        objectApiName: "Opportunity",
+        groupByField: "StageName",
+        valueField: "Amount",
+        operation: "Sum"
+      });
+
+      await Promise.resolve();
+
+      expect(getAggregatedData).not.toHaveBeenCalled();
+      expect(executeQuery).not.toHaveBeenCalled();
     });
   });
 
