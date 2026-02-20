@@ -1,6 +1,13 @@
 /**
  * Data processing utilities for D3 chart components.
  * Handles validation, truncation, and aggregation.
+ *
+ * For the soqlQuery path with full field configuration, charts prefer
+ * server-side processing via D3ChartController Apex methods
+ * (getAggregatedData, getStatistics, getCorrelation).
+ * These client-side utilities serve as the processing layer for
+ * the recordCollection path and as a fallback when server-side
+ * processing is unavailable.
  */
 
 /**
@@ -112,6 +119,9 @@ export const prepareData = (data, options = {}) => {
 
 /**
  * Aggregates data by a group field using the specified operation.
+ * For the soqlQuery path, prefer the server-side getAggregatedData Apex method
+ * which can process larger datasets via SOQL GROUP BY.
+ * This function is used for the recordCollection path and as a fallback.
  * @param {Array} data - Array of records
  * @param {String} groupByField - Field to group by
  * @param {String} valueField - Field to aggregate (not needed for Count)

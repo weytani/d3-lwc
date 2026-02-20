@@ -5,6 +5,7 @@ import { createElement } from "lwc";
 import D3BarChart from "c/d3BarChart";
 import { loadD3 } from "c/d3Lib";
 import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
+import getAggregatedData from "@salesforce/apex/D3ChartController.getAggregatedData";
 
 // Mock d3Lib
 jest.mock("c/d3Lib", () => ({
@@ -14,6 +15,14 @@ jest.mock("c/d3Lib", () => ({
 // Mock Apex
 jest.mock(
   "@salesforce/apex/D3ChartController.executeQuery",
+  () => ({
+    default: jest.fn()
+  }),
+  { virtual: true }
+);
+
+jest.mock(
+  "@salesforce/apex/D3ChartController.getAggregatedData",
   () => ({
     default: jest.fn()
   }),
@@ -116,6 +125,11 @@ describe("c-d3-bar-chart", () => {
     mockD3 = createMockD3();
     loadD3.mockResolvedValue(mockD3);
     executeQuery.mockResolvedValue(SAMPLE_DATA);
+    getAggregatedData.mockResolvedValue([
+      { label: "Prospecting", value: 300 },
+      { label: "Qualification", value: 150 },
+      { label: "Closed Won", value: 500 }
+    ]);
 
     // Spy on console to ensure pristine output
     consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
@@ -995,6 +1009,152 @@ describe("c-d3-bar-chart", () => {
         (c) => c[0] === "class" && c[1] === "grid"
       );
       expect(gridCalls.length).toBeGreaterThan(0);
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════
+  // SERVER AGGREGATION TESTS
+  // ═══════════════════════════════════════════════════════════════
+
+  describe("server aggregation", () => {
+    it("calls getAggregatedData when objectApiName, groupByField, valueField, and operation are set", async () => {
+      await createChart({
+        recordCollection: [],
+        soqlQuery: "",
+        objectApiName: "Opportunity",
+        groupByField: "StageName",
+        valueField: "Amount",
+        operation: "Sum"
+      });
+
+      await flushPromises();
+
+      expect(getAggregatedData).toHaveBeenCalledWith({
+        objectName: "Opportunity",
+        groupByField: "StageName",
+        valueField: "Amount",
+        operation: "Sum",
+        filterClause: null
+      });
+      expect(executeQuery).not.toHaveBeenCalled();
+    });
+
+    it("passes filterClause to getAggregatedData when set", async () => {
+      await createChart({
+        recordCollection: [],
+        soqlQuery: "",
+        objectApiName: "Opportunity",
+        groupByField: "StageName",
+        valueField: "Amount",
+        operation: "Sum",
+        filterClause: "Amount > 1000"
+      });
+
+      await flushPromises();
+
+      expect(getAggregatedData).toHaveBeenCalledWith({
+        objectName: "Opportunity",
+        groupByField: "StageName",
+        valueField: "Amount",
+        operation: "Sum",
+        filterClause: "Amount > 1000"
+      });
+    });
+
+    it("falls back to soqlQuery with client aggregation when objectApiName is not set", async () => {
+      await createChart({
+        recordCollection: [],
+        soqlQuery: "SELECT StageName, Amount FROM Opportunity",
+        objectApiName: "",
+        groupByField: "StageName",
+        valueField: "Amount",
+        operation: "Sum"
+      });
+
+      await flushPromises();
+
+      expect(getAggregatedData).not.toHaveBeenCalled();
+      expect(executeQuery).toHaveBeenCalledWith({
+        queryString: "SELECT StageName, Amount FROM Opportunity"
+      });
+    });
+
+    it("renders chart from server aggregated data", async () => {
+      await createChart({
+        recordCollection: [],
+        soqlQuery: "",
+        objectApiName: "Opportunity",
+        groupByField: "StageName",
+        valueField: "Amount",
+        operation: "Sum"
+      });
+
+      await flushPromises();
+      await flushPromises();
+
+      const container = element.shadowRoot.querySelector(".chart-container");
+      expect(container).toBeTruthy();
+      const errorElement = element.shadowRoot.querySelector(
+        ".slds-text-color_error"
+      );
+      expect(errorElement).toBeFalsy();
+    });
+
+    it("shows error when getAggregatedData fails", async () => {
+      getAggregatedData.mockRejectedValue({
+        body: { message: "Aggregation failed" }
+      });
+
+      await createChart({
+        recordCollection: [],
+        soqlQuery: "",
+        objectApiName: "Opportunity",
+        groupByField: "StageName",
+        valueField: "Amount",
+        operation: "Sum"
+      });
+
+      await flushPromises();
+
+      const errorElement = element.shadowRoot.querySelector(
+        ".slds-text-color_error"
+      );
+      expect(errorElement).toBeTruthy();
+    });
+
+    it("shows error when getAggregatedData returns empty array", async () => {
+      getAggregatedData.mockResolvedValue([]);
+
+      await createChart({
+        recordCollection: [],
+        soqlQuery: "",
+        objectApiName: "Opportunity",
+        groupByField: "StageName",
+        valueField: "Amount",
+        operation: "Sum"
+      });
+
+      await flushPromises();
+
+      const errorElement = element.shadowRoot.querySelector(
+        ".slds-text-color_error"
+      );
+      expect(errorElement).toBeTruthy();
+    });
+
+    it("prefers recordCollection over server aggregation", async () => {
+      await createChart({
+        recordCollection: SAMPLE_DATA,
+        objectApiName: "Opportunity",
+        groupByField: "StageName",
+        valueField: "Amount",
+        operation: "Sum"
+      });
+
+      await flushPromises();
+
+      expect(getAggregatedData).not.toHaveBeenCalled();
+      expect(executeQuery).not.toHaveBeenCalled();
     });
   });
 

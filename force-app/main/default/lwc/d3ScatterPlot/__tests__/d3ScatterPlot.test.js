@@ -5,6 +5,7 @@ import { createElement } from "lwc";
 import D3ScatterPlot from "c/d3ScatterPlot";
 import { loadD3 } from "c/d3Lib";
 import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
+import getCorrelation from "@salesforce/apex/D3ChartController.getCorrelation";
 
 // Mock d3Lib
 jest.mock("c/d3Lib", () => ({
@@ -14,6 +15,14 @@ jest.mock("c/d3Lib", () => ({
 // Mock Apex
 jest.mock(
   "@salesforce/apex/D3ChartController.executeQuery",
+  () => ({
+    default: jest.fn()
+  }),
+  { virtual: true }
+);
+
+jest.mock(
+  "@salesforce/apex/D3ChartController.getCorrelation",
   () => ({
     default: jest.fn()
   }),
@@ -138,6 +147,12 @@ describe("c-d3-scatter-plot", () => {
     jest.clearAllMocks();
     loadD3.mockResolvedValue(mockD3);
     executeQuery.mockResolvedValue(SAMPLE_DATA);
+    getCorrelation.mockResolvedValue({
+      r: 0.95,
+      slope: 0.001,
+      intercept: 10,
+      count: 5
+    });
 
     // Mock getBoundingClientRect
     Element.prototype.getBoundingClientRect = jest.fn(() => ({
@@ -639,6 +654,123 @@ describe("c-d3-scatter-plot", () => {
 
       // Should not throw error
       expect(loadD3).toHaveBeenCalled();
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════
+  // SERVER CORRELATION TESTS
+  // ═══════════════════════════════════════════════════════════════
+
+  describe("server correlation", () => {
+    it("calls getCorrelation when soqlQuery path with showTrendLine", async () => {
+      await createChart({
+        recordCollection: [],
+        soqlQuery: "SELECT Id, Amount, Probability FROM Opportunity",
+        xAxisField: "Amount",
+        yAxisField: "Probability",
+        showTrendLine: true
+      });
+
+      await flushPromises();
+
+      expect(getCorrelation).toHaveBeenCalledWith({
+        queryString: "SELECT Id, Amount, Probability FROM Opportunity",
+        xField: "Amount",
+        yField: "Probability"
+      });
+    });
+
+    it("calls getCorrelation when soqlQuery path with showCorrelation", async () => {
+      await createChart({
+        recordCollection: [],
+        soqlQuery: "SELECT Id, Amount, Probability FROM Opportunity",
+        xAxisField: "Amount",
+        yAxisField: "Probability",
+        showCorrelation: true
+      });
+
+      await flushPromises();
+
+      expect(getCorrelation).toHaveBeenCalledWith({
+        queryString: "SELECT Id, Amount, Probability FROM Opportunity",
+        xField: "Amount",
+        yField: "Probability"
+      });
+    });
+
+    it("does not call getCorrelation when using recordCollection", async () => {
+      await createChart({
+        recordCollection: SAMPLE_DATA,
+        showTrendLine: true,
+        showCorrelation: true
+      });
+
+      await flushPromises();
+
+      expect(getCorrelation).not.toHaveBeenCalled();
+    });
+
+    it("does not call getCorrelation when showTrendLine and showCorrelation are both false", async () => {
+      await createChart({
+        recordCollection: [],
+        soqlQuery: "SELECT Id, Amount, Probability FROM Opportunity",
+        xAxisField: "Amount",
+        yAxisField: "Probability",
+        showTrendLine: false,
+        showCorrelation: false
+      });
+
+      await flushPromises();
+
+      expect(getCorrelation).not.toHaveBeenCalled();
+    });
+
+    it("renders chart with server-provided correlation data", async () => {
+      await createChart({
+        recordCollection: [],
+        soqlQuery: "SELECT Id, Amount, Probability FROM Opportunity",
+        xAxisField: "Amount",
+        yAxisField: "Probability",
+        showTrendLine: true,
+        showCorrelation: true
+      });
+
+      await flushPromises();
+
+      const container = element.shadowRoot.querySelector(".chart-container");
+      expect(container).toBeTruthy();
+      const errorElement = element.shadowRoot.querySelector(
+        ".slds-text-color_error"
+      );
+      expect(errorElement).toBeFalsy();
+    });
+
+    it("falls back to client-side correlation when server call fails", async () => {
+      const consoleWarnSpy = jest
+        .spyOn(console, "warn")
+        .mockImplementation(() => {});
+
+      getCorrelation.mockRejectedValue(new Error("Server correlation failed"));
+
+      await createChart({
+        recordCollection: [],
+        soqlQuery: "SELECT Id, Amount, Probability FROM Opportunity",
+        xAxisField: "Amount",
+        yAxisField: "Probability",
+        showCorrelation: true
+      });
+
+      await flushPromises();
+
+      // Component should still render with client-side correlation
+      const container = element.shadowRoot.querySelector(".chart-container");
+      expect(container).toBeTruthy();
+      const errorElement = element.shadowRoot.querySelector(
+        ".slds-text-color_error"
+      );
+      expect(errorElement).toBeFalsy();
+
+      consoleWarnSpy.mockRestore();
     });
   });
 

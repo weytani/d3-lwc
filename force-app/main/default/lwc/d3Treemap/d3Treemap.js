@@ -15,6 +15,7 @@ import {
 import { NavigationMixin } from "lightning/navigation";
 import { ShowToastEvent } from "lightning/platformShowToastEvent";
 import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
+import getAggregatedData from "@salesforce/apex/D3ChartController.getAggregatedData";
 
 export default class D3Treemap extends NavigationMixin(LightningElement) {
   // ═══════════════════════════════════════════════════════════════
@@ -74,6 +75,9 @@ export default class D3Treemap extends NavigationMixin(LightningElement) {
 
   /** Filter field for drill-down */
   @api filterField = "";
+
+  /** Optional SOQL WHERE clause for server-side aggregation (without WHERE keyword) */
+  @api filterClause = "";
 
   /** Advanced configuration JSON */
   @api advancedConfig = "{}";
@@ -214,6 +218,10 @@ export default class D3Treemap extends NavigationMixin(LightningElement) {
 
     if (this.recordCollection && this.recordCollection.length > 0) {
       rawData = [...this.recordCollection];
+    } else if (this._canUseServerAggregation()) {
+      // Server-side aggregation for single-level hierarchies
+      await this._loadServerAggregatedData();
+      return;
     } else if (this.soqlQuery) {
       try {
         rawData = await executeQuery({ queryString: this.soqlQuery });
@@ -256,6 +264,60 @@ export default class D3Treemap extends NavigationMixin(LightningElement) {
 
     if (!this.rootData.children || this.rootData.children.length === 0) {
       throw new Error("No data after building hierarchy");
+    }
+  }
+
+  /**
+   * Checks whether server-side aggregation can be used.
+   * Requires objectApiName, groupByField, valueField, and operation to be set,
+   * and no secondaryGroupByField (two-level hierarchies fall back to client-side).
+   * @returns {Boolean} - True if server aggregation is available
+   */
+  _canUseServerAggregation() {
+    return (
+      this.objectApiName &&
+      this.groupByField &&
+      this.valueField &&
+      this.operation &&
+      !this.secondaryGroupByField
+    );
+  }
+
+  /**
+   * Loads data via server-side GROUP BY aggregation.
+   * Builds a single-level hierarchy from the aggregated result.
+   */
+  async _loadServerAggregatedData() {
+    try {
+      const result = await getAggregatedData({
+        objectName: this.objectApiName,
+        groupByField: this.groupByField,
+        valueField: this.valueField,
+        operation: this.operation,
+        filterClause: this.filterClause || null
+      });
+
+      this.rootData = {
+        name: "Root",
+        children: result.map((item) => ({
+          name: String(item.label ?? "Null"),
+          value: Number(item.value) || 0,
+          data: {
+            label: String(item.label ?? "Null"),
+            value: Number(item.value) || 0
+          }
+        }))
+      };
+      this.currentRoot = this.rootData;
+      this.calculateTotalValue();
+
+      if (!this.rootData.children || this.rootData.children.length === 0) {
+        throw new Error("No data after server aggregation");
+      }
+    } catch (e) {
+      throw new Error(
+        `Server aggregation error: ${e.body?.message || e.message}`
+      );
     }
   }
 

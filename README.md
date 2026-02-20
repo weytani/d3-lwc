@@ -1,6 +1,6 @@
 # Salesforce D3.js Chart Component Library
 
-A complete suite of 10 Lightning Web Components (LWC) that wrap D3.js charts for use in Salesforce App Builder, Experience Builder, and Screen Flows. Components are drag-and-drop ready, capable of ingesting raw Salesforce record collections, and intelligently handle aggregation client-side.
+A complete suite of 10 Lightning Web Components (LWC) that wrap D3.js charts for use in Salesforce App Builder, Experience Builder, and Screen Flows. Components are drag-and-drop ready, capable of ingesting raw Salesforce record collections, and intelligently handle aggregation via server-side SOQL GROUP BY (preferred) or client-side JavaScript (fallback).
 
 ## Screenshot
 
@@ -10,12 +10,14 @@ A complete suite of 10 Lightning Web Components (LWC) that wrap D3.js charts for
 
 - **10 Chart Types**: Bar, Line, Donut, Gauge, Scatter, Histogram, Treemap, Sankey, Force Graph, Choropleth
 - **Drag-and-Drop Ready**: Fully configurable in Lightning App Builder
-- **Smart Aggregation**: Pass raw records, components handle Sum/Count/Average
+- **Server-Side Aggregation**: GROUP BY queries run in Apex, processing 50K+ records and sending pre-bucketed results to the browser
+- **Dual Data Path**: Server-preferred when `objectApiName` is configured; client-side fallback for `recordCollection` and `soqlQuery`-only usage
+- **Server-Side Analytics**: Statistics (mean, median, stdDev) and correlation (Pearson r, linear regression) computed in Apex
 - **Responsive**: Uses ResizeObserver for adaptive reflow
 - **SLDS Styled**: Consistent with Salesforce Lightning Design System
 - **Theme Support**: 4 built-in palettes + custom colors via JSON config
-- **Performance Guardrails**: 2,000 record limit with user feedback
-- **671 Tests**: Comprehensive Jest test coverage
+- **Performance Guardrails**: 2,000 record limit on client-side path; no practical limit on server-aggregated path
+- **903 Tests**: Comprehensive Jest test coverage across 21 suites
 
 ## 📦 Components
 
@@ -42,6 +44,9 @@ A complete suite of 10 Lightning Web Components (LWC) that wrap D3.js charts for
 │  │  Static Resource │    │         Apex Controller          │  │
 │  │   (D3.js v7)     │    │   D3ChartController.cls          │  │
 │  └────────┬─────────┘    │   - executeQuery(soql)           │  │
+│           │              │   - getAggregatedData(GROUP BY)  │  │
+│           │              │   - getStatistics(stats)         │  │
+│           │              │   - getCorrelation(Pearson r)    │  │
 │           │              │   - with sharing (security)      │  │
 │           │              └──────────────┬───────────────────┘  │
 │           │                             │                       │
@@ -113,13 +118,30 @@ sf lightning dev app -o <your-org-alias>
 |----------|------|-------------|
 | `recordCollection` | Object[] | Data from Flow or parent component |
 | `soqlQuery` | String | SOQL query (used if recordCollection empty) |
+| `objectApiName` | String | SObject API name — enables server-side aggregation |
+| `filterClause` | String | Optional WHERE clause for server aggregation |
 | `height` | Integer | Chart height in pixels |
 | `theme` | String | Color theme (Salesforce Standard, Warm, Cool, Vibrant) |
 | `advancedConfig` | String | JSON for advanced options |
 
-### D3 Bar Chart
+### D3 Bar Chart (Server Aggregation)
 
 ```html
+<!-- Server-side: aggregates across all matching records via SOQL GROUP BY -->
+<c-d3-bar-chart
+    object-api-name="Opportunity"
+    group-by-field="StageName"
+    value-field="Amount"
+    operation="Sum"
+    filter-clause="IsClosed = false"
+    height="300">
+</c-d3-bar-chart>
+```
+
+### D3 Bar Chart (Client-Side Fallback)
+
+```html
+<!-- Client-side: uses recordCollection from Flow or parent component -->
 <c-d3-bar-chart
     record-collection={records}
     group-by-field="StageName"
@@ -256,7 +278,7 @@ npm test -- --testPathPattern=d3BarChart
 npm test -- --coverage
 ```
 
-**Test Coverage:** 671 tests across 14 test suites
+**Test Coverage:** 903 tests across 21 suites (includes server-side aggregation path tests)
 
 ## 📚 References
 

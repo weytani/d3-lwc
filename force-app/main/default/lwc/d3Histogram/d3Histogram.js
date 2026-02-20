@@ -13,6 +13,7 @@ import {
 import { NavigationMixin } from "lightning/navigation";
 import { ShowToastEvent } from "lightning/platformShowToastEvent";
 import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
+import getStatistics from "@salesforce/apex/D3ChartController.getStatistics";
 
 export default class D3Histogram extends NavigationMixin(LightningElement) {
   // ═══════════════════════════════════════════════════════════════
@@ -85,6 +86,7 @@ export default class D3Histogram extends NavigationMixin(LightningElement) {
   _layoutRetry = null;
   _config = {};
   _configParsed = false;
+  _usedRecordCollection = false;
 
   // ═══════════════════════════════════════════════════════════════
   // GETTERS
@@ -188,7 +190,9 @@ export default class D3Histogram extends NavigationMixin(LightningElement) {
 
     if (this.recordCollection && this.recordCollection.length > 0) {
       rawData = [...this.recordCollection];
+      this._usedRecordCollection = true;
     } else if (this.soqlQuery) {
+      this._usedRecordCollection = false;
       try {
         rawData = await executeQuery({ queryString: this.soqlQuery });
       } catch (e) {
@@ -231,8 +235,29 @@ export default class D3Histogram extends NavigationMixin(LightningElement) {
       throw new Error("No valid numeric values found in data");
     }
 
-    // Calculate statistics
-    this.calculateStatistics();
+    // Calculate statistics — prefer server-side when using SOQL path
+    if (this.soqlQuery && !this._usedRecordCollection) {
+      try {
+        const serverStats = await getStatistics({
+          queryString: this.soqlQuery,
+          valueField: this.valueField
+        });
+        this.statistics = {
+          mean: Number(serverStats.mean) || 0,
+          median: Number(serverStats.median) || 0,
+          stdDev: Number(serverStats.stdDev) || 0,
+          count: Number(serverStats.count) || 0,
+          min: Number(serverStats.min) || 0,
+          max: Number(serverStats.max) || 0
+        };
+      } catch (e) {
+        // Fall back to client-side calculation on server error
+        console.warn('Server statistics failed, falling back to client-side:', e);
+        this.calculateStatistics();
+      }
+    } else {
+      this.calculateStatistics();
+    }
   }
 
   /**

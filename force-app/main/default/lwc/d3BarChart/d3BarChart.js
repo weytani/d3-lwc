@@ -17,6 +17,7 @@ import {
 import { NavigationMixin } from "lightning/navigation";
 import { ShowToastEvent } from "lightning/platformShowToastEvent";
 import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
+import getAggregatedData from "@salesforce/apex/D3ChartController.getAggregatedData";
 
 export default class D3BarChart extends NavigationMixin(LightningElement) {
   // ═══════════════════════════════════════════════════════════════
@@ -52,6 +53,9 @@ export default class D3BarChart extends NavigationMixin(LightningElement) {
 
   /** Filter field for drill-down (usually same as groupByField) */
   @api filterField = "";
+
+  /** Optional WHERE clause fragment for server-side aggregation */
+  @api filterClause = "";
 
   // ═══════════════════════════════════════════════════════════════
   // TRACKED STATE
@@ -157,23 +161,56 @@ export default class D3BarChart extends NavigationMixin(LightningElement) {
   // ═══════════════════════════════════════════════════════════════
 
   async loadData() {
-    let rawData = [];
-
-    // Use recordCollection if provided, otherwise execute SOQL
+    // Priority 1: Use recordCollection if provided (client-side aggregation)
     if (this.recordCollection && this.recordCollection.length > 0) {
-      rawData = [...this.recordCollection];
-    } else if (this.soqlQuery) {
+      this.chartData = this._aggregateRawData([...this.recordCollection]);
+      return;
+    }
+
+    // Priority 2: Server-side aggregation when all required fields are set
+    if (this.objectApiName && this.groupByField && this.valueField && this.operation) {
+      try {
+        const result = await getAggregatedData({
+          objectName: this.objectApiName,
+          groupByField: this.groupByField,
+          valueField: this.valueField,
+          operation: this.operation,
+          filterClause: this.filterClause || null
+        });
+        // Server returns [{label, value}, ...] — same shape as aggregateData()
+        this.chartData = result;
+      } catch (e) {
+        throw new Error(`Aggregation Error: ${e.body?.message || e.message}`);
+      }
+
+      if (!this.chartData || this.chartData.length === 0) {
+        throw new Error("No data after aggregation");
+      }
+      return;
+    }
+
+    // Priority 3: Fall back to SOQL query with client-side aggregation
+    if (this.soqlQuery) {
+      let rawData = [];
       try {
         rawData = await executeQuery({ queryString: this.soqlQuery });
       } catch (e) {
         throw new Error(`SOQL Error: ${e.body?.message || e.message}`);
       }
-    } else {
-      throw new Error(
-        "No data source provided. Set recordCollection or soqlQuery."
-      );
+      this.chartData = this._aggregateRawData(rawData);
+      return;
     }
 
+    throw new Error(
+      "No data source provided. Set recordCollection or soqlQuery."
+    );
+  }
+
+  /**
+   * Validates, truncates, and aggregates raw record data client-side.
+   * Used by both recordCollection and soqlQuery paths.
+   */
+  _aggregateRawData(rawData) {
     // Validate required fields
     const requiredFields = [this.groupByField];
     if (this.operation !== OPERATIONS.COUNT) {
@@ -193,16 +230,18 @@ export default class D3BarChart extends NavigationMixin(LightningElement) {
     }
 
     // Aggregate data
-    this.chartData = aggregateData(
+    const aggregated = aggregateData(
       prepared.data,
       this.groupByField,
       this.valueField,
       this.operation
     );
 
-    if (this.chartData.length === 0) {
+    if (aggregated.length === 0) {
       throw new Error("No data after aggregation");
     }
+
+    return aggregated;
   }
 
   showTruncationToast(originalCount) {
