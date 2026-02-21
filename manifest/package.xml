@@ -24,8 +24,13 @@
     </types>
     <types>
         <members>d3</members>
+        <members>d3Sankey</members>
         <members>usStates</members>
         <name>StaticResource</name>
     </types>
-    <version>62.0</version>
+    <types>
+        <members>d3_lwc</members>
+        <name>FlexiPage</name>
+    </types>
+    <version>65.0</version>
 </Package>
