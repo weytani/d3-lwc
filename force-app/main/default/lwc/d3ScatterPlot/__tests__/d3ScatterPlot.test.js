@@ -772,6 +772,32 @@ describe("c-d3-scatter-plot", () => {
 
       consoleWarnSpy.mockRestore();
     });
+
+    it("handles server returning null correlation (Apex null-stripping)", async () => {
+      // Salesforce strips null values from Map<String, Decimal>, so r may be undefined
+      getCorrelation.mockResolvedValue({
+        slope: 0.5,
+        intercept: 10
+      });
+
+      await createChart({
+        recordCollection: [],
+        soqlQuery: "SELECT Id, Amount, Probability FROM Opportunity",
+        xAxisField: "Amount",
+        yAxisField: "Probability",
+        showCorrelation: true
+      });
+
+      await flushPromises();
+
+      // Component should render without crashing
+      const container = element.shadowRoot.querySelector(".chart-container");
+      expect(container).toBeTruthy();
+      const errorElement = element.shadowRoot.querySelector(
+        ".slds-text-color_error"
+      );
+      expect(errorElement).toBeFalsy();
+    });
   });
 
   // ═══════════════════════════════════════════════════════════════

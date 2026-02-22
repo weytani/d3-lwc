@@ -114,17 +114,17 @@ export default class D3ScatterPlot extends NavigationMixin(LightningElement) {
   get showCorrelationInfo() {
     return (
       (this.showTrendLine || this.showCorrelation) &&
-      this.correlationCoefficient !== null
+      this.correlationCoefficient != null
     );
   }
 
   get correlationDisplay() {
-    if (this.correlationCoefficient === null) return "N/A";
+    if (this.correlationCoefficient == null) return "N/A";
     return this.correlationCoefficient.toFixed(3);
   }
 
   get correlationStrength() {
-    if (this.correlationCoefficient === null) return "";
+    if (this.correlationCoefficient == null) return "";
     const absR = Math.abs(this.correlationCoefficient);
     if (absR >= 0.8) return "Strong";
     if (absR >= 0.5) return "Moderate";
@@ -252,7 +252,7 @@ export default class D3ScatterPlot extends NavigationMixin(LightningElement) {
             xField: this.xAxisField,
             yField: this.yAxisField
           });
-          this.correlationCoefficient = serverResult.r;
+          this.correlationCoefficient = serverResult.r != null ? Number(serverResult.r) : null;
           this._serverCorrelation = serverResult;
         } catch (e) {
           // Fall back to client-side calculation on server error
