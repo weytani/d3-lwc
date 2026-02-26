@@ -2,7 +2,7 @@
 // ABOUTME: Displays correlation between two numeric fields with color grouping and navigation.
 import { LightningElement, api, track } from "lwc";
 import { loadD3 } from "c/d3Lib";
-import { prepareData } from "c/dataService";
+import { prepareData, sampleData, SVG_ELEMENT_CAP } from "c/dataService";
 import { getColors, DEFAULT_THEME } from "c/themeService";
 import {
   formatNumber,
@@ -238,6 +238,24 @@ export default class D3ScatterPlot extends NavigationMixin(LightningElement) {
 
     // Process data into scatter format
     this.processScatterData(prepared.data);
+
+    // Sample data if too many points for SVG performance
+    if (this.chartData.length > SVG_ELEMENT_CAP) {
+      const sampleResult = sampleData(this.chartData, "x", SVG_ELEMENT_CAP);
+      this.chartData = sampleResult.data;
+
+      const sampledMsg = `Rendering ${SVG_ELEMENT_CAP} of ${sampleResult.originalCount} points for performance`;
+      if (!this.truncatedWarning) {
+        this.truncatedWarning = sampledMsg;
+      }
+      this.dispatchEvent(
+        new ShowToastEvent({
+          title: "Data Sampled",
+          message: sampledMsg,
+          variant: "info"
+        })
+      );
+    }
 
     if (this.chartData.length === 0) {
       throw new Error("No valid data points after processing");

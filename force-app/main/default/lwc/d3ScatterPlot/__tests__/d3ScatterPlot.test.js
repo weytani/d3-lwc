@@ -993,6 +993,75 @@ describe("c-d3-scatter-plot", () => {
   });
 
   // ═══════════════════════════════════════════════════════════════
+  // DATA SAMPLING TESTS
+  // ═══════════════════════════════════════════════════════════════
+
+  describe("data sampling", () => {
+    it("samples chartData to 500 when recordCollection exceeds SVG_ELEMENT_CAP", async () => {
+      // Generate 600 records (above SVG_ELEMENT_CAP of 500)
+      const largeData = Array.from({ length: 600 }, (_, i) => ({
+        Id: `00${i}`,
+        Amount: i * 100,
+        Probability: i % 100,
+        StageName: "Test"
+      }));
+
+      const toastHandler = jest.fn();
+
+      element = createElement("c-d3-scatter-plot", {
+        is: D3ScatterPlot
+      });
+
+      element.addEventListener("lightning__showtoast", toastHandler);
+
+      Object.assign(element, {
+        xAxisField: "Amount",
+        yAxisField: "Probability",
+        recordCollection: largeData
+      });
+
+      document.body.appendChild(element);
+
+      await Promise.resolve();
+      await Promise.resolve();
+      await flushPromises();
+
+      // Verify toast was dispatched with "Data Sampled" title
+      expect(toastHandler).toHaveBeenCalled();
+      const toastDetail = toastHandler.mock.calls[0][0].detail;
+      expect(toastDetail.title).toBe("Data Sampled");
+      expect(toastDetail.variant).toBe("info");
+      expect(toastDetail.message).toContain("500");
+      expect(toastDetail.message).toContain("600");
+    });
+
+    it("does not sample when data is within SVG_ELEMENT_CAP", async () => {
+      const toastHandler = jest.fn();
+
+      element = createElement("c-d3-scatter-plot", {
+        is: D3ScatterPlot
+      });
+
+      element.addEventListener("lightning__showtoast", toastHandler);
+
+      Object.assign(element, {
+        xAxisField: "Amount",
+        yAxisField: "Probability",
+        recordCollection: SAMPLE_DATA
+      });
+
+      document.body.appendChild(element);
+
+      await Promise.resolve();
+      await Promise.resolve();
+      await flushPromises();
+
+      // No toast should have been dispatched (5 records < 500)
+      expect(toastHandler).not.toHaveBeenCalled();
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════
   // EDGE CASE TESTS
   // ═══════════════════════════════════════════════════════════════
 

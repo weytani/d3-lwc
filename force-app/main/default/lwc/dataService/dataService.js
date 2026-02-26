@@ -118,6 +118,44 @@ export const prepareData = (data, options = {}) => {
 };
 
 /**
+ * Threshold above which scatter data is sampled to reduce SVG element count.
+ */
+export const SVG_ELEMENT_CAP = 500;
+
+/**
+ * Samples data to reduce point count for SVG rendering performance.
+ * Uses stratified sampling to preserve distribution shape:
+ * sorts by the specified field, then takes evenly-spaced samples.
+ * Always includes first and last points to preserve extent.
+ * @param {Array} data - Array of data points
+ * @param {String} sortField - Field to sort by for stratified sampling
+ * @param {Number} limit - Maximum points to return (default: SVG_ELEMENT_CAP)
+ * @returns {Object} - { data: Array, sampled: boolean, originalCount: number }
+ */
+export const sampleData = (data, sortField, limit = SVG_ELEMENT_CAP) => {
+    if (!data || data.length <= limit) {
+        return { data: data || [], sampled: false, originalCount: data ? data.length : 0 };
+    }
+
+    const sorted = [...data].sort((a, b) => {
+        const aVal = Number(a[sortField]) || 0;
+        const bVal = Number(b[sortField]) || 0;
+        return aVal - bVal;
+    });
+
+    const originalCount = sorted.length;
+    const step = (originalCount - 1) / (limit - 1);
+    const sampled = [];
+
+    for (let i = 0; i < limit; i++) {
+        const index = Math.round(i * step);
+        sampled.push(sorted[index]);
+    }
+
+    return { data: sampled, sampled: true, originalCount };
+};
+
+/**
  * Aggregates data by a group field using the specified operation.
  * For the soqlQuery path, prefer the server-side getAggregatedData Apex method
  * which can process larger datasets via SOQL GROUP BY.
