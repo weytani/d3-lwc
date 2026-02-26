@@ -67,6 +67,7 @@ const createMockD3 = () => {
     forceSimulation: jest.fn(() => {
       const sim = {
         force: jest.fn(() => sim),
+        alphaDecay: jest.fn(() => sim),
         on: jest.fn((event, callback) => {
           // Store tick callback for testing
           if (event === "tick") sim._tickCallback = callback;
@@ -798,6 +799,27 @@ describe("c-d3-force-graph", () => {
 
       // Simulation should have stop called
       expect(loadD3).toHaveBeenCalled();
+    });
+
+    it("defaults alphaDecay to 0.05", async () => {
+      await createChart();
+      expect(element.alphaDecay).toBe(0.05);
+    });
+
+    it("calls alphaDecay on the simulation during renderChart", async () => {
+      await createChart();
+      await Promise.resolve();
+
+      const sim = mockD3.forceSimulation.mock.results[0].value;
+      expect(sim.alphaDecay).toHaveBeenCalledWith(0.05);
+    });
+
+    it("passes custom alphaDecay value to the simulation", async () => {
+      await createChart({ alphaDecay: 0.1 });
+      await Promise.resolve();
+
+      const sim = mockD3.forceSimulation.mock.results[0].value;
+      expect(sim.alphaDecay).toHaveBeenCalledWith(0.1);
     });
   });
 
