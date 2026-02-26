@@ -259,6 +259,67 @@ describe("chartUtils", () => {
       });
     });
 
+    it("uses 250ms as the default debounce delay", () => {
+      jest.useFakeTimers();
+      const callback = jest.fn();
+      const handler = createResizeHandler(container, callback);
+      handler.observe();
+
+      // At 200ms the callback should not have fired yet (250ms default)
+      jest.advanceTimersByTime(200);
+      expect(callback).not.toHaveBeenCalled();
+
+      // At 250ms the callback should fire
+      jest.advanceTimersByTime(50);
+      expect(callback).toHaveBeenCalledTimes(1);
+      expect(callback).toHaveBeenCalledWith({ width: 500, height: 300 });
+
+      handler.disconnect();
+      jest.useRealTimers();
+    });
+
+    it("debounces multiple rapid resize events into a single callback", () => {
+      jest.useFakeTimers();
+      const callback = jest.fn();
+      let capturedObserverCallback;
+
+      // Override MockResizeObserver to capture the internal callback
+      const OriginalMock = global.ResizeObserver;
+      global.ResizeObserver = class extends OriginalMock {
+        constructor(cb) {
+          super(cb);
+          capturedObserverCallback = cb;
+        }
+      };
+
+      const handler = createResizeHandler(container, callback, 100);
+      handler.observe();
+
+      // First resize event fired by observe(). Advance partway.
+      jest.advanceTimersByTime(60);
+      expect(callback).not.toHaveBeenCalled();
+
+      // Simulate a second rapid resize before the debounce window closes
+      capturedObserverCallback([
+        { contentRect: { width: 600, height: 400 } }
+      ]);
+
+      // Advance past the original 100ms mark — callback should NOT fire
+      // because the second event reset the debounce timer
+      jest.advanceTimersByTime(60);
+      expect(callback).not.toHaveBeenCalled();
+
+      // Advance to complete the second debounce window
+      jest.advanceTimersByTime(40);
+      expect(callback).toHaveBeenCalledTimes(1);
+      // Should receive the LAST resize dimensions, not the first
+      expect(callback).toHaveBeenCalledWith({ width: 600, height: 400 });
+
+      handler.disconnect();
+      global.ResizeObserver = OriginalMock;
+      jest.useRealTimers();
+    });
+
     it("disconnect cleans up", () => {
       const handler = createResizeHandler(container, jest.fn());
       handler.observe();

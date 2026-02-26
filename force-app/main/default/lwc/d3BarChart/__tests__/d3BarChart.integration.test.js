@@ -540,8 +540,8 @@ describe("c-d3-bar-chart integration", () => {
       // Simulate a resize event through the captured ResizeObserver callback
       resizeObserverCallback([{ contentRect: { width: 600, height: 400 } }]);
 
-      // Advance past the debounce delay (100ms default in createResizeHandler)
-      jest.advanceTimersByTime(100);
+      // Advance past the debounce delay (250ms default in createResizeHandler)
+      jest.advanceTimersByTime(250);
 
       // Restore real timers before flushing promises
       jest.useRealTimers();

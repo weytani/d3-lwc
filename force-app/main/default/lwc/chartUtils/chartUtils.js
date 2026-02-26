@@ -184,10 +184,10 @@ export const buildTooltipContent = (label, value, options = {}) => {
  * Creates a debounced resize observer for a container.
  * @param {HTMLElement} container - Element to observe
  * @param {Function} callback - Called with { width, height } on resize
- * @param {Number} debounceMs - Debounce delay (default: 100)
+ * @param {Number} debounceMs - Debounce delay (default: 250)
  * @returns {Object} - { observe, disconnect }
  */
-export const createResizeHandler = (container, callback, debounceMs = 100) => {
+export const createResizeHandler = (container, callback, debounceMs = 250) => {
   let timeoutId = null;
   let observer = null;
 
