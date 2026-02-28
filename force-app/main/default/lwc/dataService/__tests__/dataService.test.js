@@ -4,7 +4,9 @@ import {
     truncateData,
     prepareData,
     aggregateData,
+    sampleData,
     MAX_RECORDS,
+    SVG_ELEMENT_CAP,
     OPERATIONS
 } from 'c/dataService';
 
@@ -236,6 +238,92 @@ describe('dataService', () => {
             expect(OPERATIONS.SUM).toBe('Sum');
             expect(OPERATIONS.COUNT).toBe('Count');
             expect(OPERATIONS.AVERAGE).toBe('Average');
+        });
+    });
+
+    describe('SVG_ELEMENT_CAP', () => {
+        it('is set to 500', () => {
+            expect(SVG_ELEMENT_CAP).toBe(500);
+        });
+    });
+
+    describe('sampleData', () => {
+        it('returns data unchanged when below limit', () => {
+            const data = [{ x: 1 }, { x: 2 }, { x: 3 }];
+            const result = sampleData(data, 'x', 500);
+            expect(result.sampled).toBe(false);
+            expect(result.data).toEqual(data);
+            expect(result.originalCount).toBe(3);
+        });
+
+        it('samples data when above limit', () => {
+            const data = Array.from({ length: 1000 }, (_, i) => ({ x: i, y: i * 2 }));
+            const result = sampleData(data, 'x', 500);
+            expect(result.sampled).toBe(true);
+            expect(result.data.length).toBe(500);
+            expect(result.originalCount).toBe(1000);
+        });
+
+        it('preserves first and last points (extent)', () => {
+            const data = Array.from({ length: 1000 }, (_, i) => ({ x: i, y: i * 2 }));
+            const result = sampleData(data, 'x', 100);
+            expect(result.data[0].x).toBe(0);
+            expect(result.data[result.data.length - 1].x).toBe(999);
+        });
+
+        it('handles null/undefined data', () => {
+            expect(sampleData(null, 'x').data).toEqual([]);
+            expect(sampleData(undefined, 'x').data).toEqual([]);
+            expect(sampleData(null, 'x').sampled).toBe(false);
+        });
+
+        it('handles empty array', () => {
+            const result = sampleData([], 'x');
+            expect(result.data).toEqual([]);
+            expect(result.sampled).toBe(false);
+        });
+
+        it('handles data exactly at limit', () => {
+            const data = Array.from({ length: 500 }, (_, i) => ({ x: i }));
+            const result = sampleData(data, 'x', 500);
+            expect(result.sampled).toBe(false);
+            expect(result.data.length).toBe(500);
+        });
+
+        it('produces evenly distributed samples', () => {
+            const data = Array.from({ length: 100 }, (_, i) => ({ x: i }));
+            const result = sampleData(data, 'x', 10);
+            // Samples should be roughly evenly spaced
+            const xs = result.data.map(d => d.x);
+            // First and last
+            expect(xs[0]).toBe(0);
+            expect(xs[xs.length - 1]).toBe(99);
+            // Check spacing is roughly uniform (within 1 of expected)
+            const expectedStep = 99 / 9;
+            for (let i = 1; i < xs.length - 1; i++) {
+                expect(Math.abs(xs[i] - Math.round(i * expectedStep))).toBeLessThanOrEqual(1);
+            }
+        });
+
+        it('uses SVG_ELEMENT_CAP as default limit', () => {
+            const data = Array.from({ length: 600 }, (_, i) => ({ x: i }));
+            const result = sampleData(data, 'x');
+            expect(result.sampled).toBe(true);
+            expect(result.data.length).toBe(500); // SVG_ELEMENT_CAP
+        });
+
+        it('sorts by sortField before sampling', () => {
+            // Unsorted input
+            const data = [
+                { x: 100 }, { x: 1 }, { x: 50 }, { x: 75 }, { x: 25 },
+                { x: 90 }, { x: 10 }, { x: 60 }, { x: 40 }, { x: 80 },
+                { x: 5 }
+            ];
+            const result = sampleData(data, 'x', 5);
+            // Should be sorted by x
+            for (let i = 1; i < result.data.length; i++) {
+                expect(result.data[i].x).toBeGreaterThanOrEqual(result.data[i - 1].x);
+            }
         });
     });
 });
