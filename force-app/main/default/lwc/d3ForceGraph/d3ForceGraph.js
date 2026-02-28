@@ -113,6 +113,9 @@ export default class D3ForceGraph extends NavigationMixin(LightningElement) {
   /** Center force strength (0-1) */
   @api centerStrength = 0.1;
 
+  /** Alpha decay rate controlling how quickly the simulation settles (0-1, higher = faster) */
+  @api alphaDecay = 0.05;
+
   /** Advanced configuration JSON */
   @api advancedConfig = "{}";
 
@@ -509,6 +512,7 @@ export default class D3ForceGraph extends NavigationMixin(LightningElement) {
     // Create force simulation
     this.simulation = d3
       .forceSimulation(nodes)
+      .alphaDecay(this.alphaDecay)
       .force(
         "link",
         d3
