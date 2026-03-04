@@ -76,6 +76,13 @@ Every chart component follows this structure:
 - Constants use UPPER_SNAKE_CASE (`MAX_RECORDS`, `OPERATIONS`, `PALETTES`)
 - HTML templates use SLDS classes with conditional rendering for loading/error/no-data/chart states
 
+## Chart Backlog
+
+- **ROADMAP.md** — Next 16 charts (Weeks 1–16), detailed specs with Salesforce use cases
+- **CHART-INDEX.md** — Next 50 charts beyond the roadmap, ordered by complexity (1 = simplest → 50 = most complex). When deciding what to build next, consult this index and build in order. Each entry includes: D3 gallery reference, proposed component name, Salesforce use case, and new D3 concepts required.
+
+Total library target: 76 charts (10 built + 16 roadmap + 50 index).
+
 ## Key Constraints
 
 - Node.js v20 required for Salesforce CLI compatibility (v25 has issues)

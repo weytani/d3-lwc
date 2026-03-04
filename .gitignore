@@ -52,3 +52,4 @@ prompt_plan_*.json
 **/__pycache__/
 **/.venv/
 **/venv/
+.claude/
