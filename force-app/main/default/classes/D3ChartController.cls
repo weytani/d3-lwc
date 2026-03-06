@@ -9,14 +9,14 @@ public with sharing class D3ChartController {
   /**
    * Maximum number of records to return to prevent browser performance issues.
    */
-  private static final Integer MAX_RECORDS = 2000;
+  private static final Integer MAX_RECORDS = 10000;
 
   /**
    * Executes a SOQL query string and returns results.
    * Enforces field-level and record-level security.
    *
    * @param queryString - The SOQL query to execute
-   * @return List of SObject records (max 2000)
+   * @return List of SObject records (max 10000)
    * @throws AuraHandledException for invalid or failed queries
    */
   @AuraEnabled(cacheable=true)

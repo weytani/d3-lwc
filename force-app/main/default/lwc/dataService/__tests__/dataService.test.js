@@ -6,6 +6,7 @@ import {
     aggregateData,
     sampleData,
     MAX_RECORDS,
+    CHART_LIMITS,
     SVG_ELEMENT_CAP,
     OPERATIONS
 } from 'c/dataService';
@@ -230,6 +231,29 @@ describe('dataService', () => {
     describe('MAX_RECORDS', () => {
         it('is set to 2000', () => {
             expect(MAX_RECORDS).toBe(2000);
+        });
+    });
+
+    describe('CHART_LIMITS', () => {
+        it('defines limits for all chart types', () => {
+            expect(CHART_LIMITS).toBeDefined();
+            expect(Object.keys(CHART_LIMITS)).toHaveLength(10);
+        });
+
+        it('has null limits for aggregation charts (server GROUP BY)', () => {
+            expect(CHART_LIMITS.BAR).toBeNull();
+            expect(CHART_LIMITS.DONUT).toBeNull();
+            expect(CHART_LIMITS.TREEMAP).toBeNull();
+        });
+
+        it('has numeric limits for non-aggregation charts', () => {
+            expect(CHART_LIMITS.HISTOGRAM).toBe(10000);
+            expect(CHART_LIMITS.SCATTER).toBe(5000);
+            expect(CHART_LIMITS.LINE).toBe(1000);
+            expect(CHART_LIMITS.FORCE_GRAPH).toBe(500);
+            expect(CHART_LIMITS.GAUGE).toBe(1);
+            expect(CHART_LIMITS.CHOROPLETH).toBe(500);
+            expect(CHART_LIMITS.SANKEY).toBe(1000);
         });
     });
 

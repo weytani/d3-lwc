@@ -5,7 +5,7 @@
 import { LightningElement, api, track } from "lwc";
 import { loadScript } from "lightning/platformResourceLoader";
 import { loadD3 } from "c/d3Lib";
-import { prepareData } from "c/dataService";
+import { prepareData, CHART_LIMITS } from "c/dataService";
 import { getColors, DEFAULT_THEME } from "c/themeService";
 import {
   formatNumber,
@@ -229,14 +229,14 @@ export default class D3Sankey extends NavigationMixin(LightningElement) {
       requiredFields.push(this.valueField);
     }
 
-    const prepared = prepareData(rawData, { requiredFields });
+    const prepared = prepareData(rawData, { requiredFields, limit: CHART_LIMITS.SANKEY });
 
     if (!prepared.valid) {
       throw new Error(prepared.error);
     }
 
     if (prepared.truncated) {
-      this.truncatedWarning = `Displaying first 2,000 of ${prepared.originalCount} records`;
+      this.truncatedWarning = `Displaying first ${CHART_LIMITS.SANKEY.toLocaleString()} of ${prepared.originalCount} records`;
       this.dispatchEvent(
         new ShowToastEvent({
           title: "Data Truncated",

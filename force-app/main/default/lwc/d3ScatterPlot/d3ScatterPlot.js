@@ -2,7 +2,7 @@
 // ABOUTME: Displays correlation between two numeric fields with color grouping and navigation.
 import { LightningElement, api, track } from "lwc";
 import { loadD3 } from "c/d3Lib";
-import { prepareData, sampleData, SVG_ELEMENT_CAP } from "c/dataService";
+import { prepareData, sampleData, SVG_ELEMENT_CAP, CHART_LIMITS } from "c/dataService";
 import { getColors, DEFAULT_THEME } from "c/themeService";
 import {
   formatNumber,
@@ -219,14 +219,14 @@ export default class D3ScatterPlot extends NavigationMixin(LightningElement) {
     // Required fields
     const requiredFields = [this.xAxisField, this.yAxisField];
 
-    const prepared = prepareData(rawData, { requiredFields });
+    const prepared = prepareData(rawData, { requiredFields, limit: CHART_LIMITS.SCATTER });
 
     if (!prepared.valid) {
       throw new Error(prepared.error);
     }
 
     if (prepared.truncated) {
-      this.truncatedWarning = `Displaying first 2,000 of ${prepared.originalCount} records`;
+      this.truncatedWarning = `Displaying first ${CHART_LIMITS.SCATTER.toLocaleString()} of ${prepared.originalCount} records`;
       this.dispatchEvent(
         new ShowToastEvent({
           title: "Data Truncated",

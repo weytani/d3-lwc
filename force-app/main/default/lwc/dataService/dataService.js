@@ -16,6 +16,24 @@
 export const MAX_RECORDS = 2000;
 
 /**
+ * Per-chart-type record limits tuned to visual capacity.
+ * Aggregation charts (bar, donut, treemap) use server GROUP BY with no raw cap.
+ * Each chart imports its own limit from this map.
+ */
+export const CHART_LIMITS = {
+    BAR: null,          // Server GROUP BY, no raw record cap
+    DONUT: null,        // Server GROUP BY, no raw record cap
+    TREEMAP: null,      // Server GROUP BY, no raw record cap
+    HISTOGRAM: 10000,   // Raw values for binning math, not SVG elements
+    SCATTER: 5000,      // SVG_ELEMENT_CAP handles rendering separately
+    LINE: 1000,         // Visual comprehension ceiling
+    FORCE_GRAPH: 500,   // O(n log n) simulation cost
+    GAUGE: 1,           // Single value
+    CHOROPLETH: 500,    // Geographic region limit
+    SANKEY: 1000        // Flow diagram readability
+};
+
+/**
  * Supported aggregation operations.
  */
 export const OPERATIONS = {

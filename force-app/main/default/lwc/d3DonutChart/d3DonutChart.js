@@ -2,7 +2,7 @@
 // ABOUTME: Renders part-to-whole data using configurable inner-radius, themes, legends, and tooltips.
 import { LightningElement, api, track } from "lwc";
 import { loadD3 } from "c/d3Lib";
-import { prepareData, aggregateData, OPERATIONS } from "c/dataService";
+import { prepareData, aggregateData, OPERATIONS, MAX_RECORDS } from "c/dataService";
 import { getColors, DEFAULT_THEME } from "c/themeService";
 import {
   formatNumber,
@@ -247,7 +247,7 @@ export default class D3DonutChart extends NavigationMixin(LightningElement) {
     }
 
     if (prepared.truncated) {
-      this.truncatedWarning = `Displaying first 2,000 of ${prepared.originalCount} records`;
+      this.truncatedWarning = `Displaying first ${MAX_RECORDS.toLocaleString()} of ${prepared.originalCount} records`;
       this.dispatchEvent(
         new ShowToastEvent({
           title: "Data Truncated",

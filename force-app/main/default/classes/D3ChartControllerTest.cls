@@ -223,7 +223,7 @@ private class D3ChartControllerTest {
 
     // Verify - should return results (with auto-added limit)
     System.assert(result.size() > 0, 'Should return results');
-    System.assert(result.size() <= 2000, 'Should respect max records limit');
+    System.assert(result.size() <= 10000, 'Should respect max records limit');
   }
 
   @isTest

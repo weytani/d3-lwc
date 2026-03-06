@@ -2,7 +2,7 @@
 // ABOUTME: Displays nodes and edges with force simulation, drag, zoom, tooltips, and navigation.
 import { LightningElement, api, track } from "lwc";
 import { loadD3 } from "c/d3Lib";
-import { prepareData } from "c/dataService";
+import { prepareData, CHART_LIMITS } from "c/dataService";
 import { getColors, DEFAULT_THEME } from "c/themeService";
 import {
   formatNumber,
@@ -16,7 +16,7 @@ import { ShowToastEvent } from "lightning/platformShowToastEvent";
 import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
 
 // Lower default limit for force graphs due to performance
-const MAX_NODES = 500;
+const MAX_NODES = CHART_LIMITS.FORCE_GRAPH;
 
 export default class D3ForceGraph extends NavigationMixin(LightningElement) {
   // ═══════════════════════════════════════════════════════════════

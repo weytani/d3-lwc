@@ -4,7 +4,7 @@
  */
 import { LightningElement, api, track } from "lwc";
 import { loadD3 } from "c/d3Lib";
-import { prepareData, aggregateData, OPERATIONS } from "c/dataService";
+import { prepareData, aggregateData, OPERATIONS, MAX_RECORDS } from "c/dataService";
 import { getColors, DEFAULT_THEME } from "c/themeService";
 import {
   formatNumber,
@@ -225,7 +225,7 @@ export default class D3BarChart extends NavigationMixin(LightningElement) {
     }
 
     if (prepared.truncated) {
-      this.truncatedWarning = `Displaying first 2,000 of ${prepared.originalCount} records`;
+      this.truncatedWarning = `Displaying first ${MAX_RECORDS.toLocaleString()} of ${prepared.originalCount} records`;
       this.showTruncationToast(prepared.originalCount);
     }
 
@@ -248,7 +248,7 @@ export default class D3BarChart extends NavigationMixin(LightningElement) {
     this.dispatchEvent(
       new ShowToastEvent({
         title: "Data Truncated",
-        message: `Displaying first 2,000 of ${originalCount} records for performance`,
+        message: `Displaying first ${MAX_RECORDS.toLocaleString()} of ${originalCount} records for performance`,
         variant: "warning"
       })
     );

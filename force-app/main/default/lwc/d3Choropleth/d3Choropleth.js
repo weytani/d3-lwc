@@ -2,7 +2,7 @@
 // ABOUTME: Displays regions colored by aggregated values, supporting US states, world maps, or custom GeoJSON.
 import { LightningElement, api, track } from "lwc";
 import { loadD3 } from "c/d3Lib";
-import { prepareData, aggregateData, OPERATIONS } from "c/dataService";
+import { prepareData, aggregateData, OPERATIONS, CHART_LIMITS } from "c/dataService";
 import { DEFAULT_THEME } from "c/themeService";
 import {
   formatNumber,
@@ -17,7 +17,7 @@ import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
 import US_STATES from "@salesforce/resourceUrl/usStates";
 
 // Maximum regions to process
-const MAX_REGIONS = 500;
+const MAX_REGIONS = CHART_LIMITS.CHOROPLETH;
 
 // Default color for regions with no data
 const NO_DATA_COLOR = "#E5E5E5";
