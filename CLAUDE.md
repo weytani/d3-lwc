@@ -88,3 +88,32 @@ Total library target: 76 charts (10 built + 16 roadmap + 50 index).
 - Node.js v20 required for Salesforce CLI compatibility (v25 has issues)
 - D3.js v7 loaded from `staticresources/d3.js`
 - Salesforce API version: 65.0
+
+## Two-Project Sync Strategy
+
+This project is the **source of truth**. Changes flow one direction: d3-lwc → agentforce-dev.
+
+### Path Mapping
+
+| d3-lwc | agentforce-dev |
+|--------|---------------|
+| `force-app/main/default/lwc/` | `force-app/main/d3/lwc/` |
+| `force-app/main/default/classes/` | `force-app/main/d3/classes/` |
+| `__mocks__/` | `__mocks__/` (project root) |
+| `jest.config.js` | `jest.config.js` (merge moduleNameMapper) |
+
+### Sync Checklist
+
+After making changes here, sync to `~/code/agentforce-dev/`:
+
+1. **Apex classes** — full replace (cls + meta.xml)
+2. **Service JS** (dataService, chartUtils, themeService, d3Lib) — full replace
+3. **Chart component JS** — full replace
+4. **Test files** — ALL tiers: unit (.test.js), integration (.integration.test.js), e2e (.e2e.test.js)
+5. **Mock files** (`__mocks__/`) — full replace
+6. **jest.config.js** — merge moduleNameMapper (don't replace — agentforce-dev has other config)
+7. **meta.xml** — MERGE, don't replace. agentforce-dev has `lightningCommunity__Page` targets to preserve.
+
+### Automation
+
+Run `scripts/sync-to-agentforce.sh` to automate steps 1-5. Steps 6-7 require manual review.
