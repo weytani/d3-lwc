@@ -6,6 +6,7 @@ import {
     truncateData,
     prepareData,
     aggregateData,
+    aggregateSeriesData,
     sampleData,
     MAX_RECORDS,
     CHART_LIMITS,
@@ -383,6 +384,59 @@ describe('dataService', () => {
             for (let i = 1; i < result.data.length; i++) {
                 expect(result.data[i].x).toBeGreaterThanOrEqual(result.data[i - 1].x);
             }
+        });
+    });
+
+    describe('aggregateSeriesData', () => {
+        const SERIES_DATA = [
+            { StageName: 'Prospecting', Type: 'New Business', Amount: 100 },
+            { StageName: 'Prospecting', Type: 'Existing Business', Amount: 200 },
+            { StageName: 'Qualification', Type: 'New Business', Amount: 150 },
+            { StageName: 'Qualification', Type: 'Existing Business', Amount: 300 },
+            { StageName: 'Closed Won', Type: 'New Business', Amount: 500 },
+        ];
+
+        it('groups by two dimensions with Sum', () => {
+            const result = aggregateSeriesData(SERIES_DATA, 'StageName', 'Type', 'Amount', 'Sum');
+            expect(result.length).toBe(5);
+            const prospectingNew = result.find(r => r.label === 'Prospecting' && r.series === 'New Business');
+            expect(prospectingNew.value).toBe(100);
+        });
+
+        it('returns all unique series names', () => {
+            const result = aggregateSeriesData(SERIES_DATA, 'StageName', 'Type', 'Amount', 'Sum');
+            const seriesNames = [...new Set(result.map(r => r.series))];
+            expect(seriesNames).toContain('New Business');
+            expect(seriesNames).toContain('Existing Business');
+        });
+
+        it('handles Count operation', () => {
+            const result = aggregateSeriesData(SERIES_DATA, 'StageName', 'Type', 'Amount', 'Count');
+            const prospectingNew = result.find(r => r.label === 'Prospecting' && r.series === 'New Business');
+            expect(prospectingNew.value).toBe(1);
+        });
+
+        it('handles Average operation', () => {
+            const dupes = [
+                { StageName: 'A', Type: 'X', Amount: 100 },
+                { StageName: 'A', Type: 'X', Amount: 200 },
+            ];
+            const result = aggregateSeriesData(dupes, 'StageName', 'Type', 'Amount', 'Average');
+            expect(result[0].value).toBe(150);
+        });
+
+        it('returns empty array for null data', () => {
+            expect(aggregateSeriesData(null, 'a', 'b', 'c', 'Sum')).toEqual([]);
+        });
+
+        it('returns empty array when seriesField is missing', () => {
+            expect(aggregateSeriesData(SERIES_DATA, 'StageName', '', 'Amount', 'Sum')).toEqual([]);
+        });
+
+        it('handles null series values as "Null" label', () => {
+            const withNull = [{ StageName: 'A', Type: null, Amount: 100 }];
+            const result = aggregateSeriesData(withNull, 'StageName', 'Type', 'Amount', 'Sum');
+            expect(result[0].series).toBe('Null');
         });
     });
 });

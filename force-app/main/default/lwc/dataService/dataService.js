@@ -240,3 +240,57 @@ export const aggregateData = (data, groupByField, valueField, operation) => {
     // Sort by value descending
     return result.sort((a, b) => b.value - a.value);
 };
+
+/**
+ * Aggregates data by two group fields (label + series).
+ * Returns flat array of { label, series, value } objects.
+ * @param {Array} data - Array of records
+ * @param {String} groupByField - Primary grouping (x-axis categories)
+ * @param {String} seriesField - Secondary grouping (series/stacks)
+ * @param {String} valueField - Field to aggregate
+ * @param {String} operation - 'Sum', 'Count', or 'Average'
+ * @returns {Array} - [{ label, series, value }, ...]
+ */
+export const aggregateSeriesData = (data, groupByField, seriesField, valueField, operation) => {
+    if (!data || !groupByField || !seriesField) {
+        return [];
+    }
+
+    const groups = new Map();
+
+    data.forEach(record => {
+        const label = String(record[groupByField] ?? 'Null');
+        const series = String(record[seriesField] ?? 'Null');
+        const key = `${label}|||${series}`;
+
+        if (!groups.has(key)) {
+            groups.set(key, { label, series, sum: 0, count: 0 });
+        }
+        const group = groups.get(key);
+        group.count += 1;
+        if (valueField && record[valueField] != null) {
+            group.sum += Number(record[valueField]) || 0;
+        }
+    });
+
+    const result = [];
+    groups.forEach((group) => {
+        let value;
+        switch (operation) {
+            case OPERATIONS.SUM:
+                value = group.sum;
+                break;
+            case OPERATIONS.COUNT:
+                value = group.count;
+                break;
+            case OPERATIONS.AVERAGE:
+                value = group.count > 0 ? group.sum / group.count : 0;
+                break;
+            default:
+                value = group.count;
+        }
+        result.push({ label: group.label, series: group.series, value });
+    });
+
+    return result;
+};
