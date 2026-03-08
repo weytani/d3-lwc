@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<LightningComponentBundle xmlns="http://soap.sforce.com/2006/04/metadata">
+    <apiVersion>65.0</apiVersion>
+    <isExposed>true</isExposed>
+    <masterLabel>D3 Radar Chart</masterLabel>
+    <description
+  >Multi-axis polygon overlay chart powered by D3.js for scorecards and benchmarking.</description>
+    <targets>
+        <target>lightning__AppPage</target>
+        <target>lightning__RecordPage</target>
+        <target>lightning__HomePage</target>
+    </targets>
+    <targetConfigs>
+        <targetConfig
+      targets="lightning__AppPage,lightning__RecordPage,lightning__HomePage"
+    >
+            <!-- Data Source -->
+            <property
+        name="soqlQuery"
+        type="String"
+        label="SOQL Query"
+        description="SOQL query to fetch data"
+        placeholder="SELECT Type, Amount, Probability FROM Opportunity"
+      />
+
+            <!-- Field Mapping -->
+            <property
+        name="groupByField"
+        type="String"
+        label="Group By Field"
+        default="Type"
+        description="API name of the field to group entities by (e.g., Type)"
+        placeholder="Type"
+      />
+            <property
+        name="valueField"
+        type="String"
+        label="Value Field"
+        default="Amount"
+        description="API name of the default numeric field"
+        placeholder="Amount"
+      />
+
+            <!-- Appearance -->
+            <property
+        name="height"
+        type="Integer"
+        label="Height (px)"
+        default="400"
+        description="Chart height in pixels"
+        min="200"
+        max="800"
+      />
+            <property
+        name="theme"
+        type="String"
+        label="Color Theme"
+        default="Salesforce Standard"
+        datasource="Salesforce Standard,Warm,Cool,Vibrant"
+        description="Color palette for the chart"
+      />
+
+            <!-- Drill-Down -->
+            <property
+        name="objectApiName"
+        type="String"
+        label="Drill-Down Object"
+        description="Object API name for navigation context"
+        placeholder="Opportunity"
+      />
+            <property
+        name="filterField"
+        type="String"
+        label="Filter Field"
+        description="Field to filter by (defaults to Group By Field)"
+      />
+
+            <!-- Advanced -->
+            <property
+        name="advancedConfig"
+        type="String"
+        label="Advanced Config (JSON)"
+        description='{"axes": [{"label": "Revenue", "field": "Amount"}, {"label": "Probability", "field": "Probability"}]}'
+      />
+        </targetConfig>
+    </targetConfigs>
+</LightningComponentBundle>
