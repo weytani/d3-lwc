@@ -294,3 +294,56 @@ export const aggregateSeriesData = (data, groupByField, seriesField, valueField,
 
     return result;
 };
+
+/**
+ * Computes quartile statistics for a numeric field.
+ * @param {Array} data - Array of records
+ * @param {String} valueField - Numeric field to analyze
+ * @returns {Object|null} - { q1, q2, q3, iqr, whiskerLow, whiskerHigh, min, max, outliers[] }
+ */
+export const computeQuartiles = (data, valueField) => {
+    if (!data || data.length === 0) {
+        return null;
+    }
+
+    const values = data
+        .map(d => d[valueField])
+        .filter(v => v != null && !isNaN(Number(v)))
+        .map(Number)
+        .sort((a, b) => a - b);
+
+    if (values.length === 0) {
+        return null;
+    }
+
+    const median = (arr) => {
+        const mid = Math.floor(arr.length / 2);
+        return arr.length % 2 !== 0
+            ? arr[mid]
+            : (arr[mid - 1] + arr[mid]) / 2;
+    };
+
+    const q2 = median(values);
+    const mid = Math.floor(values.length / 2);
+    const lowerHalf = values.slice(0, mid);
+    const upperHalf = values.length % 2 !== 0 ? values.slice(mid + 1) : values.slice(mid);
+    const q1 = lowerHalf.length > 0 ? median(lowerHalf) : q2;
+    const q3 = upperHalf.length > 0 ? median(upperHalf) : q2;
+    const iqr = q3 - q1;
+
+    const lowerFence = q1 - 1.5 * iqr;
+    const upperFence = q3 + 1.5 * iqr;
+
+    const whiskerLow = values.find(v => v >= lowerFence) ?? values[0];
+    const whiskerHigh = [...values].reverse().find(v => v <= upperFence) ?? values[values.length - 1];
+
+    const outliers = values.filter(v => v < lowerFence || v > upperFence);
+
+    return {
+        q1, q2, q3, iqr,
+        whiskerLow, whiskerHigh,
+        min: values[0],
+        max: values[values.length - 1],
+        outliers
+    };
+};

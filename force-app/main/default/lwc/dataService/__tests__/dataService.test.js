@@ -7,6 +7,7 @@ import {
     prepareData,
     aggregateData,
     aggregateSeriesData,
+    computeQuartiles,
     sampleData,
     MAX_RECORDS,
     CHART_LIMITS,
@@ -437,6 +438,63 @@ describe('dataService', () => {
             const withNull = [{ StageName: 'A', Type: null, Amount: 100 }];
             const result = aggregateSeriesData(withNull, 'StageName', 'Type', 'Amount', 'Sum');
             expect(result[0].series).toBe('Null');
+        });
+    });
+
+    describe('computeQuartiles', () => {
+        it('computes quartiles for odd-count dataset', () => {
+            const data = [
+                { val: 2 }, { val: 4 }, { val: 6 }, { val: 8 }, { val: 10 },
+                { val: 12 }, { val: 14 }, { val: 16 }, { val: 18 }
+            ];
+            const result = computeQuartiles(data, 'val');
+            expect(result.q2).toBe(10);
+            expect(result.q1).toBe(5);
+            expect(result.q3).toBe(15);
+        });
+
+        it('computes IQR correctly', () => {
+            const data = [{ val: 1 }, { val: 2 }, { val: 3 }, { val: 4 }, { val: 100 }];
+            const result = computeQuartiles(data, 'val');
+            expect(result.iqr).toBe(result.q3 - result.q1);
+        });
+
+        it('identifies outliers beyond 1.5*IQR', () => {
+            const data = [
+                { val: 1 }, { val: 2 }, { val: 3 }, { val: 4 }, { val: 5 },
+                { val: 6 }, { val: 7 }, { val: 8 }, { val: 9 }, { val: 100 }
+            ];
+            const result = computeQuartiles(data, 'val');
+            expect(result.outliers.length).toBeGreaterThan(0);
+            expect(result.outliers).toContain(100);
+        });
+
+        it('sets whiskers at data extent within 1.5*IQR', () => {
+            const data = [{ val: 1 }, { val: 2 }, { val: 3 }, { val: 4 }, { val: 5 }];
+            const result = computeQuartiles(data, 'val');
+            expect(result.whiskerLow).toBeGreaterThanOrEqual(1);
+            expect(result.whiskerHigh).toBeLessThanOrEqual(5);
+        });
+
+        it('returns null for empty data', () => {
+            expect(computeQuartiles([], 'val')).toBeNull();
+        });
+
+        it('returns null for null data', () => {
+            expect(computeQuartiles(null, 'val')).toBeNull();
+        });
+
+        it('handles single value', () => {
+            const result = computeQuartiles([{ val: 5 }], 'val');
+            expect(result.q1).toBe(5);
+            expect(result.q2).toBe(5);
+            expect(result.q3).toBe(5);
+        });
+
+        it('skips null values in field', () => {
+            const data = [{ val: 1 }, { val: null }, { val: 3 }, { val: 5 }];
+            const result = computeQuartiles(data, 'val');
+            expect(result).not.toBeNull();
         });
     });
 });
