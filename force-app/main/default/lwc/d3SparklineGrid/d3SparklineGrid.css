@@ -1,0 +1,77 @@
+/* D3 Sparkline Grid Styles */
+
+:host {
+  display: block;
+}
+
+.chart-container {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+}
+
+/* SVG Styles */
+.sparkline-grid-svg {
+  font-family: "Salesforce Sans", Arial, sans-serif;
+}
+
+/* Entity Row Styles */
+.entity-row {
+  cursor: default;
+}
+
+/* Entity Label Styles */
+.entity-label {
+  font-size: 12px;
+  fill: #706e6b;
+}
+
+/* Entity Value Styles */
+.entity-value {
+  font-size: 12px;
+  font-weight: bold;
+  fill: #3e3e3c;
+}
+
+/* Sparkline Styles */
+.sparkline-line {
+  fill: none;
+  stroke-width: 1.5;
+}
+
+.sparkline-area {
+  stroke: none;
+}
+
+/* Bar Sparkline Styles */
+.sparkline-bar {
+  transition: opacity 0.2s ease;
+}
+
+/* Reference Line */
+.reference-line {
+  stroke-dasharray: 2, 2;
+  stroke-width: 1;
+}
+
+/* Tooltip Styles */
+.chart-tooltip {
+  position: absolute;
+  background: #16325c;
+  color: white;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  z-index: 1000;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  max-width: 200px;
+}
+
+/* Warning Banner */
+.slds-alert_warning {
+  font-size: 12px;
+  padding: 0.5rem 1rem;
+}

@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<LightningComponentBundle xmlns="http://soap.sforce.com/2006/04/metadata">
+    <apiVersion>65.0</apiVersion>
+    <isExposed>true</isExposed>
+    <masterLabel>D3 Sparkline Grid</masterLabel>
+    <description
+  >Small multiples sparkline grid for entity comparison, powered by D3.js.</description>
+    <targets>
+        <target>lightning__AppPage</target>
+        <target>lightning__RecordPage</target>
+        <target>lightning__HomePage</target>
+    </targets>
+    <targetConfigs>
+        <targetConfig
+      targets="lightning__AppPage,lightning__RecordPage,lightning__HomePage"
+    >
+            <!-- Data Source -->
+            <property
+        name="soqlQuery"
+        type="String"
+        label="SOQL Query"
+        description="SOQL query to fetch data"
+        placeholder="SELECT Type, CloseDate, Amount FROM Opportunity ORDER BY CloseDate"
+      />
+
+            <!-- Field Mapping -->
+            <property
+        name="entityField"
+        type="String"
+        label="Entity Field"
+        description="API name of the field to group entities by (e.g., Type, Owner)"
+        placeholder="Type"
+      />
+            <property
+        name="dateField"
+        type="String"
+        label="Date Field"
+        default="CloseDate"
+        description="API name of the date field for the time axis"
+        placeholder="CloseDate"
+      />
+            <property
+        name="valueField"
+        type="String"
+        label="Value Field"
+        default="Amount"
+        description="API name of the numeric field to aggregate"
+        placeholder="Amount"
+      />
+            <property
+        name="operation"
+        type="String"
+        label="Aggregation"
+        default="Sum"
+        datasource="Sum,Count,Average"
+        description="How to aggregate the values per time bucket"
+      />
+
+            <!-- Appearance -->
+            <property
+        name="height"
+        type="Integer"
+        label="Height (px)"
+        default="400"
+        description="Chart height in pixels"
+        min="150"
+        max="800"
+      />
+            <property
+        name="theme"
+        type="String"
+        label="Color Theme"
+        default="Salesforce Standard"
+        datasource="Salesforce Standard,Warm,Cool,Vibrant"
+        description="Color palette for the chart"
+      />
+
+            <!-- Drill-Down -->
+            <property
+        name="objectApiName"
+        type="String"
+        label="Drill-Down Object"
+        description="Object API name for navigation on click"
+        placeholder="Opportunity"
+      />
+            <property
+        name="filterField"
+        type="String"
+        label="Filter Field"
+        description="Field to filter by on drill-down (defaults to Entity Field)"
+      />
+
+            <!-- Advanced -->
+            <property
+        name="advancedConfig"
+        type="String"
+        label="Advanced Config (JSON)"
+        description='{"sparkType": "line", "referenceLine": "average"}'
+      />
+        </targetConfig>
+    </targetConfigs>
+</LightningComponentBundle>
