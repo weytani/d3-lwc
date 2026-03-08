@@ -1,0 +1,544 @@
+/**
+ * ABOUTME: D3 Funnel Chart Lightning Web Component.
+ * ABOUTME: Displays pipeline data as trapezoidal segments with conversion rate labels.
+ */
+import { LightningElement, api, track } from "lwc";
+import { loadD3 } from "c/d3Lib";
+import { prepareData, aggregateData, OPERATIONS, MAX_RECORDS } from "c/dataService";
+import { getColors, DEFAULT_THEME } from "c/themeService";
+import {
+  formatNumber,
+  createTooltip,
+  createResizeHandler,
+  buildTooltipContent,
+  createLayoutRetry
+} from "c/chartUtils";
+import { NavigationMixin } from "lightning/navigation";
+import { ShowToastEvent } from "lightning/platformShowToastEvent";
+import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
+import getAggregatedData from "@salesforce/apex/D3ChartController.getAggregatedData";
+
+export default class D3FunnelChart extends NavigationMixin(LightningElement) {
+  // ═══════════════════════════════════════════════════════════════
+  // PUBLIC API PROPERTIES
+  // ═══════════════════════════════════════════════════════════════
+
+  /** Data collection from Flow or parent component */
+  @api recordCollection = [];
+
+  /** SOQL query string (used if recordCollection is empty) */
+  @api soqlQuery = "SELECT StageName, Amount FROM Opportunity";
+
+  /** Field to group by (category axis) */
+  @api groupByField = "StageName";
+
+  /** Field to aggregate (value axis) */
+  @api valueField = "Amount";
+
+  /** Aggregation operation: Sum, Count, Average */
+  @api operation = OPERATIONS.SUM;
+
+  /** Chart height in pixels */
+  @api height = 300;
+
+  /** Color theme */
+  @api theme = DEFAULT_THEME;
+
+  /** Advanced configuration JSON */
+  @api advancedConfig = "{}";
+
+  /** Object API name for drill-down navigation */
+  @api objectApiName = "";
+
+  /** Filter field for drill-down (usually same as groupByField) */
+  @api filterField = "";
+
+  /** Optional WHERE clause fragment for server-side aggregation */
+  @api filterClause = "";
+
+  /** Whether to hide conversion rate percentages between segments */
+  @api hideConversionRates = false;
+
+  // ═══════════════════════════════════════════════════════════════
+  // TRACKED STATE
+  // ═══════════════════════════════════════════════════════════════
+
+  @track isLoading = true;
+  @track error = null;
+  @track chartData = [];
+  @track truncatedWarning = null;
+
+  // ═══════════════════════════════════════════════════════════════
+  // PRIVATE PROPERTIES
+  // ═══════════════════════════════════════════════════════════════
+
+  d3 = null;
+  svg = null;
+  tooltip = null;
+  resizeHandler = null;
+  chartRendered = false;
+  _layoutRetry = null;
+  _config = {};
+
+  // ═══════════════════════════════════════════════════════════════
+  // GETTERS
+  // ═══════════════════════════════════════════════════════════════
+
+  /** Whether conversion rate labels are displayed (inverse of hideConversionRates) */
+  get showConversionRates() {
+    return !this.hideConversionRates;
+  }
+
+  get containerStyle() {
+    return `height: ${this.height}px;`;
+  }
+
+  get hasError() {
+    return !!this.error;
+  }
+
+  get hasData() {
+    return this.chartData && this.chartData.length > 0;
+  }
+
+  get showChart() {
+    return !this.isLoading && !this.hasError && this.hasData;
+  }
+
+  get config() {
+    if (!this._configParsed) {
+      try {
+        this._config = JSON.parse(this.advancedConfig || "{}");
+      } catch {
+        this._config = {};
+      }
+      this._configParsed = true;
+    }
+    return this._config;
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // LIFECYCLE HOOKS
+  // ═══════════════════════════════════════════════════════════════
+
+  async connectedCallback() {
+    try {
+      // Load D3
+      this.d3 = await loadD3(this);
+
+      // Load data
+      await this.loadData();
+
+      // Render will happen in renderedCallback after DOM is ready
+    } catch (e) {
+      this.error = e.message || "Failed to initialize chart";
+      console.error("D3FunnelChart initialization error:", e);
+    } finally {
+      this.isLoading = false;
+    }
+  }
+
+  renderedCallback() {
+    if (this.showChart && !this.chartRendered) {
+      this.chartRendered = this.initializeChart();
+      if (!this.chartRendered && !this._layoutRetry) {
+        const container = this.template.querySelector(".chart-container");
+        if (container) {
+          this._layoutRetry = createLayoutRetry(container, () => {
+            this._layoutRetry = null;
+            if (!this.chartRendered) {
+              this.chartRendered = this.initializeChart();
+            }
+          });
+        }
+      }
+    }
+  }
+
+  disconnectedCallback() {
+    if (this._layoutRetry) {
+      this._layoutRetry.cancel();
+      this._layoutRetry = null;
+    }
+    this.cleanup();
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // DATA LOADING
+  // ═══════════════════════════════════════════════════════════════
+
+  async loadData() {
+    // Priority 1: Use recordCollection if provided (client-side aggregation)
+    if (this.recordCollection && this.recordCollection.length > 0) {
+      this.chartData = this._aggregateRawData([...this.recordCollection]);
+      return;
+    }
+
+    // Priority 2: Server-side aggregation when all required fields are set
+    if (this.objectApiName && this.groupByField && this.valueField && this.operation) {
+      try {
+        const result = await getAggregatedData({
+          objectName: this.objectApiName,
+          groupByField: this.groupByField,
+          valueField: this.valueField,
+          operation: this.operation,
+          filterClause: this.filterClause || null
+        });
+        // Server returns [{label, value}, ...] — same shape as aggregateData()
+        this.chartData = result;
+      } catch (e) {
+        throw new Error(`Aggregation Error: ${e.body?.message || e.message}`);
+      }
+
+      if (!this.chartData || this.chartData.length === 0) {
+        throw new Error("No data after aggregation");
+      }
+      return;
+    }
+
+    // Priority 3: Fall back to SOQL query with client-side aggregation
+    if (this.soqlQuery) {
+      let rawData = [];
+      try {
+        rawData = await executeQuery({ queryString: this.soqlQuery });
+      } catch (e) {
+        throw new Error(`SOQL Error: ${e.body?.message || e.message}`);
+      }
+      this.chartData = this._aggregateRawData(rawData);
+      return;
+    }
+
+    throw new Error(
+      "No data source provided. Set recordCollection or soqlQuery."
+    );
+  }
+
+  /**
+   * Validates, truncates, and aggregates raw record data client-side.
+   * Used by both recordCollection and soqlQuery paths.
+   */
+  _aggregateRawData(rawData) {
+    // Validate required fields
+    const requiredFields = [this.groupByField];
+    if (this.operation !== OPERATIONS.COUNT) {
+      requiredFields.push(this.valueField);
+    }
+
+    // Prepare data (validate + truncate)
+    const prepared = prepareData(rawData, { requiredFields });
+
+    if (!prepared.valid) {
+      throw new Error(prepared.error);
+    }
+
+    if (prepared.truncated) {
+      this.truncatedWarning = `Displaying first ${MAX_RECORDS.toLocaleString()} of ${prepared.originalCount} records`;
+      this.showTruncationToast(prepared.originalCount);
+    }
+
+    // Aggregate data
+    const aggregated = aggregateData(
+      prepared.data,
+      this.groupByField,
+      this.valueField,
+      this.operation
+    );
+
+    if (aggregated.length === 0) {
+      throw new Error("No data after aggregation");
+    }
+
+    return aggregated;
+  }
+
+  showTruncationToast(originalCount) {
+    this.dispatchEvent(
+      new ShowToastEvent({
+        title: "Data Truncated",
+        message: `Displaying first ${MAX_RECORDS.toLocaleString()} of ${originalCount} records for performance`,
+        variant: "warning"
+      })
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // CHART RENDERING
+  // ═══════════════════════════════════════════════════════════════
+
+  /**
+   * Initializes the chart SVG, tooltip, and resize observer.
+   * @returns {boolean} true if the chart was successfully initialized
+   */
+  initializeChart() {
+    const container = this.template.querySelector(".chart-container");
+    if (!container) return false;
+
+    const { width } = container.getBoundingClientRect();
+    if (width === 0) return false;
+
+    // Create tooltip
+    this.tooltip = createTooltip(container);
+
+    // Render chart
+    this.renderChart(width);
+
+    // Setup resize observer
+    this.resizeHandler = createResizeHandler(
+      container,
+      ({ width: newWidth }) => {
+        if (newWidth > 0) {
+          this.renderChart(newWidth);
+        }
+      }
+    );
+    this.resizeHandler.observe();
+    return true;
+  }
+
+  renderChart(containerWidth) {
+    const d3 = this.d3;
+    const container = this.template.querySelector(".chart-container");
+    if (!container || !d3) return;
+
+    // Clear existing SVG
+    d3.select(container).select("svg").remove();
+
+    // Margins — extra right margin when showing conversion rates
+    const margin = {
+      top: 20,
+      right: this.showConversionRates ? 80 : 20,
+      bottom: 20,
+      left: 20
+    };
+
+    const width = containerWidth - margin.left - margin.right;
+    const height = this.height - margin.top - margin.bottom;
+
+    if (width <= 0 || height <= 0) return;
+
+    // Sort data descending by value (largest at top of funnel)
+    const sortedData = [...this.chartData].sort((a, b) => b.value - a.value);
+
+    // Create SVG
+    this.svg = d3
+      .select(container)
+      .append("svg")
+      .attr("width", containerWidth)
+      .attr("height", this.height)
+      .attr("class", "funnel-chart-svg")
+      .append("g")
+      .attr("transform", `translate(${margin.left},${margin.top})`);
+
+    // Colors
+    const colors = getColors(
+      this.theme,
+      sortedData.length,
+      this.config.customColors
+    );
+
+    // Segment dimensions
+    const segmentCount = sortedData.length;
+    const segmentGap = 4;
+    const totalGap = segmentGap * (segmentCount - 1);
+    const segmentHeight = (height - totalGap) / segmentCount;
+    const maxValue = sortedData.length > 0 ? sortedData[0].value : 1;
+
+    // Draw funnel segments as trapezoids
+    const segments = this.svg
+      .selectAll(".funnel-segment")
+      .data(sortedData)
+      .enter()
+      .append("path")
+      .attr("class", "funnel-segment")
+      .attr("d", (d, i) => {
+        // Calculate widths proportional to value
+        const currentWidth = maxValue > 0 ? (d.value / maxValue) * width : width;
+        const nextWidth =
+          i < segmentCount - 1 && maxValue > 0
+            ? (sortedData[i + 1].value / maxValue) * width
+            : currentWidth * 0.6;
+
+        // Center-align the trapezoid
+        const topOffset = (width - currentWidth) / 2;
+        const bottomOffset = (width - nextWidth) / 2;
+        const y = i * (segmentHeight + segmentGap);
+
+        return this._trapezoidPath(
+          topOffset,
+          y,
+          currentWidth,
+          bottomOffset,
+          y + segmentHeight,
+          nextWidth
+        );
+      })
+      .attr("fill", (d, i) => colors[i])
+      .attr("cursor", this.objectApiName ? "pointer" : "default")
+      .attr("opacity", 0);
+
+    // Animate segments with opacity transition
+    segments
+      .transition()
+      .duration(500)
+      .delay((d, i) => i * 100)
+      .attr("opacity", 1);
+
+    // Segment labels (inside each trapezoid)
+    this.svg
+      .selectAll(".segment-label")
+      .data(sortedData)
+      .enter()
+      .append("text")
+      .attr("class", "segment-label")
+      .attr("x", width / 2)
+      .attr("y", (d, i) => i * (segmentHeight + segmentGap) + segmentHeight / 2)
+      .attr("text-anchor", "middle")
+      .attr("dominant-baseline", "central")
+      .attr("fill", "white")
+      .attr("font-size", "13px")
+      .attr("pointer-events", "none")
+      .text((d) => `${d.label}: ${formatNumber(d.value)}`);
+
+    // Conversion rate labels between segments
+    if (this.showConversionRates && segmentCount > 1) {
+      const conversionData = sortedData.slice(0, -1).map((d, i) => ({
+        rate: d.value > 0 ? ((sortedData[i + 1].value / d.value) * 100).toFixed(1) : 0,
+        yPos: (i + 1) * (segmentHeight + segmentGap) - segmentGap / 2
+      }));
+
+      this.svg
+        .selectAll(".conversion-label")
+        .data(conversionData)
+        .enter()
+        .append("text")
+        .attr("class", "conversion-label")
+        .attr("x", width + 10)
+        .attr("y", (d) => d.yPos)
+        .attr("text-anchor", "start")
+        .attr("dominant-baseline", "central")
+        .attr("fill", "#706e6b")
+        .attr("font-size", "11px")
+        .text((d) => `${d.rate}%`);
+    }
+
+    // Tooltip and click interactions on segments
+    segments
+      .on("mouseenter", (event, d) => {
+        this.showTooltip(event, d);
+        d3.select(event.currentTarget)
+          .transition()
+          .duration(100)
+          .attr("opacity", 0.8);
+      })
+      .on("mousemove", (event) => {
+        this.moveTooltip(event);
+      })
+      .on("mouseleave", (event) => {
+        this.hideTooltip();
+        d3.select(event.currentTarget)
+          .transition()
+          .duration(100)
+          .attr("opacity", 1);
+      })
+      .on("click", (event, d) => {
+        this.handleSegmentClick(d);
+      });
+  }
+
+  /**
+   * Builds an SVG path string for a trapezoid shape.
+   * @param {Number} topX - Top-left X coordinate
+   * @param {Number} topY - Top Y coordinate
+   * @param {Number} topWidth - Width at the top
+   * @param {Number} bottomX - Bottom-left X coordinate
+   * @param {Number} bottomY - Bottom Y coordinate
+   * @param {Number} bottomWidth - Width at the bottom
+   * @returns {String} SVG path d attribute
+   */
+  _trapezoidPath(topX, topY, topWidth, bottomX, bottomY, bottomWidth) {
+    return [
+      `M ${topX} ${topY}`,
+      `L ${topX + topWidth} ${topY}`,
+      `L ${bottomX + bottomWidth} ${bottomY}`,
+      `L ${bottomX} ${bottomY}`,
+      "Z"
+    ].join(" ");
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // TOOLTIP HANDLERS
+  // ═══════════════════════════════════════════════════════════════
+
+  showTooltip(event, d) {
+    if (!this.tooltip) return;
+
+    const content = buildTooltipContent(d.label, d.value, {
+      prefix: `${this.operation || "Value"}: `
+    });
+
+    this.tooltip.show(content, event.offsetX, event.offsetY);
+  }
+
+  // eslint-disable-next-line no-unused-vars
+  moveTooltip(event) {
+    // Tooltip position is set in show(), but we can update it here if needed
+    // The current implementation handles positioning in show()
+  }
+
+  hideTooltip() {
+    if (!this.tooltip) return;
+    this.tooltip.hide();
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // CLICK HANDLER - DRILL DOWN
+  // ═══════════════════════════════════════════════════════════════
+
+  handleSegmentClick(d) {
+    if (!this.objectApiName) return;
+
+    const filterFieldName = this.filterField || this.groupByField;
+
+    // Navigate to list view with filter
+    this[NavigationMixin.Navigate]({
+      type: "standard__objectPage",
+      attributes: {
+        objectApiName: this.objectApiName,
+        actionName: "list"
+      },
+      state: {
+        filterName: "Recent"
+        // Note: Deep filtering requires a custom list view or Lightning Page
+        // This provides basic navigation to the object list
+      }
+    });
+
+    // Dispatch custom event for parent components to handle filtering
+    this.dispatchEvent(
+      new CustomEvent("funnelclick", {
+        detail: {
+          label: d.label,
+          value: d.value,
+          filterField: filterFieldName
+        },
+        bubbles: true,
+        composed: true
+      })
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // CLEANUP
+  // ═══════════════════════════════════════════════════════════════
+
+  cleanup() {
+    if (this.resizeHandler) {
+      this.resizeHandler.disconnect();
+      this.resizeHandler = null;
+    }
+    if (this.tooltip) {
+      this.tooltip.destroy();
+      this.tooltip = null;
+    }
+  }
+}
