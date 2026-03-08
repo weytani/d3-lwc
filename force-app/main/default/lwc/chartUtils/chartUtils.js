@@ -317,3 +317,70 @@ export const createLayoutRetry = (
     }
   };
 };
+
+// ===== COLOR CONTRAST UTILITIES =====
+
+/**
+ * Returns black or white text color based on background luminance.
+ * Uses WCAG relative luminance formula.
+ * @param {String} hexColor - Background color in hex (#RGB or #RRGGBB)
+ * @returns {String} - '#000000' or '#ffffff'
+ */
+export const getContrastColor = (hexColor) => {
+  if (!hexColor || typeof hexColor !== "string") return "#000000";
+
+  let hex = hexColor.replace("#", "");
+  if (hex.length === 3) {
+    hex = hex
+      .split("")
+      .map((c) => c + c)
+      .join("");
+  }
+  if (hex.length !== 6) return "#000000";
+
+  const r = parseInt(hex.slice(0, 2), 16) / 255;
+  const g = parseInt(hex.slice(2, 4), 16) / 255;
+  const b = parseInt(hex.slice(4, 6), 16) / 255;
+
+  const toLinear = (c) =>
+    c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+  const luminance =
+    0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
+
+  return luminance > 0.179 ? "#000000" : "#ffffff";
+};
+
+// ===== CALENDAR GRID UTILITIES =====
+
+/**
+ * Builds a calendar grid for a given year (GitHub-contribution-style).
+ * @param {Number} year - Full year (e.g. 2025)
+ * @returns {Array} - [{ date: Date, week: Number, dayOfWeek: 0-6, month: 0-11 }, ...]
+ */
+export const buildCalendarGrid = (year) => {
+  const grid = [];
+  const startDate = new Date(year, 0, 1);
+  const endDate = new Date(year, 11, 31);
+
+  let weekNum = 0;
+  let lastDayOfWeek = -1;
+
+  for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+    const date = new Date(d);
+    const dayOfWeek = date.getDay();
+
+    if (dayOfWeek < lastDayOfWeek) {
+      weekNum++;
+    }
+    lastDayOfWeek = dayOfWeek;
+
+    grid.push({
+      date: new Date(date),
+      week: weekNum,
+      dayOfWeek,
+      month: date.getMonth()
+    });
+  }
+
+  return grid;
+};

@@ -8,7 +8,9 @@ import {
   createResizeHandler,
   calculateDimensions,
   shouldUseCompactMode,
-  createLayoutRetry
+  createLayoutRetry,
+  getContrastColor,
+  buildCalendarGrid
 } from "c/chartUtils";
 
 describe("chartUtils", () => {
@@ -543,6 +545,71 @@ describe("chartUtils", () => {
 
       expect(onLayout).not.toHaveBeenCalled();
       expect(rafCallbacks.size).toBe(0);
+    });
+  });
+
+  describe("getContrastColor", () => {
+    it("returns white for dark backgrounds", () => {
+      expect(getContrastColor("#000000")).toBe("#ffffff");
+      expect(getContrastColor("#16325c")).toBe("#ffffff");
+    });
+
+    it("returns black for light backgrounds", () => {
+      expect(getContrastColor("#ffffff")).toBe("#000000");
+      expect(getContrastColor("#FFD86E")).toBe("#000000");
+    });
+
+    it("handles 3-digit hex", () => {
+      expect(getContrastColor("#fff")).toBe("#000000");
+      expect(getContrastColor("#000")).toBe("#ffffff");
+    });
+
+    it("returns black for invalid input", () => {
+      expect(getContrastColor("")).toBe("#000000");
+      expect(getContrastColor(null)).toBe("#000000");
+    });
+  });
+
+  describe("buildCalendarGrid", () => {
+    it("returns 365 or 366 entries for a year", () => {
+      const grid = buildCalendarGrid(2025);
+      expect(grid.length).toBe(365);
+    });
+
+    it("returns 366 entries for a leap year", () => {
+      const grid = buildCalendarGrid(2024);
+      expect(grid.length).toBe(366);
+    });
+
+    it("each entry has date, week, dayOfWeek, month", () => {
+      const grid = buildCalendarGrid(2025);
+      const entry = grid[0];
+      expect(entry).toHaveProperty("date");
+      expect(entry).toHaveProperty("week");
+      expect(entry).toHaveProperty("dayOfWeek");
+      expect(entry).toHaveProperty("month");
+    });
+
+    it("dayOfWeek is 0-6 (Sun-Sat)", () => {
+      const grid = buildCalendarGrid(2025);
+      grid.forEach((entry) => {
+        expect(entry.dayOfWeek).toBeGreaterThanOrEqual(0);
+        expect(entry.dayOfWeek).toBeLessThanOrEqual(6);
+      });
+    });
+
+    it("week numbers increment correctly", () => {
+      const grid = buildCalendarGrid(2025);
+      const weeks = [...new Set(grid.map((e) => e.week))];
+      expect(weeks.length).toBeGreaterThanOrEqual(52);
+    });
+
+    it("month is 0-11", () => {
+      const grid = buildCalendarGrid(2025);
+      grid.forEach((entry) => {
+        expect(entry.month).toBeGreaterThanOrEqual(0);
+        expect(entry.month).toBeLessThanOrEqual(11);
+      });
     });
   });
 });
