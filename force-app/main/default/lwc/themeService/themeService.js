@@ -109,3 +109,47 @@ export const getColor = (theme, index = 0, customColors = null) => {
     const colors = getColors(theme, index + 1, customColors);
     return colors[index] || colors[0];
 };
+
+/**
+ * Semantic colors for charts with directional meaning.
+ */
+export const SEMANTIC_COLORS = {
+    positive: '#4BCA81',
+    negative: '#FF5D5D',
+    neutral: '#B0C4DE',
+    subtotal: '#1589EE'
+};
+
+/**
+ * Base hues for sequential ramps (light → dark).
+ */
+const SEQUENTIAL_BASES = {
+    blue:  { light: [222, 235, 247], dark: [8, 48, 107] },
+    green: { light: [229, 245, 224], dark: [0, 68, 27] },
+    red:   { light: [254, 229, 217], dark: [153, 0, 13] }
+};
+
+/**
+ * Generates a sequential color ramp from light to dark.
+ * @param {String} hue - 'blue', 'green', or 'red'
+ * @param {Number} steps - Number of colors to generate
+ * @returns {Array} - Array of hex color strings, light to dark
+ */
+export const getSequentialRamp = (hue, steps) => {
+    const base = SEQUENTIAL_BASES[hue] || SEQUENTIAL_BASES.blue;
+    if (steps <= 0) return [];
+    if (steps === 1) {
+        const mid = base.light.map((l, i) => Math.round((l + base.dark[i]) / 2));
+        return ['#' + mid.map(v => v.toString(16).padStart(2, '0')).join('')];
+    }
+
+    const ramp = [];
+    for (let i = 0; i < steps; i++) {
+        const t = i / (steps - 1);
+        const rgb = base.light.map((l, idx) =>
+            Math.round(l + t * (base.dark[idx] - l))
+        );
+        ramp.push('#' + rgb.map(v => v.toString(16).padStart(2, '0')).join(''));
+    }
+    return ramp;
+};

@@ -4,7 +4,9 @@ import {
     DEFAULT_THEME,
     getColors,
     createColorScale,
-    getColor
+    getColor,
+    SEMANTIC_COLORS,
+    getSequentialRamp
 } from 'c/themeService';
 
 describe('themeService', () => {
@@ -166,6 +168,66 @@ describe('themeService', () => {
             const custom = ['#ABC', '#DEF'];
             const color = getColor('Warm', 1, custom);
             expect(color).toBe('#DEF');
+        });
+    });
+
+    describe('SEMANTIC_COLORS', () => {
+        it('exports positive color', () => {
+            expect(SEMANTIC_COLORS.positive).toBe('#4BCA81');
+        });
+        it('exports negative color', () => {
+            expect(SEMANTIC_COLORS.negative).toBe('#FF5D5D');
+        });
+        it('exports neutral color', () => {
+            expect(SEMANTIC_COLORS.neutral).toBeDefined();
+        });
+        it('exports subtotal color', () => {
+            expect(SEMANTIC_COLORS.subtotal).toBeDefined();
+        });
+    });
+
+    describe('getSequentialRamp', () => {
+        it('returns array of requested length', () => {
+            const ramp = getSequentialRamp('blue', 5);
+            expect(ramp).toHaveLength(5);
+        });
+
+        it('returns valid hex colors', () => {
+            const ramp = getSequentialRamp('blue', 3);
+            ramp.forEach(color => {
+                expect(color).toMatch(/^#[0-9a-fA-F]{6}$/);
+            });
+        });
+
+        it('goes from light to dark', () => {
+            const ramp = getSequentialRamp('blue', 5);
+            const hexToSum = (hex) => {
+                const r = parseInt(hex.slice(1, 3), 16);
+                const g = parseInt(hex.slice(3, 5), 16);
+                const b = parseInt(hex.slice(5, 7), 16);
+                return r + g + b;
+            };
+            expect(hexToSum(ramp[0])).toBeGreaterThan(hexToSum(ramp[ramp.length - 1]));
+        });
+
+        it('supports blue ramp', () => {
+            expect(getSequentialRamp('blue', 3)).toHaveLength(3);
+        });
+
+        it('supports green ramp', () => {
+            expect(getSequentialRamp('green', 3)).toHaveLength(3);
+        });
+
+        it('supports red ramp', () => {
+            expect(getSequentialRamp('red', 3)).toHaveLength(3);
+        });
+
+        it('falls back to blue for unknown ramp', () => {
+            expect(getSequentialRamp('unknown', 3)).toHaveLength(3);
+        });
+
+        it('handles 1-step ramp', () => {
+            expect(getSequentialRamp('blue', 1)).toHaveLength(1);
         });
     });
 });
