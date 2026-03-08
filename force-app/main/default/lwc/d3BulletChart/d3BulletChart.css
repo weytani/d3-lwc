@@ -1,0 +1,70 @@
+/* ABOUTME: Styles for the d3BulletChart Lightning Web Component. */
+/* ABOUTME: Provides layout, SVG typography, axis, tooltip, and warning banner styling. */
+
+:host {
+  display: block;
+}
+
+.chart-container {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+}
+
+/* SVG Styles */
+.bullet-chart-svg {
+  font-family: "Salesforce Sans", Arial, sans-serif;
+}
+
+/* Axis Styles */
+.x-axis text {
+  font-size: 12px;
+  fill: #706e6b;
+}
+
+.x-axis path,
+.x-axis line {
+  stroke: #dddbda;
+}
+
+/* Feature Bar Styles */
+.feature-bar {
+  transition: opacity 0.2s ease;
+}
+
+.feature-bar:hover {
+  opacity: 0.8;
+}
+
+/* Tooltip Styles */
+.chart-tooltip {
+  position: absolute;
+  background: #16325c;
+  color: white;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  z-index: 1000;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  max-width: 200px;
+}
+
+.chart-tooltip::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  margin-left: -5px;
+  border-width: 5px;
+  border-style: solid;
+  border-color: #16325c transparent transparent transparent;
+}
+
+/* Warning Banner */
+.slds-alert_warning {
+  font-size: 12px;
+  padding: 0.5rem 1rem;
+}
