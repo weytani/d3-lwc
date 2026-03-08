@@ -47,6 +47,12 @@ IMPLEMENTATION-BLUEPRINT.md
 PROJECT-SPEC.md
 ROADMAP.md
 prompt_plan_*.json
+docs/plans/
+
+# SFDMU generated data (config and scripts are tracked)
+sfdmu/*.csv
+sfdmu/.venv/
+sfdmu/__pycache__/
 
 # Python Salesforce Functions
 **/__pycache__/

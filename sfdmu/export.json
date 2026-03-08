@@ -1,0 +1,18 @@
+{
+    "objects": [
+        {
+            "query": "SELECT Name, ParentId, Industry FROM Account",
+            "operation": "Upsert",
+            "externalId": "Name",
+            "master": true,
+            "excluded": false
+        },
+        {
+            "query": "SELECT Name, StageName, Type, Amount, Probability, CloseDate, LeadSource, IsClosed, IsWon, AccountId FROM Opportunity",
+            "operation": "Upsert",
+            "externalId": "Name",
+            "master": true,
+            "excluded": false
+        }
+    ]
+}
