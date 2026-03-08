@@ -1,3 +1,5 @@
+// ABOUTME: Data processing utilities for D3 chart components.
+// ABOUTME: Handles validation, truncation, aggregation, sampling, and per-chart record limits.
 /**
  * Data processing utilities for D3 chart components.
  * Handles validation, truncation, and aggregation.
@@ -30,7 +32,18 @@ export const CHART_LIMITS = {
     FORCE_GRAPH: 500,   // O(n log n) simulation cost
     GAUGE: 1,           // Single value
     CHOROPLETH: 500,    // Geographic region limit
-    SANKEY: 1000        // Flow diagram readability
+    SANKEY: 1000,       // Flow diagram readability
+    // Phase 2 charts
+    FUNNEL: null,           // Server GROUP BY, no raw record cap
+    STACKED_BAR: null,      // Server GROUP BY, no raw record cap
+    AREA: 1000,             // Visual comprehension ceiling
+    BULLET: 1,              // Single value
+    HEATMAP: null,          // Server GROUP BY, no raw record cap
+    BOX_PLOT: 5000,         // Raw values for distribution math
+    RADAR: null,            // Server GROUP BY, no raw record cap
+    WATERFALL: 500,         // Sequential step readability
+    CALENDAR_HEATMAP: 2000, // Daily data points (~5.5 years)
+    SPARKLINE_GRID: 5000    // Multiple small charts, raw values
 };
 
 /**

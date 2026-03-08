@@ -1,3 +1,5 @@
+// ABOUTME: Unit tests for the dataService shared module.
+// ABOUTME: Covers validation, truncation, aggregation, sampling, and CHART_LIMITS constants.
 import {
     validateData,
     validateFields,
@@ -237,7 +239,7 @@ describe('dataService', () => {
     describe('CHART_LIMITS', () => {
         it('defines limits for all chart types', () => {
             expect(CHART_LIMITS).toBeDefined();
-            expect(Object.keys(CHART_LIMITS)).toHaveLength(10);
+            expect(Object.keys(CHART_LIMITS)).toHaveLength(20);
         });
 
         it('has null limits for aggregation charts (server GROUP BY)', () => {
@@ -254,6 +256,39 @@ describe('dataService', () => {
             expect(CHART_LIMITS.GAUGE).toBe(1);
             expect(CHART_LIMITS.CHOROPLETH).toBe(500);
             expect(CHART_LIMITS.SANKEY).toBe(1000);
+        });
+    });
+
+    describe('CHART_LIMITS for Phase 2 charts', () => {
+        it('exports FUNNEL limit as null (server GROUP BY)', () => {
+            expect(CHART_LIMITS.FUNNEL).toBeNull();
+        });
+        it('exports STACKED_BAR limit as null', () => {
+            expect(CHART_LIMITS.STACKED_BAR).toBeNull();
+        });
+        it('exports AREA limit as 1000', () => {
+            expect(CHART_LIMITS.AREA).toBe(1000);
+        });
+        it('exports BULLET limit as 1', () => {
+            expect(CHART_LIMITS.BULLET).toBe(1);
+        });
+        it('exports HEATMAP limit as null', () => {
+            expect(CHART_LIMITS.HEATMAP).toBeNull();
+        });
+        it('exports BOX_PLOT limit as 5000', () => {
+            expect(CHART_LIMITS.BOX_PLOT).toBe(5000);
+        });
+        it('exports RADAR limit as null', () => {
+            expect(CHART_LIMITS.RADAR).toBeNull();
+        });
+        it('exports WATERFALL limit as 500', () => {
+            expect(CHART_LIMITS.WATERFALL).toBe(500);
+        });
+        it('exports CALENDAR_HEATMAP limit as 2000', () => {
+            expect(CHART_LIMITS.CALENDAR_HEATMAP).toBe(2000);
+        });
+        it('exports SPARKLINE_GRID limit as 5000', () => {
+            expect(CHART_LIMITS.SPARKLINE_GRID).toBe(5000);
         });
     });
 
