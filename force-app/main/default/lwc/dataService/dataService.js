@@ -347,3 +347,29 @@ export const computeQuartiles = (data, valueField) => {
         outliers
     };
 };
+
+/**
+ * Computes running total with start/end positions for waterfall charts.
+ * Input data should already be aggregated: [{ label, value }, ...]
+ * @param {Array} data - Aggregated data with label and value
+ * @returns {Array} - [{ label, value, cumulative, start, end, isPositive }, ...]
+ */
+export const computeRunningTotal = (data) => {
+    if (!data || data.length === 0) {
+        return [];
+    }
+
+    let cumulative = 0;
+    return data.map(d => {
+        const start = cumulative;
+        cumulative += d.value;
+        return {
+            label: d.label,
+            value: d.value,
+            cumulative,
+            start,
+            end: cumulative,
+            isPositive: d.value >= 0
+        };
+    });
+};

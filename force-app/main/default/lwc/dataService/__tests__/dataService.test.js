@@ -8,6 +8,7 @@ import {
     aggregateData,
     aggregateSeriesData,
     computeQuartiles,
+    computeRunningTotal,
     sampleData,
     MAX_RECORDS,
     CHART_LIMITS,
@@ -495,6 +496,57 @@ describe('dataService', () => {
             const data = [{ val: 1 }, { val: null }, { val: 3 }, { val: 5 }];
             const result = computeQuartiles(data, 'val');
             expect(result).not.toBeNull();
+        });
+    });
+
+    describe('computeRunningTotal', () => {
+        it('computes cumulative sum', () => {
+            const data = [
+                { label: 'A', value: 100 },
+                { label: 'B', value: -30 },
+                { label: 'C', value: 50 },
+            ];
+            const result = computeRunningTotal(data);
+            expect(result[0].cumulative).toBe(100);
+            expect(result[1].cumulative).toBe(70);
+            expect(result[2].cumulative).toBe(120);
+        });
+
+        it('marks positive and negative deltas', () => {
+            const data = [
+                { label: 'A', value: 100 },
+                { label: 'B', value: -30 },
+            ];
+            const result = computeRunningTotal(data);
+            expect(result[0].isPositive).toBe(true);
+            expect(result[1].isPositive).toBe(false);
+        });
+
+        it('sets start and end for waterfall bar positioning', () => {
+            const data = [
+                { label: 'A', value: 100 },
+                { label: 'B', value: -30 },
+            ];
+            const result = computeRunningTotal(data);
+            expect(result[0].start).toBe(0);
+            expect(result[0].end).toBe(100);
+            expect(result[1].start).toBe(100);
+            expect(result[1].end).toBe(70);
+        });
+
+        it('returns empty for null/empty input', () => {
+            expect(computeRunningTotal(null)).toEqual([]);
+            expect(computeRunningTotal([])).toEqual([]);
+        });
+
+        it('handles all negative values', () => {
+            const data = [
+                { label: 'A', value: -10 },
+                { label: 'B', value: -20 },
+            ];
+            const result = computeRunningTotal(data);
+            expect(result[0].cumulative).toBe(-10);
+            expect(result[1].cumulative).toBe(-30);
         });
     });
 });
