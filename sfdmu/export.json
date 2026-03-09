@@ -1,4 +1,15 @@
 {
+    "$schema": "https://raw.githubusercontent.com/forcedotcom/SFDX-Data-Move-Utility/master/src/modules/app/schema/export-schema.json",
+    "apiVersion": "65.0",
+    "bulkThreshold": 200,
+    "bulkApiVersion": "2.0",
+    "concurrencyMode": "Parallel",
+    "pollingIntervalMs": 5000,
+    "allOrNone": false,
+    "createTargetCSVFiles": true,
+    "promptOnMissingParentObjects": true,
+    "promptOnIssuesInCSVFiles": true,
+    "excludeIdsFromCSVFiles": true,
     "objects": [
         {
             "query": "SELECT Name, ParentId, Industry FROM Account",
@@ -11,7 +22,7 @@
             "query": "SELECT Name, StageName, Type, Amount, Probability, CloseDate, LeadSource, IsClosed, IsWon, AccountId FROM Opportunity",
             "operation": "Upsert",
             "externalId": "Name",
-            "master": true,
+            "master": false,
             "excluded": false
         }
     ]
