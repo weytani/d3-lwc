@@ -4,7 +4,12 @@
  */
 import { LightningElement, api, track } from "lwc";
 import { loadD3 } from "c/d3Lib";
-import { prepareData, aggregateData, OPERATIONS, MAX_RECORDS } from "c/dataService";
+import {
+  prepareData,
+  aggregateData,
+  OPERATIONS,
+  MAX_RECORDS
+} from "c/dataService";
 import { getColors, DEFAULT_THEME } from "c/themeService";
 import {
   formatNumber,
@@ -175,7 +180,12 @@ export default class D3FunnelChart extends NavigationMixin(LightningElement) {
     }
 
     // Priority 2: Server-side aggregation when all required fields are set
-    if (this.objectApiName && this.groupByField && this.valueField && this.operation) {
+    if (
+      this.objectApiName &&
+      this.groupByField &&
+      this.valueField &&
+      this.operation
+    ) {
       try {
         const result = await getAggregatedData({
           objectName: this.objectApiName,
@@ -352,7 +362,8 @@ export default class D3FunnelChart extends NavigationMixin(LightningElement) {
       .attr("class", "funnel-segment")
       .attr("d", (d, i) => {
         // Calculate widths proportional to value
-        const currentWidth = maxValue > 0 ? (d.value / maxValue) * width : width;
+        const currentWidth =
+          maxValue > 0 ? (d.value / maxValue) * width : width;
         const nextWidth =
           i < segmentCount - 1 && maxValue > 0
             ? (sortedData[i + 1].value / maxValue) * width
@@ -402,7 +413,10 @@ export default class D3FunnelChart extends NavigationMixin(LightningElement) {
     // Conversion rate labels between segments
     if (this.showConversionRates && segmentCount > 1) {
       const conversionData = sortedData.slice(0, -1).map((d, i) => ({
-        rate: d.value > 0 ? ((sortedData[i + 1].value / d.value) * 100).toFixed(1) : 0,
+        rate:
+          d.value > 0
+            ? ((sortedData[i + 1].value / d.value) * 100).toFixed(1)
+            : 0,
         yPos: (i + 1) * (segmentHeight + segmentGap) - segmentGap / 2
       }));
 

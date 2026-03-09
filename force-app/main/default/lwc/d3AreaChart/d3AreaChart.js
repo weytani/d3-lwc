@@ -450,10 +450,31 @@ export default class D3AreaChart extends NavigationMixin(LightningElement) {
     const areaMode = this.config.areaMode || "overlapping";
     const isMultiSeries = this.seriesData.length > 1;
 
-    if ((areaMode === "stacked" || areaMode === "normalized") && isMultiSeries) {
-      this.renderStackedAreas(d3, xScale, yScale, width, height, colors, clipId, areaMode);
+    if (
+      (areaMode === "stacked" || areaMode === "normalized") &&
+      isMultiSeries
+    ) {
+      this.renderStackedAreas(
+        d3,
+        xScale,
+        yScale,
+        width,
+        height,
+        colors,
+        clipId,
+        areaMode
+      );
     } else {
-      this.renderOverlappingAreas(d3, xScale, yScale, height, colors, clipId, isMultiSeries, clipDefs);
+      this.renderOverlappingAreas(
+        d3,
+        xScale,
+        yScale,
+        height,
+        colors,
+        clipId,
+        isMultiSeries,
+        clipDefs
+      );
     }
   }
 
@@ -461,7 +482,16 @@ export default class D3AreaChart extends NavigationMixin(LightningElement) {
    * Renders areas in overlapping mode (default).
    * Single-series gets a gradient fill; multi-series gets distinct colors with opacity.
    */
-  renderOverlappingAreas(d3, xScale, yScale, height, colors, clipId, isMultiSeries, clipDefs) {
+  renderOverlappingAreas(
+    d3,
+    xScale,
+    yScale,
+    height,
+    colors,
+    clipId,
+    isMultiSeries,
+    clipDefs
+  ) {
     const curve = this.getCurve(d3);
 
     // Area generator
@@ -549,7 +579,16 @@ export default class D3AreaChart extends NavigationMixin(LightningElement) {
   /**
    * Renders areas in stacked or normalized mode using d3.stack().
    */
-  renderStackedAreas(d3, xScale, origYScale, width, height, colors, clipId, areaMode) {
+  renderStackedAreas(
+    d3,
+    xScale,
+    origYScale,
+    width,
+    height,
+    colors,
+    clipId,
+    areaMode
+  ) {
     const curve = this.getCurve(d3);
     const seriesNames = this.seriesData.map((s) => s.name);
 

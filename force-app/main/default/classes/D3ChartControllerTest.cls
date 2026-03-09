@@ -15,13 +15,48 @@ private class D3ChartControllerTest {
     List<Account> accounts = new List<Account>();
 
     // Technology accounts (3) with known AnnualRevenue and NumberOfEmployees
-    accounts.add(new Account(Name = 'Tech Alpha', Industry = 'Technology', AnnualRevenue = 100, NumberOfEmployees = 10));
-    accounts.add(new Account(Name = 'Tech Beta', Industry = 'Technology', AnnualRevenue = 200, NumberOfEmployees = 20));
-    accounts.add(new Account(Name = 'Tech Gamma', Industry = 'Technology', AnnualRevenue = 300, NumberOfEmployees = 30));
+    accounts.add(
+      new Account(
+        Name = 'Tech Alpha',
+        Industry = 'Technology',
+        AnnualRevenue = 100,
+        NumberOfEmployees = 10
+      )
+    );
+    accounts.add(
+      new Account(
+        Name = 'Tech Beta',
+        Industry = 'Technology',
+        AnnualRevenue = 200,
+        NumberOfEmployees = 20
+      )
+    );
+    accounts.add(
+      new Account(
+        Name = 'Tech Gamma',
+        Industry = 'Technology',
+        AnnualRevenue = 300,
+        NumberOfEmployees = 30
+      )
+    );
 
     // Finance accounts (2)
-    accounts.add(new Account(Name = 'Fin Delta', Industry = 'Finance', AnnualRevenue = 400, NumberOfEmployees = 40));
-    accounts.add(new Account(Name = 'Fin Epsilon', Industry = 'Finance', AnnualRevenue = 500, NumberOfEmployees = 50));
+    accounts.add(
+      new Account(
+        Name = 'Fin Delta',
+        Industry = 'Finance',
+        AnnualRevenue = 400,
+        NumberOfEmployees = 40
+      )
+    );
+    accounts.add(
+      new Account(
+        Name = 'Fin Epsilon',
+        Industry = 'Finance',
+        AnnualRevenue = 500,
+        NumberOfEmployees = 50
+      )
+    );
 
     insert accounts;
   }
@@ -311,7 +346,11 @@ private class D3ChartControllerTest {
   static void testGetAggregatedDataSum() {
     Test.startTest();
     List<Map<String, Object>> results = D3ChartController.getAggregatedData(
-      'Account', 'Industry', 'AnnualRevenue', 'Sum', null
+      'Account',
+      'Industry',
+      'AnnualRevenue',
+      'Sum',
+      null
     );
     Test.stopTest();
 
@@ -324,16 +363,28 @@ private class D3ChartControllerTest {
     }
 
     // Technology: 100 + 200 + 300 = 600
-    System.assertEquals(600, (Decimal) byLabel.get('Technology'), 'Technology sum should be 600');
+    System.assertEquals(
+      600,
+      (Decimal) byLabel.get('Technology'),
+      'Technology sum should be 600'
+    );
     // Finance: 400 + 500 = 900
-    System.assertEquals(900, (Decimal) byLabel.get('Finance'), 'Finance sum should be 900');
+    System.assertEquals(
+      900,
+      (Decimal) byLabel.get('Finance'),
+      'Finance sum should be 900'
+    );
   }
 
   @isTest
   static void testGetAggregatedDataCount() {
     Test.startTest();
     List<Map<String, Object>> results = D3ChartController.getAggregatedData(
-      'Account', 'Industry', 'AnnualRevenue', 'Count', null
+      'Account',
+      'Industry',
+      'AnnualRevenue',
+      'Count',
+      null
     );
     Test.stopTest();
 
@@ -342,15 +393,27 @@ private class D3ChartControllerTest {
       byLabel.put((String) row.get('label'), row.get('value'));
     }
 
-    System.assertEquals(3, (Integer) byLabel.get('Technology'), 'Technology count should be 3');
-    System.assertEquals(2, (Integer) byLabel.get('Finance'), 'Finance count should be 2');
+    System.assertEquals(
+      3,
+      (Integer) byLabel.get('Technology'),
+      'Technology count should be 3'
+    );
+    System.assertEquals(
+      2,
+      (Integer) byLabel.get('Finance'),
+      'Finance count should be 2'
+    );
   }
 
   @isTest
   static void testGetAggregatedDataAverage() {
     Test.startTest();
     List<Map<String, Object>> results = D3ChartController.getAggregatedData(
-      'Account', 'Industry', 'AnnualRevenue', 'Average', null
+      'Account',
+      'Industry',
+      'AnnualRevenue',
+      'Average',
+      null
     );
     Test.stopTest();
 
@@ -360,22 +423,46 @@ private class D3ChartControllerTest {
     }
 
     // Technology avg: (100+200+300)/3 = 200
-    System.assertEquals(200, (Decimal) byLabel.get('Technology'), 'Technology average should be 200');
+    System.assertEquals(
+      200,
+      (Decimal) byLabel.get('Technology'),
+      'Technology average should be 200'
+    );
     // Finance avg: (400+500)/2 = 450
-    System.assertEquals(450, (Decimal) byLabel.get('Finance'), 'Finance average should be 450');
+    System.assertEquals(
+      450,
+      (Decimal) byLabel.get('Finance'),
+      'Finance average should be 450'
+    );
   }
 
   @isTest
   static void testGetAggregatedDataWithFilter() {
     Test.startTest();
     List<Map<String, Object>> results = D3ChartController.getAggregatedData(
-      'Account', 'Industry', 'AnnualRevenue', 'Sum', 'Industry = \'Technology\''
+      'Account',
+      'Industry',
+      'AnnualRevenue',
+      'Sum',
+      'Industry = \'Technology\''
     );
     Test.stopTest();
 
-    System.assertEquals(1, results.size(), 'Filter should return only one industry group');
-    System.assertEquals('Technology', (String) results[0].get('label'), 'Filtered label should be Technology');
-    System.assertEquals(600, (Decimal) results[0].get('value'), 'Filtered sum should be 600');
+    System.assertEquals(
+      1,
+      results.size(),
+      'Filter should return only one industry group'
+    );
+    System.assertEquals(
+      'Technology',
+      (String) results[0].get('label'),
+      'Filtered label should be Technology'
+    );
+    System.assertEquals(
+      600,
+      (Decimal) results[0].get('value'),
+      'Filtered sum should be 600'
+    );
   }
 
   @isTest
@@ -383,11 +470,18 @@ private class D3ChartControllerTest {
     Test.startTest();
     try {
       D3ChartController.getAggregatedData(
-        'TotallyFakeObject__xyz', 'Industry', 'AnnualRevenue', 'Sum', null
+        'TotallyFakeObject__xyz',
+        'Industry',
+        'AnnualRevenue',
+        'Sum',
+        null
       );
       System.assert(false, 'Expected exception for invalid object');
     } catch (AuraHandledException e) {
-      System.assert(e.getMessage().contains('Invalid object'), 'Error should mention invalid object');
+      System.assert(
+        e.getMessage().contains('Invalid object'),
+        'Error should mention invalid object'
+      );
     }
     Test.stopTest();
   }
@@ -397,11 +491,18 @@ private class D3ChartControllerTest {
     Test.startTest();
     try {
       D3ChartController.getAggregatedData(
-        'Account', 'NonExistentField__xyz', 'AnnualRevenue', 'Sum', null
+        'Account',
+        'NonExistentField__xyz',
+        'AnnualRevenue',
+        'Sum',
+        null
       );
       System.assert(false, 'Expected exception for invalid field');
     } catch (AuraHandledException e) {
-      System.assert(e.getMessage().contains('Invalid groupByField'), 'Error should mention invalid groupByField');
+      System.assert(
+        e.getMessage().contains('Invalid groupByField'),
+        'Error should mention invalid groupByField'
+      );
     }
     Test.stopTest();
   }
@@ -411,11 +512,18 @@ private class D3ChartControllerTest {
     Test.startTest();
     try {
       D3ChartController.getAggregatedData(
-        'Account', 'Industry', 'AnnualRevenue', 'Invalid', null
+        'Account',
+        'Industry',
+        'AnnualRevenue',
+        'Invalid',
+        null
       );
       System.assert(false, 'Expected exception for invalid operation');
     } catch (AuraHandledException e) {
-      System.assert(e.getMessage().contains('Invalid operation'), 'Error should mention invalid operation');
+      System.assert(
+        e.getMessage().contains('Invalid operation'),
+        'Error should mention invalid operation'
+      );
     }
     Test.stopTest();
   }
@@ -425,7 +533,11 @@ private class D3ChartControllerTest {
     Test.startTest();
     try {
       D3ChartController.getAggregatedData(
-        'Account', 'Industry', 'AnnualRevenue', 'Sum', 'DELETE FROM Account'
+        'Account',
+        'Industry',
+        'AnnualRevenue',
+        'Sum',
+        'DELETE FROM Account'
       );
       System.assert(false, 'Expected exception for injection attempt');
     } catch (AuraHandledException e) {
@@ -455,7 +567,11 @@ private class D3ChartControllerTest {
     System.assertEquals(100, stats.get('min'), 'Min should be 100');
     System.assertEquals(500, stats.get('max'), 'Max should be 500');
     System.assertEquals(300, stats.get('mean'), 'Mean should be 300');
-    System.assertEquals(300, stats.get('median'), 'Median of 5 values should be the middle value (300)');
+    System.assertEquals(
+      300,
+      stats.get('median'),
+      'Median of 5 values should be the middle value (300)'
+    );
 
     // Population stdDev: sqrt(((100-300)^2+(200-300)^2+(300-300)^2+(400-300)^2+(500-300)^2)/5)
     //   = sqrt((40000+10000+0+10000+40000)/5) = sqrt(20000) ≈ 141.42
@@ -479,7 +595,11 @@ private class D3ChartControllerTest {
     Test.stopTest();
 
     System.assertEquals(4, stats.get('count'), 'Count should be 4');
-    System.assertEquals(300, stats.get('median'), 'Median of even count should be average of two middle values');
+    System.assertEquals(
+      300,
+      stats.get('median'),
+      'Median of even count should be average of two middle values'
+    );
   }
 
   @isTest
@@ -492,11 +612,31 @@ private class D3ChartControllerTest {
     Test.stopTest();
 
     System.assertEquals(1, stats.get('count'), 'Count should be 1');
-    System.assertEquals(100, stats.get('min'), 'Min should equal the single value');
-    System.assertEquals(100, stats.get('max'), 'Max should equal the single value');
-    System.assertEquals(100, stats.get('mean'), 'Mean should equal the single value');
-    System.assertEquals(100, stats.get('median'), 'Median should equal the single value');
-    System.assertEquals(0, stats.get('stdDev'), 'StdDev of single value should be 0');
+    System.assertEquals(
+      100,
+      stats.get('min'),
+      'Min should equal the single value'
+    );
+    System.assertEquals(
+      100,
+      stats.get('max'),
+      'Max should equal the single value'
+    );
+    System.assertEquals(
+      100,
+      stats.get('mean'),
+      'Mean should equal the single value'
+    );
+    System.assertEquals(
+      100,
+      stats.get('median'),
+      'Median should equal the single value'
+    );
+    System.assertEquals(
+      0,
+      stats.get('stdDev'),
+      'StdDev of single value should be 0'
+    );
   }
 
   @isTest
@@ -508,12 +648,36 @@ private class D3ChartControllerTest {
     );
     Test.stopTest();
 
-    System.assertEquals(0, stats.get('count'), 'Count should be 0 for empty results');
-    System.assertEquals(0, stats.get('min'), 'Min should be 0 for empty results');
-    System.assertEquals(0, stats.get('max'), 'Max should be 0 for empty results');
-    System.assertEquals(0, stats.get('mean'), 'Mean should be 0 for empty results');
-    System.assertEquals(0, stats.get('median'), 'Median should be 0 for empty results');
-    System.assertEquals(0, stats.get('stdDev'), 'StdDev should be 0 for empty results');
+    System.assertEquals(
+      0,
+      stats.get('count'),
+      'Count should be 0 for empty results'
+    );
+    System.assertEquals(
+      0,
+      stats.get('min'),
+      'Min should be 0 for empty results'
+    );
+    System.assertEquals(
+      0,
+      stats.get('max'),
+      'Max should be 0 for empty results'
+    );
+    System.assertEquals(
+      0,
+      stats.get('mean'),
+      'Mean should be 0 for empty results'
+    );
+    System.assertEquals(
+      0,
+      stats.get('median'),
+      'Median should be 0 for empty results'
+    );
+    System.assertEquals(
+      0,
+      stats.get('stdDev'),
+      'StdDev should be 0 for empty results'
+    );
   }
 
   @isTest
@@ -563,7 +727,10 @@ private class D3ChartControllerTest {
     Test.stopTest();
 
     System.assert(result.get('r') != null, 'Correlation r should not be null');
-    System.assert(result.get('r') > 0.9, 'Should have strong positive correlation, got: ' + result.get('r'));
+    System.assert(
+      result.get('r') > 0.9,
+      'Should have strong positive correlation, got: ' + result.get('r')
+    );
     System.assert(result.get('slope') > 0, 'Slope should be positive');
   }
 
@@ -572,11 +739,21 @@ private class D3ChartControllerTest {
     // Delete setup data and create accounts with no correlation pattern
     delete [SELECT Id FROM Account];
     List<Account> accounts = new List<Account>();
-    accounts.add(new Account(Name = 'A1', AnnualRevenue = 100, NumberOfEmployees = 50));
-    accounts.add(new Account(Name = 'A2', AnnualRevenue = 200, NumberOfEmployees = 10));
-    accounts.add(new Account(Name = 'A3', AnnualRevenue = 300, NumberOfEmployees = 40));
-    accounts.add(new Account(Name = 'A4', AnnualRevenue = 400, NumberOfEmployees = 20));
-    accounts.add(new Account(Name = 'A5', AnnualRevenue = 500, NumberOfEmployees = 30));
+    accounts.add(
+      new Account(Name = 'A1', AnnualRevenue = 100, NumberOfEmployees = 50)
+    );
+    accounts.add(
+      new Account(Name = 'A2', AnnualRevenue = 200, NumberOfEmployees = 10)
+    );
+    accounts.add(
+      new Account(Name = 'A3', AnnualRevenue = 300, NumberOfEmployees = 40)
+    );
+    accounts.add(
+      new Account(Name = 'A4', AnnualRevenue = 400, NumberOfEmployees = 20)
+    );
+    accounts.add(
+      new Account(Name = 'A5', AnnualRevenue = 500, NumberOfEmployees = 30)
+    );
     insert accounts;
 
     Test.startTest();
@@ -604,9 +781,21 @@ private class D3ChartControllerTest {
     );
     Test.stopTest();
 
-    System.assertEquals(null, result.get('r'), 'r should be null for single record');
-    System.assertEquals(null, result.get('slope'), 'slope should be null for single record');
-    System.assertEquals(null, result.get('intercept'), 'intercept should be null for single record');
+    System.assertEquals(
+      null,
+      result.get('r'),
+      'r should be null for single record'
+    );
+    System.assertEquals(
+      null,
+      result.get('slope'),
+      'slope should be null for single record'
+    );
+    System.assertEquals(
+      null,
+      result.get('intercept'),
+      'intercept should be null for single record'
+    );
   }
 
   @isTest
@@ -614,9 +803,15 @@ private class D3ChartControllerTest {
     // All same x values → denominator is zero → r should be null
     delete [SELECT Id FROM Account];
     List<Account> accounts = new List<Account>();
-    accounts.add(new Account(Name = 'Same1', AnnualRevenue = 100, NumberOfEmployees = 10));
-    accounts.add(new Account(Name = 'Same2', AnnualRevenue = 100, NumberOfEmployees = 20));
-    accounts.add(new Account(Name = 'Same3', AnnualRevenue = 100, NumberOfEmployees = 30));
+    accounts.add(
+      new Account(Name = 'Same1', AnnualRevenue = 100, NumberOfEmployees = 10)
+    );
+    accounts.add(
+      new Account(Name = 'Same2', AnnualRevenue = 100, NumberOfEmployees = 20)
+    );
+    accounts.add(
+      new Account(Name = 'Same3', AnnualRevenue = 100, NumberOfEmployees = 30)
+    );
     insert accounts;
 
     Test.startTest();
@@ -627,8 +822,16 @@ private class D3ChartControllerTest {
     );
     Test.stopTest();
 
-    System.assertEquals(null, result.get('r'), 'r should be null when x values are all identical');
-    System.assertEquals(0, result.get('slope'), 'slope should be 0 when x values are identical');
+    System.assertEquals(
+      null,
+      result.get('r'),
+      'r should be null when x values are all identical'
+    );
+    System.assertEquals(
+      0,
+      result.get('slope'),
+      'slope should be 0 when x values are identical'
+    );
   }
 
   @isTest
@@ -636,7 +839,9 @@ private class D3ChartControllerTest {
     Test.startTest();
     try {
       D3ChartController.getCorrelation(
-        'SELECT AnnualRevenue FROM Account', '', 'AnnualRevenue'
+        'SELECT AnnualRevenue FROM Account',
+        '',
+        'AnnualRevenue'
       );
       System.assert(false, 'Expected exception for blank xField');
     } catch (AuraHandledException e) {
@@ -652,12 +857,183 @@ private class D3ChartControllerTest {
   static void testGetCorrelationInvalidQuery() {
     Test.startTest();
     try {
-      D3ChartController.getCorrelation('DELETE FROM Account', 'AnnualRevenue', 'NumberOfEmployees');
+      D3ChartController.getCorrelation(
+        'DELETE FROM Account',
+        'AnnualRevenue',
+        'NumberOfEmployees'
+      );
       System.assert(false, 'Expected exception for non-SELECT query');
     } catch (AuraHandledException e) {
       System.assert(
         e.getMessage().contains('must start with SELECT'),
         'Error should mention SELECT requirement'
+      );
+    }
+    Test.stopTest();
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // getMultiGroupData Tests
+  // ═══════════════════════════════════════════════════════════════
+
+  @isTest
+  static void testGetMultiGroupDataSum() {
+    Test.startTest();
+    List<Map<String, Object>> results = D3ChartController.getMultiGroupData(
+      'Opportunity',
+      'StageName',
+      'LeadSource',
+      'Amount',
+      'Sum',
+      null
+    );
+    System.assertNotEquals(null, results, 'Results should not be null');
+    // Each result should have label, series, and value keys
+    if (!results.isEmpty()) {
+      System.assert(
+        results[0].containsKey('label'),
+        'Result should contain label key'
+      );
+      System.assert(
+        results[0].containsKey('series'),
+        'Result should contain series key'
+      );
+      System.assert(
+        results[0].containsKey('value'),
+        'Result should contain value key'
+      );
+    }
+    Test.stopTest();
+  }
+
+  @isTest
+  static void testGetMultiGroupDataCount() {
+    Test.startTest();
+    List<Map<String, Object>> results = D3ChartController.getMultiGroupData(
+      'Opportunity',
+      'StageName',
+      'LeadSource',
+      'Amount',
+      'Count',
+      null
+    );
+    System.assertNotEquals(null, results, 'Results should not be null');
+    Test.stopTest();
+  }
+
+  @isTest
+  static void testGetMultiGroupDataAverage() {
+    Test.startTest();
+    List<Map<String, Object>> results = D3ChartController.getMultiGroupData(
+      'Opportunity',
+      'StageName',
+      'LeadSource',
+      'Amount',
+      'Average',
+      null
+    );
+    System.assertNotEquals(null, results, 'Results should not be null');
+    Test.stopTest();
+  }
+
+  @isTest
+  static void testGetMultiGroupDataWithFilter() {
+    Test.startTest();
+    List<Map<String, Object>> results = D3ChartController.getMultiGroupData(
+      'Opportunity',
+      'StageName',
+      'LeadSource',
+      'Amount',
+      'Sum',
+      'Amount > 0'
+    );
+    System.assertNotEquals(null, results, 'Filtered results should not be null');
+    Test.stopTest();
+  }
+
+  @isTest
+  static void testGetMultiGroupDataInvalidObject() {
+    Test.startTest();
+    try {
+      D3ChartController.getMultiGroupData(
+        'FakeObject__c',
+        'Name',
+        'Type',
+        'Amount',
+        'Sum',
+        null
+      );
+      System.assert(false, 'Expected exception for invalid object');
+    } catch (AuraHandledException e) {
+      System.assert(
+        e.getMessage().contains('Invalid object'),
+        'Error should mention invalid object'
+      );
+    }
+    Test.stopTest();
+  }
+
+  @isTest
+  static void testGetMultiGroupDataInvalidOperation() {
+    Test.startTest();
+    try {
+      D3ChartController.getMultiGroupData(
+        'Opportunity',
+        'StageName',
+        'LeadSource',
+        'Amount',
+        'Multiply',
+        null
+      );
+      System.assert(false, 'Expected exception for invalid operation');
+    } catch (AuraHandledException e) {
+      System.assert(
+        e.getMessage().contains('Invalid operation'),
+        'Error should mention invalid operation'
+      );
+    }
+    Test.stopTest();
+  }
+
+  @isTest
+  static void testGetMultiGroupDataInvalidSeriesField() {
+    Test.startTest();
+    try {
+      D3ChartController.getMultiGroupData(
+        'Opportunity',
+        'StageName',
+        'FakeField__c',
+        'Amount',
+        'Sum',
+        null
+      );
+      System.assert(false, 'Expected exception for invalid series field');
+    } catch (AuraHandledException e) {
+      System.assert(
+        e.getMessage().contains('Invalid seriesField'),
+        'Error should mention invalid series field'
+      );
+    }
+    Test.stopTest();
+  }
+
+  @isTest
+  static void testGetMultiGroupDataInjectionPrevention() {
+    Test.startTest();
+    try {
+      D3ChartController.getMultiGroupData(
+        'Opportunity',
+        'StageName',
+        'LeadSource',
+        'Amount',
+        'Sum',
+        'Amount > 0; DELETE FROM Opportunity'
+      );
+      System.assert(false, 'Expected exception for injection attempt');
+    } catch (AuraHandledException e) {
+      System.assert(
+        e.getMessage().contains('forbidden keyword'),
+        'Error should mention forbidden keyword'
       );
     }
     Test.stopTest();

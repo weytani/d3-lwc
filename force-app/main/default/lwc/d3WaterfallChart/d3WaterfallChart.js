@@ -193,9 +193,7 @@ export default class D3WaterfallChart extends NavigationMixin(
         // Server returns [{label, value}, ...] — same shape as aggregateData()
         this.chartData = result;
       } catch (e) {
-        throw new Error(
-          `Aggregation Error: ${e.body?.message || e.message}`
-        );
+        throw new Error(`Aggregation Error: ${e.body?.message || e.message}`);
       }
 
       if (!this.chartData || this.chartData.length === 0) {
@@ -420,9 +418,7 @@ export default class D3WaterfallChart extends NavigationMixin(
       .duration(750)
       .delay((d, i) => i * 50)
       .attr("y", (d) => yScale(Math.max(d.start, d.end)))
-      .attr("height", (d) =>
-        Math.abs(yScale(d.start) - yScale(d.end))
-      );
+      .attr("height", (d) => Math.abs(yScale(d.start) - yScale(d.end)));
 
     // Connector lines (thin gray dashed lines from top of each bar to start of next)
     this.svg

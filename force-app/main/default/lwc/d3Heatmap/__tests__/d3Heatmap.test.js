@@ -106,9 +106,7 @@ const HEATMAP_RECORDS = [
   { Quarter: "Q3", Product: "Product B", Amount: 175 }
 ];
 
-const SINGLE_RECORD = [
-  { Quarter: "Q1", Product: "Product A", Amount: 100 }
-];
+const SINGLE_RECORD = [{ Quarter: "Q1", Product: "Product A", Amount: 100 }];
 
 const SERVER_MULTI_GROUP_RESULT = [
   { label: "Q1", series: "Product A", value: 100 },
@@ -251,7 +249,9 @@ describe("c-d3-heatmap", () => {
     });
 
     it("shows no-data state when query returns empty results", async () => {
-      executeQuery.mockResolvedValue([{ Quarter: "Q1", Product: "A", Amount: 1 }]);
+      executeQuery.mockResolvedValue([
+        { Quarter: "Q1", Product: "A", Amount: 1 }
+      ]);
       // Force empty aggregation by using wrong fields
       await createChart({
         recordCollection: [],
@@ -347,7 +347,9 @@ describe("c-d3-heatmap", () => {
 
       await flushPromises();
 
-      const errorEl = element.shadowRoot.querySelector(".slds-text-color_error");
+      const errorEl = element.shadowRoot.querySelector(
+        ".slds-text-color_error"
+      );
       expect(errorEl).toBeTruthy();
       expect(errorEl.textContent).toContain("D3 load failed");
     });
@@ -364,7 +366,9 @@ describe("c-d3-heatmap", () => {
 
       await flushPromises();
 
-      const errorEl = element.shadowRoot.querySelector(".slds-text-color_error");
+      const errorEl = element.shadowRoot.querySelector(
+        ".slds-text-color_error"
+      );
       expect(errorEl).toBeTruthy();
       expect(errorEl.textContent).toContain("SOQL");
     });
@@ -384,7 +388,9 @@ describe("c-d3-heatmap", () => {
 
       await flushPromises();
 
-      const errorEl = element.shadowRoot.querySelector(".slds-text-color_error");
+      const errorEl = element.shadowRoot.querySelector(
+        ".slds-text-color_error"
+      );
       expect(errorEl).toBeTruthy();
       expect(errorEl.textContent).toContain("Aggregation Error");
     });
@@ -394,7 +400,9 @@ describe("c-d3-heatmap", () => {
       await flushPromises();
 
       // Should not crash — config falls back to {}
-      const errorEl = element.shadowRoot.querySelector(".slds-text-color_error");
+      const errorEl = element.shadowRoot.querySelector(
+        ".slds-text-color_error"
+      );
       expect(errorEl).toBeFalsy();
     });
 
@@ -406,7 +414,9 @@ describe("c-d3-heatmap", () => {
 
       await flushPromises();
 
-      const errorEl = element.shadowRoot.querySelector(".slds-text-color_error");
+      const errorEl = element.shadowRoot.querySelector(
+        ".slds-text-color_error"
+      );
       expect(errorEl).toBeTruthy();
       expect(errorEl.textContent).toContain("No data source");
     });
@@ -527,7 +537,9 @@ describe("c-d3-heatmap", () => {
 
       await flushPromises();
 
-      const errorEl = element.shadowRoot.querySelector(".slds-text-color_error");
+      const errorEl = element.shadowRoot.querySelector(
+        ".slds-text-color_error"
+      );
       expect(errorEl).toBeTruthy();
     });
   });
@@ -847,7 +859,9 @@ describe("c-d3-heatmap", () => {
     });
 
     it("handles records with wrong field names", async () => {
-      const wrongFields = [{ WrongField: "A", WrongSeries: "B", WrongValue: 100 }];
+      const wrongFields = [
+        { WrongField: "A", WrongSeries: "B", WrongValue: 100 }
+      ];
       await createChart({ recordCollection: wrongFields });
       await flushPromises();
 
@@ -987,7 +1001,9 @@ describe("c-d3-heatmap", () => {
         { label: "Q1", series: "Product A", value: 500 }
       );
 
-      expect(handler.mock.calls[0][0].detail.filterField).toBe("CustomField__c");
+      expect(handler.mock.calls[0][0].detail.filterField).toBe(
+        "CustomField__c"
+      );
     });
 
     it("does not dispatch cellclick when objectApiName is empty", async () => {
@@ -1043,7 +1059,9 @@ describe("c-d3-heatmap", () => {
       await flushPromises();
 
       // No error — config was parsed successfully
-      const errorEl = element.shadowRoot.querySelector(".slds-text-color_error");
+      const errorEl = element.shadowRoot.querySelector(
+        ".slds-text-color_error"
+      );
       expect(errorEl).toBeFalsy();
     });
 
@@ -1051,7 +1069,9 @@ describe("c-d3-heatmap", () => {
       await createChart({ advancedConfig: "" });
       await flushPromises();
 
-      const errorEl = element.shadowRoot.querySelector(".slds-text-color_error");
+      const errorEl = element.shadowRoot.querySelector(
+        ".slds-text-color_error"
+      );
       expect(errorEl).toBeFalsy();
     });
 
@@ -1060,7 +1080,9 @@ describe("c-d3-heatmap", () => {
       await flushPromises();
 
       // Should not crash
-      const errorEl = element.shadowRoot.querySelector(".slds-text-color_error");
+      const errorEl = element.shadowRoot.querySelector(
+        ".slds-text-color_error"
+      );
       expect(errorEl).toBeFalsy();
     });
   });

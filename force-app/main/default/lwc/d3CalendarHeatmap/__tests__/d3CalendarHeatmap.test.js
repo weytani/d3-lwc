@@ -347,15 +347,23 @@ describe("c-d3-calendar-heatmap", () => {
       // a function reference. We verify text() was called with a function
       // that resolves month names when invoked with month boundary data.
       const textCalls = mockD3.text.mock.calls;
-      const monthFnCall = textCalls.find(
-        (c) => typeof c[0] === "function"
-      );
+      const monthFnCall = textCalls.find((c) => typeof c[0] === "function");
       expect(monthFnCall).toBeTruthy();
 
       // Verify the function produces month names when called
       const monthNames = [
-        "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+        "Jan",
+        "Feb",
+        "Mar",
+        "Apr",
+        "May",
+        "Jun",
+        "Jul",
+        "Aug",
+        "Sep",
+        "Oct",
+        "Nov",
+        "Dec"
       ];
       const fnResults = textCalls
         .filter((c) => typeof c[0] === "function")

@@ -49,7 +49,7 @@ const createMockD3 = () => {
     text: jest.fn(() => mockD3),
     node: jest.fn(() => mockNode),
     scaleTime: jest.fn(() => {
-      const scale = jest.fn((d) => d ? d.getTime() / 1000000 : 0);
+      const scale = jest.fn((d) => (d ? d.getTime() / 1000000 : 0));
       scale.domain = jest.fn(() => scale);
       scale.range = jest.fn(() => scale);
       return scale;
@@ -309,7 +309,8 @@ describe("c-d3-area-chart", () => {
     it("executes SOQL when recordCollection is empty", async () => {
       await createChart({
         recordCollection: [],
-        soqlQuery: "SELECT CloseDate, Amount FROM Opportunity ORDER BY CloseDate"
+        soqlQuery:
+          "SELECT CloseDate, Amount FROM Opportunity ORDER BY CloseDate"
       });
 
       expect(executeQuery).toHaveBeenCalledWith({
@@ -351,9 +352,7 @@ describe("c-d3-area-chart", () => {
     });
 
     it("shows error when no valid data after processing", async () => {
-      const invalidData = [
-        { CloseDate: "not-a-date", Amount: "not-a-number" }
-      ];
+      const invalidData = [{ CloseDate: "not-a-date", Amount: "not-a-number" }];
       await createChart({ recordCollection: invalidData });
       await flushPromises();
 
@@ -853,7 +852,8 @@ describe("c-d3-area-chart", () => {
 
       const attrCalls = mockD3.attr.mock.calls;
       const gridCalls = attrCalls.filter(
-        (c) => c[0] === "class" && typeof c[1] === "string" && c[1].includes("grid")
+        (c) =>
+          c[0] === "class" && typeof c[1] === "string" && c[1].includes("grid")
       );
       expect(gridCalls.length).toBeGreaterThan(0);
     });

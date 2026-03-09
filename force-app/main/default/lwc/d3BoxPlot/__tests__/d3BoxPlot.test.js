@@ -129,7 +129,7 @@ const DATA_WITH_OUTLIERS = [
   { StageName: "Test", Amount: 12 },
   { StageName: "Test", Amount: 13 },
   { StageName: "Test", Amount: 100 }, // outlier high
-  { StageName: "Test", Amount: -50 }  // outlier low
+  { StageName: "Test", Amount: -50 } // outlier low
 ];
 
 const NULL_VALUE_DATA = [
@@ -555,7 +555,10 @@ describe("c-d3-box-plot", () => {
 
       const attrCalls = mockD3.attr.mock.calls;
       const classCalls = attrCalls.filter(
-        (c) => c[0] === "class" && typeof c[1] === "string" && c[1].includes("whisker-cap")
+        (c) =>
+          c[0] === "class" &&
+          typeof c[1] === "string" &&
+          c[1].includes("whisker-cap")
       );
       expect(classCalls.length).toBeGreaterThan(0);
     });

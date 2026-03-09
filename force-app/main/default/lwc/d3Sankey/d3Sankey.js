@@ -229,7 +229,10 @@ export default class D3Sankey extends NavigationMixin(LightningElement) {
       requiredFields.push(this.valueField);
     }
 
-    const prepared = prepareData(rawData, { requiredFields, limit: CHART_LIMITS.SANKEY });
+    const prepared = prepareData(rawData, {
+      requiredFields,
+      limit: CHART_LIMITS.SANKEY
+    });
 
     if (!prepared.valid) {
       throw new Error(prepared.error);

@@ -105,12 +105,8 @@ describe("c-d3-bullet-chart", () => {
     getAggregatedData.mockResolvedValue(AGGREGATED_RESPONSE);
 
     // Spy on console to ensure pristine output
-    consoleErrorSpy = jest
-      .spyOn(console, "error")
-      .mockImplementation(() => {});
-    consoleWarnSpy = jest
-      .spyOn(console, "warn")
-      .mockImplementation(() => {});
+    consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+    consoleWarnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
 
     // Mock getBoundingClientRect
     Element.prototype.getBoundingClientRect = jest.fn(() => ({
@@ -791,8 +787,7 @@ describe("c-d3-bullet-chart", () => {
 
     it("creates range rect elements for qualitative backgrounds", async () => {
       await createChart({
-        advancedConfig:
-          '{"target": 250000, "ranges": [100000, 200000, 400000]}'
+        advancedConfig: '{"target": 250000, "ranges": [100000, 200000, 400000]}'
       });
       await flushPromises();
 
@@ -898,8 +893,7 @@ describe("c-d3-bullet-chart", () => {
 
     it("renders 3 range backgrounds when ranges are provided", async () => {
       await createChart({
-        advancedConfig:
-          '{"target": 250000, "ranges": [100000, 200000, 400000]}'
+        advancedConfig: '{"target": 250000, "ranges": [100000, 200000, 400000]}'
       });
       await flushPromises();
 
@@ -968,8 +962,7 @@ describe("c-d3-bullet-chart", () => {
 
     it("range rects fill uses gray shades", async () => {
       await createChart({
-        advancedConfig:
-          '{"target": 250000, "ranges": [100000, 200000, 400000]}'
+        advancedConfig: '{"target": 250000, "ranges": [100000, 200000, 400000]}'
       });
       await flushPromises();
 
@@ -977,8 +970,7 @@ describe("c-d3-bullet-chart", () => {
       const attrCalls = mockD3.attr.mock.calls;
       const fillCalls = attrCalls.filter((c) => c[0] === "fill");
       const grayFills = fillCalls.filter(
-        (c) =>
-          c[1] === "#e0e0e0" || c[1] === "#c0c0c0" || c[1] === "#a0a0a0"
+        (c) => c[1] === "#e0e0e0" || c[1] === "#c0c0c0" || c[1] === "#a0a0a0"
       );
       expect(grayFills.length).toBe(3);
     });

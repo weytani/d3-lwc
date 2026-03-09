@@ -319,11 +319,15 @@ export default class D3BoxPlot extends NavigationMixin(LightningElement) {
     this.chartData.forEach((d) => {
       const low = Math.min(
         d.stats.whiskerLow,
-        ...(d.stats.outliers.length > 0 ? d.stats.outliers : [d.stats.whiskerLow])
+        ...(d.stats.outliers.length > 0
+          ? d.stats.outliers
+          : [d.stats.whiskerLow])
       );
       const high = Math.max(
         d.stats.whiskerHigh,
-        ...(d.stats.outliers.length > 0 ? d.stats.outliers : [d.stats.whiskerHigh])
+        ...(d.stats.outliers.length > 0
+          ? d.stats.outliers
+          : [d.stats.whiskerHigh])
       );
       if (low < globalMin) globalMin = low;
       if (high > globalMax) globalMax = high;

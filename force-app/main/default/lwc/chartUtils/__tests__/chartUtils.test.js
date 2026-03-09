@@ -302,9 +302,7 @@ describe("chartUtils", () => {
       expect(callback).not.toHaveBeenCalled();
 
       // Simulate a second rapid resize before the debounce window closes
-      capturedObserverCallback([
-        { contentRect: { width: 600, height: 400 } }
-      ]);
+      capturedObserverCallback([{ contentRect: { width: 600, height: 400 } }]);
 
       // Advance past the original 100ms mark — callback should NOT fire
       // because the second event reset the debounce timer

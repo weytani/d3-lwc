@@ -954,9 +954,7 @@ describe("c-d3-waterfall-chart", () => {
 
       // text() should be called with a function that formats deltas
       const textCalls = mockD3.text.mock.calls;
-      const funcTextCalls = textCalls.filter(
-        (c) => typeof c[0] === "function"
-      );
+      const funcTextCalls = textCalls.filter((c) => typeof c[0] === "function");
       expect(funcTextCalls.length).toBeGreaterThan(0);
 
       // Test the formatter function with positive value
@@ -970,9 +968,7 @@ describe("c-d3-waterfall-chart", () => {
       await flushPromises();
 
       const textCalls = mockD3.text.mock.calls;
-      const funcTextCalls = textCalls.filter(
-        (c) => typeof c[0] === "function"
-      );
+      const funcTextCalls = textCalls.filter((c) => typeof c[0] === "function");
 
       if (funcTextCalls.length > 0) {
         const formatter = funcTextCalls[0][0];

@@ -210,9 +210,7 @@ export default class D3StackedBarChart extends NavigationMixin(
           this.chartData = result;
         }
       } catch (e) {
-        throw new Error(
-          `Aggregation Error: ${e.body?.message || e.message}`
-        );
+        throw new Error(`Aggregation Error: ${e.body?.message || e.message}`);
       }
 
       if (!this.chartData || this.chartData.length === 0) {
@@ -377,11 +375,7 @@ export default class D3StackedBarChart extends NavigationMixin(
       .attr("transform", `translate(${margin.left},${margin.top})`);
 
     // X Scale
-    const xScale = d3
-      .scaleBand()
-      .domain(labels)
-      .range([0, width])
-      .padding(0.2);
+    const xScale = d3.scaleBand().domain(labels).range([0, width]).padding(0.2);
 
     // Colors — one per series
     const colorCount = hasSeries ? seriesNames.length : labels.length;
@@ -423,7 +417,16 @@ export default class D3StackedBarChart extends NavigationMixin(
   // STACKED RENDERING
   // ═══════════════════════════════════════════════════════════════
 
-  _renderStacked(d3, labels, seriesNames, xScale, width, height, colors, stackMode) {
+  _renderStacked(
+    d3,
+    labels,
+    seriesNames,
+    xScale,
+    width,
+    height,
+    colors,
+    stackMode
+  ) {
     // Pivot chartData into rows keyed by label: { label, seriesA: val, seriesB: val, ... }
     const pivotMap = new Map();
     labels.forEach((label) => {
@@ -576,8 +579,7 @@ export default class D3StackedBarChart extends NavigationMixin(
       .padding(0.05);
 
     // Y Scale
-    const yMax =
-      d3.max(this.chartData, (d) => d.value) || 0;
+    const yMax = d3.max(this.chartData, (d) => d.value) || 0;
     const yScale = d3
       .scaleLinear()
       .domain([0, yMax * 1.1])
@@ -631,9 +633,7 @@ export default class D3StackedBarChart extends NavigationMixin(
     // Draw rects per series within each group
     groups.each((label, idx, nodes) => {
       const group = d3.select(nodes[idx]);
-      const seriesForLabel = this.chartData.filter(
-        (d) => d.label === label
-      );
+      const seriesForLabel = this.chartData.filter((d) => d.label === label);
 
       group
         .selectAll("rect")
@@ -780,10 +780,7 @@ export default class D3StackedBarChart extends NavigationMixin(
     const legendGroup = this.svg
       .append("g")
       .attr("class", "legend")
-      .attr(
-        "transform",
-        `translate(0, ${height + 35})`
-      );
+      .attr("transform", `translate(0, ${height + 35})`);
 
     const itemWidth = 80;
     const totalWidth = seriesNames.length * itemWidth;

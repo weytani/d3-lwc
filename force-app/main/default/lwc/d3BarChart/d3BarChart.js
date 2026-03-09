@@ -4,7 +4,12 @@
  */
 import { LightningElement, api, track } from "lwc";
 import { loadD3 } from "c/d3Lib";
-import { prepareData, aggregateData, OPERATIONS, MAX_RECORDS } from "c/dataService";
+import {
+  prepareData,
+  aggregateData,
+  OPERATIONS,
+  MAX_RECORDS
+} from "c/dataService";
 import { getColors, DEFAULT_THEME } from "c/themeService";
 import {
   formatNumber,
@@ -168,7 +173,12 @@ export default class D3BarChart extends NavigationMixin(LightningElement) {
     }
 
     // Priority 2: Server-side aggregation when all required fields are set
-    if (this.objectApiName && this.groupByField && this.valueField && this.operation) {
+    if (
+      this.objectApiName &&
+      this.groupByField &&
+      this.valueField &&
+      this.operation
+    ) {
       try {
         const result = await getAggregatedData({
           objectName: this.objectApiName,

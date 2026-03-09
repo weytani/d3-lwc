@@ -92,7 +92,12 @@ const SINGLE_GROUP_DATA = [
 
 const THREE_GROUP_DATA = [
   { Type: "New Business", Amount: 50000, Probability: 0.8, CloseRate: 0.5 },
-  { Type: "Existing Business", Amount: 40000, Probability: 0.9, CloseRate: 0.7 },
+  {
+    Type: "Existing Business",
+    Amount: 40000,
+    Probability: 0.9,
+    CloseRate: 0.7
+  },
   { Type: "Partner", Amount: 30000, Probability: 0.6, CloseRate: 0.3 }
 ];
 
@@ -619,7 +624,8 @@ describe("c-d3-radar-chart", () => {
       // Grid polygons are rendered as path elements with class "grid-polygon"
       const attrCalls = mockD3.attr.mock.calls;
       const gridCalls = attrCalls.filter(
-        (c) => c[0] === "class" && typeof c[1] === "string" && c[1].includes("grid")
+        (c) =>
+          c[0] === "class" && typeof c[1] === "string" && c[1].includes("grid")
       );
       expect(gridCalls.length).toBeGreaterThan(0);
     });
@@ -649,7 +655,10 @@ describe("c-d3-radar-chart", () => {
 
       const attrCalls = mockD3.attr.mock.calls;
       const transformCalls = attrCalls.filter(
-        (c) => c[0] === "transform" && typeof c[1] === "string" && c[1].includes("translate")
+        (c) =>
+          c[0] === "transform" &&
+          typeof c[1] === "string" &&
+          c[1].includes("translate")
       );
       expect(transformCalls.length).toBeGreaterThan(0);
     });

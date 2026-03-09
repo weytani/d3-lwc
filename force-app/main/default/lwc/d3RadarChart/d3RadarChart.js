@@ -2,7 +2,12 @@
 // ABOUTME: Displays multi-axis polygon overlays for scorecards and benchmarking.
 import { LightningElement, api, track } from "lwc";
 import { loadD3 } from "c/d3Lib";
-import { prepareData, aggregateData, OPERATIONS, MAX_RECORDS } from "c/dataService";
+import {
+  prepareData,
+  aggregateData,
+  OPERATIONS,
+  MAX_RECORDS
+} from "c/dataService";
 import { getColors, DEFAULT_THEME } from "c/themeService";
 import {
   formatNumber,
@@ -117,11 +122,17 @@ export default class D3RadarChart extends NavigationMixin(LightningElement) {
    * Otherwise falls back to using groupByField aggregation (bar-chart-in-polar style).
    */
   get axes() {
-    if (this.config.axes && Array.isArray(this.config.axes) && this.config.axes.length > 0) {
+    if (
+      this.config.axes &&
+      Array.isArray(this.config.axes) &&
+      this.config.axes.length > 0
+    ) {
       return this.config.axes;
     }
     // Fallback: no multi-axis config, use single valueField
-    return [{ label: this.valueField || "Value", field: this.valueField || "Value" }];
+    return [
+      { label: this.valueField || "Value", field: this.valueField || "Value" }
+    ];
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -182,7 +193,12 @@ export default class D3RadarChart extends NavigationMixin(LightningElement) {
     }
 
     // Priority 2: Server-side aggregation when all required fields are set
-    if (this.objectApiName && this.groupByField && this.valueField && this.operation) {
+    if (
+      this.objectApiName &&
+      this.groupByField &&
+      this.valueField &&
+      this.operation
+    ) {
       try {
         const result = await getAggregatedData({
           objectName: this.objectApiName,
@@ -231,7 +247,9 @@ export default class D3RadarChart extends NavigationMixin(LightningElement) {
     // Each label becomes an entity, single axis from valueField
     return serverData.map((d) => ({
       entity: d.label,
-      values: [{ axis: this.valueField || "Value", value: d.value, rawValue: d.value }]
+      values: [
+        { axis: this.valueField || "Value", value: d.value, rawValue: d.value }
+      ]
     }));
   }
 
@@ -277,7 +295,8 @@ export default class D3RadarChart extends NavigationMixin(LightningElement) {
           .map((r) => r[axisDef.field])
           .filter((v) => v != null && !isNaN(Number(v)))
           .map(Number);
-        const avg = nums.length > 0 ? nums.reduce((a, b) => a + b, 0) / nums.length : 0;
+        const avg =
+          nums.length > 0 ? nums.reduce((a, b) => a + b, 0) / nums.length : 0;
         return { axis: axisDef.label, value: avg, rawValue: avg };
       });
       entities.push({ entity, values });
@@ -290,7 +309,9 @@ export default class D3RadarChart extends NavigationMixin(LightningElement) {
     // Normalize each axis independently (0-1 scale based on max across all entities)
     const axisCount = axesDef.length;
     for (let i = 0; i < axisCount; i++) {
-      const maxVal = Math.max(...entities.map((e) => Math.abs(e.values[i].value)));
+      const maxVal = Math.max(
+        ...entities.map((e) => Math.abs(e.values[i].value))
+      );
       if (maxVal > 0) {
         entities.forEach((e) => {
           e.values[i].value = e.values[i].value / maxVal;
@@ -401,7 +422,10 @@ export default class D3RadarChart extends NavigationMixin(LightningElement) {
    * Draws concentric grid polygons at evenly-spaced levels.
    */
   _renderGrid(d3, axisCount, radius, angleSlice) {
-    const levels = Array.from({ length: GRID_LEVELS }, (_, i) => (i + 1) / GRID_LEVELS);
+    const levels = Array.from(
+      { length: GRID_LEVELS },
+      (_, i) => (i + 1) / GRID_LEVELS
+    );
 
     levels.forEach((level) => {
       const levelRadius = radius * level;
@@ -414,7 +438,12 @@ export default class D3RadarChart extends NavigationMixin(LightningElement) {
         ]);
       }
       // Close the polygon
-      const pathData = points.map((p, idx) => (idx === 0 ? `M${p[0]},${p[1]}` : `L${p[0]},${p[1]}`)).join("") + "Z";
+      const pathData =
+        points
+          .map((p, idx) =>
+            idx === 0 ? `M${p[0]},${p[1]}` : `L${p[0]},${p[1]}`
+          )
+          .join("") + "Z";
 
       this.svg
         .append("path")
@@ -450,11 +479,12 @@ export default class D3RadarChart extends NavigationMixin(LightningElement) {
       // Axis label
       const labelX = (radius + 15) * Math.cos(angle);
       const labelY = (radius + 15) * Math.sin(angle);
-      const anchor = Math.abs(Math.cos(angle)) < 0.01
-        ? "middle"
-        : Math.cos(angle) > 0
-          ? "start"
-          : "end";
+      const anchor =
+        Math.abs(Math.cos(angle)) < 0.01
+          ? "middle"
+          : Math.cos(angle) > 0
+            ? "start"
+            : "end";
 
       this.svg
         .append("text")
@@ -483,7 +513,12 @@ export default class D3RadarChart extends NavigationMixin(LightningElement) {
           radius * value * Math.sin(angle)
         ]);
       }
-      const pathData = points.map((p, idx) => (idx === 0 ? `M${p[0]},${p[1]}` : `L${p[0]},${p[1]}`)).join("") + "Z";
+      const pathData =
+        points
+          .map((p, idx) =>
+            idx === 0 ? `M${p[0]},${p[1]}` : `L${p[0]},${p[1]}`
+          )
+          .join("") + "Z";
 
       this.svg
         .append("path")

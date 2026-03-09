@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <FlexiPage xmlns="http://soap.sforce.com/2006/04/metadata">
     <flexiPageRegions>
         <itemInstances>
@@ -6,7 +6,8 @@
             <componentInstance>
                 <componentInstanceProperties>
                     <name>soqlQuery</name>
-                    <value>SELECT StageName, Amount FROM Opportunity WHERE Amount != null</value>
+                    <value
+          >SELECT StageName, Amount FROM Opportunity WHERE Amount != null</value>
                 </componentInstanceProperties>
                 <componentInstanceProperties>
                     <name>groupByField</name>
@@ -41,7 +42,8 @@
             <componentInstance>
                 <componentInstanceProperties>
                     <name>soqlQuery</name>
-                    <value>SELECT Type, Amount FROM Opportunity WHERE Type != null</value>
+                    <value
+          >SELECT Type, Amount FROM Opportunity WHERE Type != null</value>
                 </componentInstanceProperties>
                 <componentInstanceProperties>
                     <name>groupByField</name>
@@ -80,7 +82,8 @@
             <componentInstance>
                 <componentInstanceProperties>
                     <name>soqlQuery</name>
-                    <value>SELECT CloseDate, Amount FROM Opportunity WHERE Amount != null AND CloseDate != null ORDER BY CloseDate</value>
+                    <value
+          >SELECT CloseDate, Amount FROM Opportunity WHERE Amount != null AND CloseDate != null ORDER BY CloseDate</value>
                 </componentInstanceProperties>
                 <componentInstanceProperties>
                     <name>dateField</name>
@@ -115,7 +118,8 @@
             <componentInstance>
                 <componentInstanceProperties>
                     <name>soqlQuery</name>
-                    <value>SELECT Amount FROM Opportunity WHERE Amount != null LIMIT 1</value>
+                    <value
+          >SELECT Amount FROM Opportunity WHERE Amount != null LIMIT 1</value>
                 </componentInstanceProperties>
                 <componentInstanceProperties>
                     <name>valueField</name>
@@ -150,7 +154,8 @@
             <componentInstance>
                 <componentInstanceProperties>
                     <name>soqlQuery</name>
-                    <value>SELECT Amount FROM Opportunity WHERE Amount != null</value>
+                    <value
+          >SELECT Amount FROM Opportunity WHERE Amount != null</value>
                 </componentInstanceProperties>
                 <componentInstanceProperties>
                     <name>valueField</name>
@@ -189,7 +194,8 @@
             <componentInstance>
                 <componentInstanceProperties>
                     <name>soqlQuery</name>
-                    <value>SELECT Id, Amount, Probability FROM Opportunity WHERE Amount != null AND Probability != null</value>
+                    <value
+          >SELECT Id, Amount, Probability FROM Opportunity WHERE Amount != null AND Probability != null</value>
                 </componentInstanceProperties>
                 <componentInstanceProperties>
                     <name>xAxisField</name>
@@ -236,7 +242,8 @@
             <componentInstance>
                 <componentInstanceProperties>
                     <name>soqlQuery</name>
-                    <value>SELECT Type, Amount FROM Opportunity WHERE Amount != null AND Type != null</value>
+                    <value
+          >SELECT Type, Amount FROM Opportunity WHERE Amount != null AND Type != null</value>
                 </componentInstanceProperties>
                 <componentInstanceProperties>
                     <name>groupByField</name>
@@ -271,7 +278,8 @@
             <componentInstance>
                 <componentInstanceProperties>
                     <name>soqlQuery</name>
-                    <value>SELECT LeadSource, StageName, Amount FROM Opportunity WHERE LeadSource != null AND Amount != null</value>
+                    <value
+          >SELECT LeadSource, StageName, Amount FROM Opportunity WHERE LeadSource != null AND Amount != null</value>
                 </componentInstanceProperties>
                 <componentInstanceProperties>
                     <name>sourceField</name>
@@ -310,7 +318,8 @@
             <componentInstance>
                 <componentInstanceProperties>
                     <name>soqlQuery</name>
-                    <value>SELECT Id, Name, ParentId FROM Account WHERE ParentId != null</value>
+                    <value
+          >SELECT Id, Name, ParentId FROM Account WHERE ParentId != null</value>
                 </componentInstanceProperties>
                 <componentInstanceProperties>
                     <name>nodeIdField</name>

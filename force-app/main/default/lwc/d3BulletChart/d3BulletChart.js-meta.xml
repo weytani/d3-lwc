@@ -1,6 +1,6 @@
+<?xml version="1.0" encoding="UTF-8" ?>
 <!-- ABOUTME: Metadata configuration for d3BulletChart Lightning Web Component. -->
 <!-- ABOUTME: Defines exposed properties for App Builder: soqlQuery, valueField, height, theme, minValue, maxValue, advancedConfig. -->
-<?xml version="1.0" encoding="UTF-8" ?>
 <LightningComponentBundle xmlns="http://soap.sforce.com/2006/04/metadata">
     <apiVersion>65.0</apiVersion>
     <isExposed>true</isExposed>

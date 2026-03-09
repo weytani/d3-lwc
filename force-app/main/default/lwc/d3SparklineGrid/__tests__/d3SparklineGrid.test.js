@@ -167,9 +167,7 @@ describe("c-d3-sparkline-grid", () => {
     executeQuery.mockResolvedValue(SPARKLINE_RECORDS);
 
     // Spy on console to keep output pristine
-    consoleErrorSpy = jest
-      .spyOn(console, "error")
-      .mockImplementation(() => {});
+    consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
     consoleWarnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
 
     // Mock getBoundingClientRect globally
@@ -458,7 +456,7 @@ describe("c-d3-sparkline-grid", () => {
     it("dispatches toast when data exceeds CHART_LIMITS.SPARKLINE_GRID", async () => {
       const largeData = Array.from({ length: 6000 }, (_, i) => ({
         Type: `Type${i % 5}`,
-        CloseDate: `2024-${String(((i % 12) + 1)).padStart(2, "0")}-15`,
+        CloseDate: `2024-${String((i % 12) + 1).padStart(2, "0")}-15`,
         Amount: Math.random() * 1000
       }));
 
@@ -598,9 +596,7 @@ describe("c-d3-sparkline-grid", () => {
       // Sparklines have no visible axes
       const attrCalls = mockD3.attr.mock.calls;
       const axisClasses = attrCalls.filter(
-        (c) =>
-          c[0] === "class" &&
-          (c[1] === "x-axis" || c[1] === "y-axis")
+        (c) => c[0] === "class" && (c[1] === "x-axis" || c[1] === "y-axis")
       );
       expect(axisClasses.length).toBe(0);
     });
@@ -612,9 +608,7 @@ describe("c-d3-sparkline-grid", () => {
       // Mini sparklines should have no axis rendering
       expect(mockD3.axisBottom).toBeUndefined?.() ||
         expect(
-          mockD3.axisBottom
-            ? mockD3.axisBottom.mock?.calls?.length || 0
-            : 0
+          mockD3.axisBottom ? mockD3.axisBottom.mock?.calls?.length || 0 : 0
         ).toBe(0);
     });
 
@@ -1052,16 +1046,14 @@ describe("c-d3-sparkline-grid", () => {
     it("shows truncation warning when data exceeds limit", async () => {
       const largeData = Array.from({ length: 6000 }, (_, i) => ({
         Type: `Type${i % 3}`,
-        CloseDate: `2024-${String(((i % 12) + 1)).padStart(2, "0")}-15`,
+        CloseDate: `2024-${String((i % 12) + 1).padStart(2, "0")}-15`,
         Amount: (i + 1) * 10
       }));
 
       await createChart({ recordCollection: largeData });
       await flushPromises();
 
-      const warning = element.shadowRoot.querySelector(
-        ".slds-alert_warning"
-      );
+      const warning = element.shadowRoot.querySelector(".slds-alert_warning");
       expect(warning).toBeTruthy();
     });
 
@@ -1069,9 +1061,7 @@ describe("c-d3-sparkline-grid", () => {
       await createChart();
       await flushPromises();
 
-      const warning = element.shadowRoot.querySelector(
-        ".slds-alert_warning"
-      );
+      const warning = element.shadowRoot.querySelector(".slds-alert_warning");
       expect(warning).toBeFalsy();
     });
   });

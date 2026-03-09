@@ -406,7 +406,9 @@ describe("c-d3-stacked-bar-chart", () => {
     });
 
     it("handles records with wrong field names", async () => {
-      const wrongFields = [{ WrongField: "A", WrongSeries: "B", WrongValue: 100 }];
+      const wrongFields = [
+        { WrongField: "A", WrongSeries: "B", WrongValue: 100 }
+      ];
       await createChart({ recordCollection: wrongFields });
       await flushPromises();
 
@@ -818,7 +820,10 @@ describe("c-d3-stacked-bar-chart", () => {
 
       const attrCalls = mockD3.attr.mock.calls;
       const legendCalls = attrCalls.filter(
-        (c) => c[0] === "class" && typeof c[1] === "string" && c[1].includes("legend")
+        (c) =>
+          c[0] === "class" &&
+          typeof c[1] === "string" &&
+          c[1].includes("legend")
       );
       expect(legendCalls.length).toBeGreaterThan(0);
     });

@@ -206,7 +206,10 @@ export default class D3Histogram extends NavigationMixin(LightningElement) {
 
     // Validate and prepare data
     const requiredFields = [this.valueField];
-    const prepared = prepareData(rawData, { requiredFields, limit: CHART_LIMITS.HISTOGRAM });
+    const prepared = prepareData(rawData, {
+      requiredFields,
+      limit: CHART_LIMITS.HISTOGRAM
+    });
 
     if (!prepared.valid) {
       throw new Error(prepared.error);
@@ -252,7 +255,10 @@ export default class D3Histogram extends NavigationMixin(LightningElement) {
         };
       } catch (e) {
         // Fall back to client-side calculation on server error
-        console.warn('Server statistics failed, falling back to client-side:', e);
+        console.warn(
+          "Server statistics failed, falling back to client-side:",
+          e
+        );
         this.calculateStatistics();
       }
     } else {

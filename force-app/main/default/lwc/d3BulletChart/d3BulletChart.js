@@ -199,9 +199,7 @@ export default class D3BulletChart extends NavigationMixin(LightningElement) {
           this.currentValue = Number(result[0].value) || 0;
         }
       } catch (e) {
-        throw new Error(
-          `Aggregation Error: ${e.body?.message || e.message}`
-        );
+        throw new Error(`Aggregation Error: ${e.body?.message || e.message}`);
       }
       return;
     }
@@ -358,9 +356,7 @@ export default class D3BulletChart extends NavigationMixin(LightningElement) {
       .append("g")
       .attr("class", "x-axis")
       .attr("transform", `translate(0,${height})`)
-      .call(
-        d3.axisBottom(xScale).tickFormat((d) => this.valueFormatter(d))
-      );
+      .call(d3.axisBottom(xScale).tickFormat((d) => this.valueFormatter(d)));
 
     // Tooltip and click interactions on feature bar
     this.svg
@@ -387,11 +383,7 @@ export default class D3BulletChart extends NavigationMixin(LightningElement) {
     const min = this.effectiveMinValue;
     const max = this.effectiveMaxValue;
     const span = max - min;
-    return [
-      min + span * 0.33,
-      min + span * 0.67,
-      max
-    ];
+    return [min + span * 0.33, min + span * 0.67, max];
   }
 
   /**

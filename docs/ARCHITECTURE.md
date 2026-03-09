@@ -31,12 +31,12 @@ When only `soqlQuery` is set (no `objectApiName`), the chart calls `D3ChartContr
 
 ### Apex Methods Summary
 
-| Method | Purpose | Returns | Limit |
-|---|---|---|---|
-| `executeQuery(queryString)` | Raw SOQL execution with FLS | `List<SObject>` | 10,000 rows (auto-appended LIMIT) |
-| `getAggregatedData(objectName, groupByField, valueField, operation, filterClause)` | Server-side GROUP BY | `List<Map<String, Object>>` [{label, value}] | 200 groups |
-| `getStatistics(queryString, valueField)` | Descriptive stats (count, min, max, mean, median, stdDev) | `Map<String, Decimal>` | Bounded by query LIMIT |
-| `getCorrelation(queryString, xField, yField)` | Pearson r, slope, intercept | `Map<String, Decimal>` | Bounded by query LIMIT |
+| Method                                                                             | Purpose                                                   | Returns                                      | Limit                             |
+| ---------------------------------------------------------------------------------- | --------------------------------------------------------- | -------------------------------------------- | --------------------------------- |
+| `executeQuery(queryString)`                                                        | Raw SOQL execution with FLS                               | `List<SObject>`                              | 10,000 rows (auto-appended LIMIT) |
+| `getAggregatedData(objectName, groupByField, valueField, operation, filterClause)` | Server-side GROUP BY                                      | `List<Map<String, Object>>` [{label, value}] | 200 groups                        |
+| `getStatistics(queryString, valueField)`                                           | Descriptive stats (count, min, max, mean, median, stdDev) | `Map<String, Decimal>`                       | Bounded by query LIMIT            |
+| `getCorrelation(queryString, xField, yField)`                                      | Pearson r, slope, intercept                               | `Map<String, Decimal>`                       | Bounded by query LIMIT            |
 
 `getStatistics` and `getCorrelation` both fetch raw records server-side and compute results in Apex. They exist because computing population standard deviation or Pearson correlation on 10K records in Apex is cheaper than transferring 10K records to the browser for JavaScript math.
 
@@ -48,18 +48,18 @@ When only `soqlQuery` is set (no `objectApiName`), the chart calls `D3ChartContr
 
 ### Limits Table
 
-| Chart Type | Limit | Reasoning |
-|---|---|---|
-| `BAR` | `null` | Server GROUP BY; no raw records needed. Returns ~50-200 groups. |
-| `DONUT` | `null` | Server GROUP BY; same rationale as bar. |
-| `TREEMAP` | `null` | Server GROUP BY; same rationale as bar. |
-| `HISTOGRAM` | `10,000` | Needs raw values for binning math, but values are bucketed into ~20-50 visual bins. More raw data = better distribution accuracy. |
-| `SCATTER` | `5,000` | Points overlap beyond ~1K; `SVG_ELEMENT_CAP` (500) handles rendering separately via sampling. The 5K cap bounds data transfer, not SVG elements. |
-| `LINE` | `1,000` | Time series with >1K points should be downsampled. Human eyes can't distinguish 1,000+ line segments. |
-| `FORCE_GRAPH` | `500` | Force simulation is O(n log n) per tick. 500 nodes is the practical ceiling before the simulation becomes sluggish. |
-| `GAUGE` | `1` | Single value display. |
-| `CHOROPLETH` | `500` | Bounded by the number of geographic regions on the map. |
-| `SANKEY` | `1,000` | Flow diagrams become unreadable beyond ~1K links. |
+| Chart Type    | Limit    | Reasoning                                                                                                                                        |
+| ------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `BAR`         | `null`   | Server GROUP BY; no raw records needed. Returns ~50-200 groups.                                                                                  |
+| `DONUT`       | `null`   | Server GROUP BY; same rationale as bar.                                                                                                          |
+| `TREEMAP`     | `null`   | Server GROUP BY; same rationale as bar.                                                                                                          |
+| `HISTOGRAM`   | `10,000` | Needs raw values for binning math, but values are bucketed into ~20-50 visual bins. More raw data = better distribution accuracy.                |
+| `SCATTER`     | `5,000`  | Points overlap beyond ~1K; `SVG_ELEMENT_CAP` (500) handles rendering separately via sampling. The 5K cap bounds data transfer, not SVG elements. |
+| `LINE`        | `1,000`  | Time series with >1K points should be downsampled. Human eyes can't distinguish 1,000+ line segments.                                            |
+| `FORCE_GRAPH` | `500`    | Force simulation is O(n log n) per tick. 500 nodes is the practical ceiling before the simulation becomes sluggish.                              |
+| `GAUGE`       | `1`      | Single value display.                                                                                                                            |
+| `CHOROPLETH`  | `500`    | Bounded by the number of geographic regions on the map.                                                                                          |
+| `SANKEY`      | `1,000`  | Flow diagrams become unreadable beyond ~1K links.                                                                                                |
 
 **Decision:** Aggregation charts (bar, donut, treemap) have `null` limits because they use server-side GROUP BY — the raw record count is irrelevant. The server handles millions of records and returns a handful of groups. New charts should add their entry to `CHART_LIMITS` based on visual capacity analysis, not a blanket default.
 
@@ -84,16 +84,17 @@ This preserves the distribution shape because samples are drawn uniformly across
 ### Why 500?
 
 `SVG_ELEMENT_CAP = 500` was chosen as the rendering cap because:
+
 - 500 SVG circles render smoothly with tooltips and hover effects across all browsers.
 - Above ~800 elements, mobile Safari and older machines show noticeable jank on hover.
 - 500 points are visually dense enough that adding more doesn't reveal additional patterns — the scatter cloud is already fully formed.
 
 ### Sampling vs. Truncation
 
-| Approach | Distribution preserved? | Extent preserved? | Use case |
-|---|---|---|---|
-| `truncateData()` | No — biased toward early records | No | Record count guardrail (prevent OOM) |
-| `sampleData()` | Yes — stratified across range | Yes — always includes first/last | SVG element count reduction |
+| Approach         | Distribution preserved?          | Extent preserved?                | Use case                             |
+| ---------------- | -------------------------------- | -------------------------------- | ------------------------------------ |
+| `truncateData()` | No — biased toward early records | No                               | Record count guardrail (prevent OOM) |
+| `sampleData()`   | Yes — stratified across range    | Yes — always includes first/last | SVG element count reduction          |
 
 `truncateData()` is a safety valve applied early in the pipeline. `sampleData()` is a visual optimization applied just before rendering. They serve different purposes and are not interchangeable.
 
@@ -103,19 +104,19 @@ This preserves the distribution shape because samples are drawn uniformly across
 
 ### When to use server-side (Apex)
 
-| Need | Apex Method | Why server-side wins |
-|---|---|---|
+| Need                              | Apex Method         | Why server-side wins                                                      |
+| --------------------------------- | ------------------- | ------------------------------------------------------------------------- |
 | Aggregation (bar, donut, treemap) | `getAggregatedData` | GROUP BY can process the full table; client would need all raw rows first |
-| Descriptive statistics | `getStatistics` | stdDev over 10K records is cheaper in Apex than transferring 10K records |
-| Correlation / regression | `getCorrelation` | Same rationale — compute-heavy math on large datasets belongs server-side |
+| Descriptive statistics            | `getStatistics`     | stdDev over 10K records is cheaper in Apex than transferring 10K records  |
+| Correlation / regression          | `getCorrelation`    | Same rationale — compute-heavy math on large datasets belongs server-side |
 
 ### When to use client-side (JavaScript)
 
-| Need | Client Function | Why client-side is acceptable |
-|---|---|---|
-| Aggregation of `recordCollection` | `aggregateData()` | Data is already in the browser; no wire call savings possible |
-| Histogram binning | Chart component logic | Binning depends on D3 scale configuration (bin count, domain) which is a rendering concern |
-| Scatter point rendering | Chart component logic | Individual points must be positioned by D3 scales |
+| Need                              | Client Function       | Why client-side is acceptable                                                              |
+| --------------------------------- | --------------------- | ------------------------------------------------------------------------------------------ |
+| Aggregation of `recordCollection` | `aggregateData()`     | Data is already in the browser; no wire call savings possible                              |
+| Histogram binning                 | Chart component logic | Binning depends on D3 scale configuration (bin count, domain) which is a rendering concern |
+| Scatter point rendering           | Chart component logic | Individual points must be positioned by D3 scales                                          |
 
 ### Decision Rule
 

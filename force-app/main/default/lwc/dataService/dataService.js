@@ -23,36 +23,36 @@ export const MAX_RECORDS = 2000;
  * Each chart imports its own limit from this map.
  */
 export const CHART_LIMITS = {
-    BAR: null,          // Server GROUP BY, no raw record cap
-    DONUT: null,        // Server GROUP BY, no raw record cap
-    TREEMAP: null,      // Server GROUP BY, no raw record cap
-    HISTOGRAM: 10000,   // Raw values for binning math, not SVG elements
-    SCATTER: 5000,      // SVG_ELEMENT_CAP handles rendering separately
-    LINE: 1000,         // Visual comprehension ceiling
-    FORCE_GRAPH: 500,   // O(n log n) simulation cost
-    GAUGE: 1,           // Single value
-    CHOROPLETH: 500,    // Geographic region limit
-    SANKEY: 1000,       // Flow diagram readability
-    // Phase 2 charts
-    FUNNEL: null,           // Server GROUP BY, no raw record cap
-    STACKED_BAR: null,      // Server GROUP BY, no raw record cap
-    AREA: 1000,             // Visual comprehension ceiling
-    BULLET: 1,              // Single value
-    HEATMAP: null,          // Server GROUP BY, no raw record cap
-    BOX_PLOT: 5000,         // Raw values for distribution math
-    RADAR: null,            // Server GROUP BY, no raw record cap
-    WATERFALL: 500,         // Sequential step readability
-    CALENDAR_HEATMAP: 2000, // Daily data points (~5.5 years)
-    SPARKLINE_GRID: 5000    // Multiple small charts, raw values
+  BAR: null, // Server GROUP BY, no raw record cap
+  DONUT: null, // Server GROUP BY, no raw record cap
+  TREEMAP: null, // Server GROUP BY, no raw record cap
+  HISTOGRAM: 10000, // Raw values for binning math, not SVG elements
+  SCATTER: 5000, // SVG_ELEMENT_CAP handles rendering separately
+  LINE: 1000, // Visual comprehension ceiling
+  FORCE_GRAPH: 500, // O(n log n) simulation cost
+  GAUGE: 1, // Single value
+  CHOROPLETH: 500, // Geographic region limit
+  SANKEY: 1000, // Flow diagram readability
+  // Phase 2 charts
+  FUNNEL: null, // Server GROUP BY, no raw record cap
+  STACKED_BAR: null, // Server GROUP BY, no raw record cap
+  AREA: 1000, // Visual comprehension ceiling
+  BULLET: 1, // Single value
+  HEATMAP: null, // Server GROUP BY, no raw record cap
+  BOX_PLOT: 5000, // Raw values for distribution math
+  RADAR: null, // Server GROUP BY, no raw record cap
+  WATERFALL: 500, // Sequential step readability
+  CALENDAR_HEATMAP: 2000, // Daily data points (~5.5 years)
+  SPARKLINE_GRID: 5000 // Multiple small charts, raw values
 };
 
 /**
  * Supported aggregation operations.
  */
 export const OPERATIONS = {
-    SUM: 'Sum',
-    COUNT: 'Count',
-    AVERAGE: 'Average'
+  SUM: "Sum",
+  COUNT: "Count",
+  AVERAGE: "Average"
 };
 
 /**
@@ -61,16 +61,16 @@ export const OPERATIONS = {
  * @returns {Object} - { isValid: boolean, error: string|null }
  */
 export const validateData = (data) => {
-    if (!data) {
-        return { isValid: false, error: 'Data is required' };
-    }
-    if (!Array.isArray(data)) {
-        return { isValid: false, error: 'Data must be an array' };
-    }
-    if (data.length === 0) {
-        return { isValid: false, error: 'Data array is empty' };
-    }
-    return { isValid: true, error: null };
+  if (!data) {
+    return { isValid: false, error: "Data is required" };
+  }
+  if (!Array.isArray(data)) {
+    return { isValid: false, error: "Data must be an array" };
+  }
+  if (data.length === 0) {
+    return { isValid: false, error: "Data array is empty" };
+  }
+  return { isValid: true, error: null };
 };
 
 /**
@@ -80,22 +80,22 @@ export const validateData = (data) => {
  * @returns {Object} - { isValid: boolean, error: string|null, missingFields: Array }
  */
 export const validateFields = (data, requiredFields) => {
-    if (!requiredFields || requiredFields.length === 0) {
-        return { isValid: true, error: null, missingFields: [] };
-    }
-    
-    const sample = data[0];
-    const missingFields = requiredFields.filter(field => !(field in sample));
-    
-    if (missingFields.length > 0) {
-        return {
-            isValid: false,
-            error: `Missing required fields: ${missingFields.join(', ')}`,
-            missingFields
-        };
-    }
-    
+  if (!requiredFields || requiredFields.length === 0) {
     return { isValid: true, error: null, missingFields: [] };
+  }
+
+  const sample = data[0];
+  const missingFields = requiredFields.filter((field) => !(field in sample));
+
+  if (missingFields.length > 0) {
+    return {
+      isValid: false,
+      error: `Missing required fields: ${missingFields.join(", ")}`,
+      missingFields
+    };
+  }
+
+  return { isValid: true, error: null, missingFields: [] };
 };
 
 /**
@@ -105,14 +105,14 @@ export const validateFields = (data, requiredFields) => {
  * @returns {Object} - { data: Array, truncated: boolean, originalCount: number }
  */
 export const truncateData = (data, limit = MAX_RECORDS) => {
-    const originalCount = data.length;
-    const truncated = originalCount > limit;
-    
-    return {
-        data: truncated ? data.slice(0, limit) : data,
-        truncated,
-        originalCount
-    };
+  const originalCount = data.length;
+  const truncated = originalCount > limit;
+
+  return {
+    data: truncated ? data.slice(0, limit) : data,
+    truncated,
+    originalCount
+  };
 };
 
 /**
@@ -122,30 +122,40 @@ export const truncateData = (data, limit = MAX_RECORDS) => {
  * @returns {Object} - { data: Array, valid: boolean, error: string, truncated: boolean }
  */
 export const prepareData = (data, options = {}) => {
-    const { requiredFields = [], limit = MAX_RECORDS } = options;
-    
-    // Validate
-    const validation = validateData(data);
-    if (!validation.isValid) {
-        return { data: [], valid: false, error: validation.error, truncated: false };
-    }
-    
-    // Validate fields
-    const fieldValidation = validateFields(data, requiredFields);
-    if (!fieldValidation.isValid) {
-        return { data: [], valid: false, error: fieldValidation.error, truncated: false };
-    }
-    
-    // Truncate
-    const truncation = truncateData(data, limit);
-    
+  const { requiredFields = [], limit = MAX_RECORDS } = options;
+
+  // Validate
+  const validation = validateData(data);
+  if (!validation.isValid) {
     return {
-        data: truncation.data,
-        valid: true,
-        error: null,
-        truncated: truncation.truncated,
-        originalCount: truncation.originalCount
+      data: [],
+      valid: false,
+      error: validation.error,
+      truncated: false
     };
+  }
+
+  // Validate fields
+  const fieldValidation = validateFields(data, requiredFields);
+  if (!fieldValidation.isValid) {
+    return {
+      data: [],
+      valid: false,
+      error: fieldValidation.error,
+      truncated: false
+    };
+  }
+
+  // Truncate
+  const truncation = truncateData(data, limit);
+
+  return {
+    data: truncation.data,
+    valid: true,
+    error: null,
+    truncated: truncation.truncated,
+    originalCount: truncation.originalCount
+  };
 };
 
 /**
@@ -164,26 +174,30 @@ export const SVG_ELEMENT_CAP = 500;
  * @returns {Object} - { data: Array, sampled: boolean, originalCount: number }
  */
 export const sampleData = (data, sortField, limit = SVG_ELEMENT_CAP) => {
-    if (!data || data.length <= limit) {
-        return { data: data || [], sampled: false, originalCount: data ? data.length : 0 };
-    }
+  if (!data || data.length <= limit) {
+    return {
+      data: data || [],
+      sampled: false,
+      originalCount: data ? data.length : 0
+    };
+  }
 
-    const sorted = [...data].sort((a, b) => {
-        const aVal = Number(a[sortField]) || 0;
-        const bVal = Number(b[sortField]) || 0;
-        return aVal - bVal;
-    });
+  const sorted = [...data].sort((a, b) => {
+    const aVal = Number(a[sortField]) || 0;
+    const bVal = Number(b[sortField]) || 0;
+    return aVal - bVal;
+  });
 
-    const originalCount = sorted.length;
-    const step = (originalCount - 1) / (limit - 1);
-    const sampled = [];
+  const originalCount = sorted.length;
+  const step = (originalCount - 1) / (limit - 1);
+  const sampled = [];
 
-    for (let i = 0; i < limit; i++) {
-        const index = Math.round(i * step);
-        sampled.push(sorted[index]);
-    }
+  for (let i = 0; i < limit; i++) {
+    const index = Math.round(i * step);
+    sampled.push(sorted[index]);
+  }
 
-    return { data: sampled, sampled: true, originalCount };
+  return { data: sampled, sampled: true, originalCount };
 };
 
 /**
@@ -198,47 +212,47 @@ export const sampleData = (data, sortField, limit = SVG_ELEMENT_CAP) => {
  * @returns {Array} - [{ label: string, value: number }, ...]
  */
 export const aggregateData = (data, groupByField, valueField, operation) => {
-    if (!data || !groupByField) {
-        return [];
+  if (!data || !groupByField) {
+    return [];
+  }
+
+  // Group by the specified field
+  const groups = new Map();
+
+  data.forEach((record) => {
+    const key = String(record[groupByField] ?? "Null");
+    if (!groups.has(key)) {
+      groups.set(key, { sum: 0, count: 0 });
     }
-    
-    // Group by the specified field
-    const groups = new Map();
-    
-    data.forEach(record => {
-        const key = String(record[groupByField] ?? 'Null');
-        if (!groups.has(key)) {
-            groups.set(key, { sum: 0, count: 0 });
-        }
-        const group = groups.get(key);
-        group.count += 1;
-        if (valueField && record[valueField] != null) {
-            group.sum += Number(record[valueField]) || 0;
-        }
-    });
-    
-    // Calculate final values based on operation
-    const result = [];
-    groups.forEach((group, label) => {
-        let value;
-        switch (operation) {
-            case OPERATIONS.SUM:
-                value = group.sum;
-                break;
-            case OPERATIONS.COUNT:
-                value = group.count;
-                break;
-            case OPERATIONS.AVERAGE:
-                value = group.count > 0 ? group.sum / group.count : 0;
-                break;
-            default:
-                value = group.count;
-        }
-        result.push({ label, value });
-    });
-    
-    // Sort by value descending
-    return result.sort((a, b) => b.value - a.value);
+    const group = groups.get(key);
+    group.count += 1;
+    if (valueField && record[valueField] != null) {
+      group.sum += Number(record[valueField]) || 0;
+    }
+  });
+
+  // Calculate final values based on operation
+  const result = [];
+  groups.forEach((group, label) => {
+    let value;
+    switch (operation) {
+      case OPERATIONS.SUM:
+        value = group.sum;
+        break;
+      case OPERATIONS.COUNT:
+        value = group.count;
+        break;
+      case OPERATIONS.AVERAGE:
+        value = group.count > 0 ? group.sum / group.count : 0;
+        break;
+      default:
+        value = group.count;
+    }
+    result.push({ label, value });
+  });
+
+  // Sort by value descending
+  return result.sort((a, b) => b.value - a.value);
 };
 
 /**
@@ -251,48 +265,54 @@ export const aggregateData = (data, groupByField, valueField, operation) => {
  * @param {String} operation - 'Sum', 'Count', or 'Average'
  * @returns {Array} - [{ label, series, value }, ...]
  */
-export const aggregateSeriesData = (data, groupByField, seriesField, valueField, operation) => {
-    if (!data || !groupByField || !seriesField) {
-        return [];
+export const aggregateSeriesData = (
+  data,
+  groupByField,
+  seriesField,
+  valueField,
+  operation
+) => {
+  if (!data || !groupByField || !seriesField) {
+    return [];
+  }
+
+  const groups = new Map();
+
+  data.forEach((record) => {
+    const label = String(record[groupByField] ?? "Null");
+    const series = String(record[seriesField] ?? "Null");
+    const key = `${label}|||${series}`;
+
+    if (!groups.has(key)) {
+      groups.set(key, { label, series, sum: 0, count: 0 });
     }
+    const group = groups.get(key);
+    group.count += 1;
+    if (valueField && record[valueField] != null) {
+      group.sum += Number(record[valueField]) || 0;
+    }
+  });
 
-    const groups = new Map();
+  const result = [];
+  groups.forEach((group) => {
+    let value;
+    switch (operation) {
+      case OPERATIONS.SUM:
+        value = group.sum;
+        break;
+      case OPERATIONS.COUNT:
+        value = group.count;
+        break;
+      case OPERATIONS.AVERAGE:
+        value = group.count > 0 ? group.sum / group.count : 0;
+        break;
+      default:
+        value = group.count;
+    }
+    result.push({ label: group.label, series: group.series, value });
+  });
 
-    data.forEach(record => {
-        const label = String(record[groupByField] ?? 'Null');
-        const series = String(record[seriesField] ?? 'Null');
-        const key = `${label}|||${series}`;
-
-        if (!groups.has(key)) {
-            groups.set(key, { label, series, sum: 0, count: 0 });
-        }
-        const group = groups.get(key);
-        group.count += 1;
-        if (valueField && record[valueField] != null) {
-            group.sum += Number(record[valueField]) || 0;
-        }
-    });
-
-    const result = [];
-    groups.forEach((group) => {
-        let value;
-        switch (operation) {
-            case OPERATIONS.SUM:
-                value = group.sum;
-                break;
-            case OPERATIONS.COUNT:
-                value = group.count;
-                break;
-            case OPERATIONS.AVERAGE:
-                value = group.count > 0 ? group.sum / group.count : 0;
-                break;
-            default:
-                value = group.count;
-        }
-        result.push({ label: group.label, series: group.series, value });
-    });
-
-    return result;
+  return result;
 };
 
 /**
@@ -302,50 +322,55 @@ export const aggregateSeriesData = (data, groupByField, seriesField, valueField,
  * @returns {Object|null} - { q1, q2, q3, iqr, whiskerLow, whiskerHigh, min, max, outliers[] }
  */
 export const computeQuartiles = (data, valueField) => {
-    if (!data || data.length === 0) {
-        return null;
-    }
+  if (!data || data.length === 0) {
+    return null;
+  }
 
-    const values = data
-        .map(d => d[valueField])
-        .filter(v => v != null && !isNaN(Number(v)))
-        .map(Number)
-        .sort((a, b) => a - b);
+  const values = data
+    .map((d) => d[valueField])
+    .filter((v) => v != null && !isNaN(Number(v)))
+    .map(Number)
+    .sort((a, b) => a - b);
 
-    if (values.length === 0) {
-        return null;
-    }
+  if (values.length === 0) {
+    return null;
+  }
 
-    const median = (arr) => {
-        const mid = Math.floor(arr.length / 2);
-        return arr.length % 2 !== 0
-            ? arr[mid]
-            : (arr[mid - 1] + arr[mid]) / 2;
-    };
+  const median = (arr) => {
+    const mid = Math.floor(arr.length / 2);
+    return arr.length % 2 !== 0 ? arr[mid] : (arr[mid - 1] + arr[mid]) / 2;
+  };
 
-    const q2 = median(values);
-    const mid = Math.floor(values.length / 2);
-    const lowerHalf = values.slice(0, mid);
-    const upperHalf = values.length % 2 !== 0 ? values.slice(mid + 1) : values.slice(mid);
-    const q1 = lowerHalf.length > 0 ? median(lowerHalf) : q2;
-    const q3 = upperHalf.length > 0 ? median(upperHalf) : q2;
-    const iqr = q3 - q1;
+  const q2 = median(values);
+  const mid = Math.floor(values.length / 2);
+  const lowerHalf = values.slice(0, mid);
+  const upperHalf =
+    values.length % 2 !== 0 ? values.slice(mid + 1) : values.slice(mid);
+  const q1 = lowerHalf.length > 0 ? median(lowerHalf) : q2;
+  const q3 = upperHalf.length > 0 ? median(upperHalf) : q2;
+  const iqr = q3 - q1;
 
-    const lowerFence = q1 - 1.5 * iqr;
-    const upperFence = q3 + 1.5 * iqr;
+  const lowerFence = q1 - 1.5 * iqr;
+  const upperFence = q3 + 1.5 * iqr;
 
-    const whiskerLow = values.find(v => v >= lowerFence) ?? values[0];
-    const whiskerHigh = [...values].reverse().find(v => v <= upperFence) ?? values[values.length - 1];
+  const whiskerLow = values.find((v) => v >= lowerFence) ?? values[0];
+  const whiskerHigh =
+    [...values].reverse().find((v) => v <= upperFence) ??
+    values[values.length - 1];
 
-    const outliers = values.filter(v => v < lowerFence || v > upperFence);
+  const outliers = values.filter((v) => v < lowerFence || v > upperFence);
 
-    return {
-        q1, q2, q3, iqr,
-        whiskerLow, whiskerHigh,
-        min: values[0],
-        max: values[values.length - 1],
-        outliers
-    };
+  return {
+    q1,
+    q2,
+    q3,
+    iqr,
+    whiskerLow,
+    whiskerHigh,
+    min: values[0],
+    max: values[values.length - 1],
+    outliers
+  };
 };
 
 /**
@@ -355,21 +380,21 @@ export const computeQuartiles = (data, valueField) => {
  * @returns {Array} - [{ label, value, cumulative, start, end, isPositive }, ...]
  */
 export const computeRunningTotal = (data) => {
-    if (!data || data.length === 0) {
-        return [];
-    }
+  if (!data || data.length === 0) {
+    return [];
+  }
 
-    let cumulative = 0;
-    return data.map(d => {
-        const start = cumulative;
-        cumulative += d.value;
-        return {
-            label: d.label,
-            value: d.value,
-            cumulative,
-            start,
-            end: cumulative,
-            isPositive: d.value >= 0
-        };
-    });
+  let cumulative = 0;
+  return data.map((d) => {
+    const start = cumulative;
+    cumulative += d.value;
+    return {
+      label: d.label,
+      value: d.value,
+      cumulative,
+      start,
+      end: cumulative,
+      isPositive: d.value >= 0
+    };
+  });
 };

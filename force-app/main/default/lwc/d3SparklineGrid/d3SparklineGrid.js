@@ -2,7 +2,12 @@
 // ABOUTME: Displays small multiples inline mini-charts for entity comparison with monthly aggregation.
 import { LightningElement, api, track } from "lwc";
 import { loadD3 } from "c/d3Lib";
-import { prepareData, aggregateData, OPERATIONS, CHART_LIMITS } from "c/dataService";
+import {
+  prepareData,
+  aggregateData,
+  OPERATIONS,
+  CHART_LIMITS
+} from "c/dataService";
 import { getColors, DEFAULT_THEME } from "c/themeService";
 import {
   formatNumber,
@@ -437,7 +442,8 @@ export default class D3SparklineGrid extends NavigationMixin(LightningElement) {
     // Reference line (optional)
     if (this.config.referenceLine === "average") {
       const avgValue = d3.mean(sparklineData, (d) => d.value);
-      const yScale = d3.scaleLinear()
+      const yScale = d3
+        .scaleLinear()
         .domain([Math.min(0, yMin), yMax || 1])
         .range([height, 0]);
 

@@ -174,7 +174,13 @@ export default class D3Heatmap extends NavigationMixin(LightningElement) {
     }
 
     // Priority 2: Server-side aggregation when all required fields are set
-    if (this.objectApiName && this.xField && this.yField && this.valueField && this.operation) {
+    if (
+      this.objectApiName &&
+      this.xField &&
+      this.yField &&
+      this.valueField &&
+      this.operation
+    ) {
       try {
         const result = await getMultiGroupData({
           objectName: this.objectApiName,
@@ -369,10 +375,7 @@ export default class D3Heatmap extends NavigationMixin(LightningElement) {
 
     // Color scale
     const valueExtent = d3.extent(gridData, (d) => d.value);
-    const colorScale = d3
-      .scaleQuantize()
-      .domain(valueExtent)
-      .range(rampColors);
+    const colorScale = d3.scaleQuantize().domain(valueExtent).range(rampColors);
 
     // X Axis
     const xAxis = this.svg

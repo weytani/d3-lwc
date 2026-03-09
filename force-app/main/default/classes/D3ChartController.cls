@@ -88,7 +88,10 @@ public with sharing class D3ChartController {
     }
 
     // Validate object exists
-    if (String.isBlank(objectName) || !Schema.getGlobalDescribe().containsKey(objectName)) {
+    if (
+      String.isBlank(objectName) ||
+      !Schema.getGlobalDescribe().containsKey(objectName)
+    ) {
       throw buildException('Invalid object: ' + objectName);
     }
 
@@ -115,11 +118,17 @@ public with sharing class D3ChartController {
       sanitizedFilter = filterClause.replaceAll('[;]', '');
       String upperFilter = sanitizedFilter.toUpperCase();
       List<String> blockedKeywords = new List<String>{
-        'INSERT', 'UPDATE', 'DELETE', 'UPSERT', 'MERGE'
+        'INSERT',
+        'UPDATE',
+        'DELETE',
+        'UPSERT',
+        'MERGE'
       };
       for (String keyword : blockedKeywords) {
         if (upperFilter.contains(keyword)) {
-          throw buildException('Filter clause contains forbidden keyword: ' + keyword);
+          throw buildException(
+            'Filter clause contains forbidden keyword: ' + keyword
+          );
         }
       }
     }
@@ -135,16 +144,26 @@ public with sharing class D3ChartController {
     }
 
     String escapedGroupBy = String.escapeSingleQuotes(groupByField);
-    String query = 'SELECT ' + escapedGroupBy + ', ' + aggregateExpr + ' val'
-      + ' FROM ' + String.escapeSingleQuotes(objectName);
+    String query =
+      'SELECT ' +
+      escapedGroupBy +
+      ', ' +
+      aggregateExpr +
+      ' val' +
+      ' FROM ' +
+      String.escapeSingleQuotes(objectName);
 
     if (String.isNotBlank(sanitizedFilter)) {
       query += ' WHERE ' + sanitizedFilter;
     }
 
-    query += ' GROUP BY ' + escapedGroupBy
-      + ' ORDER BY ' + aggregateExpr + ' DESC'
-      + ' LIMIT 200';
+    query +=
+      ' GROUP BY ' +
+      escapedGroupBy +
+      ' ORDER BY ' +
+      aggregateExpr +
+      ' DESC' +
+      ' LIMIT 200';
 
     try {
       List<AggregateResult> results = Database.query(query);
@@ -162,6 +181,138 @@ public with sharing class D3ChartController {
       throw buildException('Aggregation query failed: ' + e.getMessage());
     } catch (Exception e) {
       throw buildException('Aggregation failed: ' + e.getMessage());
+    }
+  }
+
+  /**
+   * Executes a server-side two-dimensional GROUP BY aggregation.
+   * Groups by both a primary field and a series field, returning
+   * [{label, series, value}, ...] for heatmaps and similar charts.
+   *
+   * @param objectName   - API name of the SObject to query
+   * @param groupByField - Primary grouping field (e.g., StageName)
+   * @param seriesField  - Secondary grouping field (e.g., LeadSource)
+   * @param valueField   - Field to aggregate (ignored for Count)
+   * @param operation    - One of 'Sum', 'Count', 'Average'
+   * @param filterClause - Optional WHERE clause (without the WHERE keyword)
+   * @return List of maps with 'label', 'series', and 'value' keys
+   * @throws AuraHandledException for invalid inputs
+   */
+  @AuraEnabled(cacheable=true)
+  public static List<Map<String, Object>> getMultiGroupData(
+    String objectName,
+    String groupByField,
+    String seriesField,
+    String valueField,
+    String operation,
+    String filterClause
+  ) {
+    // Validate operation
+    Set<String> validOperations = new Set<String>{ 'Sum', 'Count', 'Average' };
+    if (String.isBlank(operation) || !validOperations.contains(operation)) {
+      throw buildException('Invalid operation: must be Sum, Count, or Average');
+    }
+
+    // Validate object exists
+    if (
+      String.isBlank(objectName) ||
+      !Schema.getGlobalDescribe().containsKey(objectName)
+    ) {
+      throw buildException('Invalid object: ' + objectName);
+    }
+
+    Schema.DescribeSObjectResult objDescribe = Schema.getGlobalDescribe()
+      .get(objectName)
+      .getDescribe();
+    Map<String, Schema.SObjectField> fieldMap = objDescribe.fields.getMap();
+
+    // Validate fields exist
+    if (String.isBlank(groupByField) || !fieldMap.containsKey(groupByField)) {
+      throw buildException('Invalid groupByField: ' + groupByField);
+    }
+    if (String.isBlank(seriesField) || !fieldMap.containsKey(seriesField)) {
+      throw buildException('Invalid seriesField: ' + seriesField);
+    }
+    if (operation != 'Count') {
+      if (String.isBlank(valueField) || !fieldMap.containsKey(valueField)) {
+        throw buildException('Invalid valueField: ' + valueField);
+      }
+    }
+
+    // Sanitize filter clause
+    String sanitizedFilter = '';
+    if (String.isNotBlank(filterClause)) {
+      sanitizedFilter = filterClause.replaceAll('[;]', '');
+      String upperFilter = sanitizedFilter.toUpperCase();
+      List<String> blockedKeywords = new List<String>{
+        'INSERT',
+        'UPDATE',
+        'DELETE',
+        'UPSERT',
+        'MERGE'
+      };
+      for (String keyword : blockedKeywords) {
+        if (upperFilter.contains(keyword)) {
+          throw buildException(
+            'Filter clause contains forbidden keyword: ' + keyword
+          );
+        }
+      }
+    }
+
+    // Build aggregate expression
+    String aggregateExpr;
+    if (operation == 'Sum') {
+      aggregateExpr = 'SUM(' + String.escapeSingleQuotes(valueField) + ')';
+    } else if (operation == 'Count') {
+      aggregateExpr = 'COUNT(Id)';
+    } else {
+      aggregateExpr = 'AVG(' + String.escapeSingleQuotes(valueField) + ')';
+    }
+
+    String escapedGroupBy = String.escapeSingleQuotes(groupByField);
+    String escapedSeries = String.escapeSingleQuotes(seriesField);
+    String query =
+      'SELECT ' +
+      escapedGroupBy +
+      ', ' +
+      escapedSeries +
+      ', ' +
+      aggregateExpr +
+      ' val' +
+      ' FROM ' +
+      String.escapeSingleQuotes(objectName);
+
+    if (String.isNotBlank(sanitizedFilter)) {
+      query += ' WHERE ' + sanitizedFilter;
+    }
+
+    query +=
+      ' GROUP BY ' +
+      escapedGroupBy +
+      ', ' +
+      escapedSeries +
+      ' ORDER BY ' +
+      escapedGroupBy +
+      ' LIMIT 2000';
+
+    try {
+      List<AggregateResult> results = Database.query(query);
+      List<Map<String, Object>> output = new List<Map<String, Object>>();
+
+      for (AggregateResult ar : results) {
+        Map<String, Object> row = new Map<String, Object>();
+        row.put('label', ar.get(groupByField));
+        row.put('series', ar.get(seriesField));
+        row.put('value', ar.get('val'));
+        output.add(row);
+      }
+
+      return output;
+    } catch (QueryException e) {
+      throw buildException('Multi-group query failed: ' + e.getMessage());
+    } catch (Exception e) {
+      throw buildException('Multi-group aggregation failed: ' + e.getMessage());
     }
   }
 
@@ -252,12 +403,20 @@ public with sharing class D3ChartController {
       if (xRaw == null || yRaw == null) {
         continue;
       }
-      if (!(xRaw instanceof Decimal) && !(xRaw instanceof Integer) &&
-          !(xRaw instanceof Long) && !(xRaw instanceof Double)) {
+      if (
+        !(xRaw instanceof Decimal) &&
+        !(xRaw instanceof Integer) &&
+        !(xRaw instanceof Long) &&
+        !(xRaw instanceof Double)
+      ) {
         continue;
       }
-      if (!(yRaw instanceof Decimal) && !(yRaw instanceof Integer) &&
-          !(yRaw instanceof Long) && !(yRaw instanceof Double)) {
+      if (
+        !(yRaw instanceof Decimal) &&
+        !(yRaw instanceof Integer) &&
+        !(yRaw instanceof Long) &&
+        !(yRaw instanceof Double)
+      ) {
         continue;
       }
 
@@ -337,7 +496,10 @@ public with sharing class D3ChartController {
    * @throws AuraHandledException for invalid queries or missing field
    */
   @AuraEnabled(cacheable=true)
-  public static Map<String, Decimal> getStatistics(String queryString, String valueField) {
+  public static Map<String, Decimal> getStatistics(
+    String queryString,
+    String valueField
+  ) {
     if (String.isBlank(queryString)) {
       throw buildException('Query string cannot be empty');
     }

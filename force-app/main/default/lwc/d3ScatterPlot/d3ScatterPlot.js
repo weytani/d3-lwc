@@ -2,7 +2,12 @@
 // ABOUTME: Displays correlation between two numeric fields with color grouping and navigation.
 import { LightningElement, api, track } from "lwc";
 import { loadD3 } from "c/d3Lib";
-import { prepareData, sampleData, SVG_ELEMENT_CAP, CHART_LIMITS } from "c/dataService";
+import {
+  prepareData,
+  sampleData,
+  SVG_ELEMENT_CAP,
+  CHART_LIMITS
+} from "c/dataService";
 import { getColors, DEFAULT_THEME } from "c/themeService";
 import {
   formatNumber,
@@ -219,7 +224,10 @@ export default class D3ScatterPlot extends NavigationMixin(LightningElement) {
     // Required fields
     const requiredFields = [this.xAxisField, this.yAxisField];
 
-    const prepared = prepareData(rawData, { requiredFields, limit: CHART_LIMITS.SCATTER });
+    const prepared = prepareData(rawData, {
+      requiredFields,
+      limit: CHART_LIMITS.SCATTER
+    });
 
     if (!prepared.valid) {
       throw new Error(prepared.error);
@@ -270,11 +278,15 @@ export default class D3ScatterPlot extends NavigationMixin(LightningElement) {
             xField: this.xAxisField,
             yField: this.yAxisField
           });
-          this.correlationCoefficient = serverResult.r != null ? Number(serverResult.r) : null;
+          this.correlationCoefficient =
+            serverResult.r != null ? Number(serverResult.r) : null;
           this._serverCorrelation = serverResult;
         } catch (e) {
           // Fall back to client-side calculation on server error
-          console.warn('Server correlation failed, falling back to client-side:', e);
+          console.warn(
+            "Server correlation failed, falling back to client-side:",
+            e
+          );
           this.calculateCorrelation();
           this._serverCorrelation = null;
         }

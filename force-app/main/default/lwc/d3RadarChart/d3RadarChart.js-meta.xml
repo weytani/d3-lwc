@@ -41,6 +41,16 @@
         placeholder="Amount"
       />
 
+            <!-- Aggregation -->
+            <property
+        name="operation"
+        type="String"
+        label="Aggregation"
+        default="Sum"
+        datasource="Sum,Count,Average"
+        description="Aggregation operation for multi-axis values"
+      />
+
             <!-- Appearance -->
             <property
         name="height"

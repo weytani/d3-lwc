@@ -405,7 +405,8 @@ export default class D3CalendarHeatmap extends LightningElement {
     const innerWidth = containerWidth - margin.left - margin.right;
     const cellSize = Math.max(2, Math.floor(innerWidth / 53) - 1);
     const cellPad = 1;
-    const chartHeight = cellSize * 7 + cellPad * 6 + margin.top + margin.bottom + 15;
+    const chartHeight =
+      cellSize * 7 + cellPad * 6 + margin.top + margin.bottom + 15;
 
     // Color scale
     const maxVal = d3.max(Array.from(dayData.values())) || 1;

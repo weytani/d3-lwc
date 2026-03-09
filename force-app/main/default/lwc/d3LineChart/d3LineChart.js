@@ -212,7 +212,10 @@ export default class D3LineChart extends NavigationMixin(LightningElement) {
     // Required fields for line chart
     const requiredFields = [this.dateField, this.valueField];
 
-    const prepared = prepareData(rawData, { requiredFields, limit: CHART_LIMITS.LINE });
+    const prepared = prepareData(rawData, {
+      requiredFields,
+      limit: CHART_LIMITS.LINE
+    });
 
     if (!prepared.valid) {
       throw new Error(prepared.error);

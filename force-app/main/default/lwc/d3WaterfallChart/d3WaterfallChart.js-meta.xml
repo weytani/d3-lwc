@@ -3,7 +3,8 @@
     <apiVersion>65.0</apiVersion>
     <isExposed>true</isExposed>
     <masterLabel>D3 Waterfall Chart</masterLabel>
-    <description>Bridge/variance waterfall chart showing sequential value changes.</description>
+    <description
+  >Bridge/variance waterfall chart showing sequential value changes.</description>
     <targets>
         <target>lightning__AppPage</target>
         <target>lightning__RecordPage</target>

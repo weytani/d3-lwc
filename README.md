@@ -21,18 +21,18 @@ A complete suite of 10 Lightning Web Components (LWC) that wrap D3.js charts for
 
 ## 📦 Components
 
-| Component | Description | Status | Key Features |
-|-----------|-------------|--------|--------------|
-| `c-d3-gauge` | Single KPI gauge | Done | Zones, thresholds, color coding |
-| `c-d3-bar-chart` | Aggregated bar chart | Done | Vertical bars, drill-down, grid |
-| `c-d3-donut-chart` | Part-to-whole | Done | Animated slices, center total, legend |
-| `c-d3-line-chart` | Time series | Done | Multi-series, date parsing, curve types |
-| `c-d3-scatter-plot` | Correlation | Done | Trend line, Pearson coefficient, point sizing |
-| `c-d3-histogram` | Distribution | Done | Auto-binning, normal curve overlay, statistics |
-| `c-d3-treemap` | Hierarchical | Done | Nested rectangles, zoom/drill, breadcrumbs |
-| `c-d3-sankey` | Flow/process | Done | Nodes + links, gradient colors, flow values |
-| `c-d3-force-graph` | Network graph | Done | Force simulation, drag, zoom/pan, node sizing |
-| `c-d3-choropleth` | Geographic map | **In Progress** | US states, world, custom GeoJSON, color scales |
+| Component           | Description          | Status          | Key Features                                   |
+| ------------------- | -------------------- | --------------- | ---------------------------------------------- |
+| `c-d3-gauge`        | Single KPI gauge     | Done            | Zones, thresholds, color coding                |
+| `c-d3-bar-chart`    | Aggregated bar chart | Done            | Vertical bars, drill-down, grid                |
+| `c-d3-donut-chart`  | Part-to-whole        | Done            | Animated slices, center total, legend          |
+| `c-d3-line-chart`   | Time series          | Done            | Multi-series, date parsing, curve types        |
+| `c-d3-scatter-plot` | Correlation          | Done            | Trend line, Pearson coefficient, point sizing  |
+| `c-d3-histogram`    | Distribution         | Done            | Auto-binning, normal curve overlay, statistics |
+| `c-d3-treemap`      | Hierarchical         | Done            | Nested rectangles, zoom/drill, breadcrumbs     |
+| `c-d3-sankey`       | Flow/process         | Done            | Nodes + links, gradient colors, flow values    |
+| `c-d3-force-graph`  | Network graph        | Done            | Force simulation, drag, zoom/pan, node sizing  |
+| `c-d3-choropleth`   | Geographic map       | **In Progress** | US states, world, custom GeoJSON, color scales |
 
 ## 🏗️ Architecture
 
@@ -114,27 +114,28 @@ sf lightning dev app -o <your-org-alias>
 
 ### Common Properties (All Charts)
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `recordCollection` | Object[] | Data from Flow or parent component |
-| `soqlQuery` | String | SOQL query (used if recordCollection empty) |
-| `objectApiName` | String | SObject API name — enables server-side aggregation |
-| `filterClause` | String | Optional WHERE clause for server aggregation |
-| `height` | Integer | Chart height in pixels |
-| `theme` | String | Color theme (Salesforce Standard, Warm, Cool, Vibrant) |
-| `advancedConfig` | String | JSON for advanced options |
+| Property           | Type     | Description                                            |
+| ------------------ | -------- | ------------------------------------------------------ |
+| `recordCollection` | Object[] | Data from Flow or parent component                     |
+| `soqlQuery`        | String   | SOQL query (used if recordCollection empty)            |
+| `objectApiName`    | String   | SObject API name — enables server-side aggregation     |
+| `filterClause`     | String   | Optional WHERE clause for server aggregation           |
+| `height`           | Integer  | Chart height in pixels                                 |
+| `theme`            | String   | Color theme (Salesforce Standard, Warm, Cool, Vibrant) |
+| `advancedConfig`   | String   | JSON for advanced options                              |
 
 ### D3 Bar Chart (Server Aggregation)
 
 ```html
 <!-- Server-side: aggregates across all matching records via SOQL GROUP BY -->
 <c-d3-bar-chart
-    object-api-name="Opportunity"
-    group-by-field="StageName"
-    value-field="Amount"
-    operation="Sum"
-    filter-clause="IsClosed = false"
-    height="300">
+  object-api-name="Opportunity"
+  group-by-field="StageName"
+  value-field="Amount"
+  operation="Sum"
+  filter-clause="IsClosed = false"
+  height="300"
+>
 </c-d3-bar-chart>
 ```
 
@@ -143,11 +144,12 @@ sf lightning dev app -o <your-org-alias>
 ```html
 <!-- Client-side: uses recordCollection from Flow or parent component -->
 <c-d3-bar-chart
-    record-collection={records}
-    group-by-field="StageName"
-    value-field="Amount"
-    operation="Sum"
-    height="300">
+  record-collection="{records}"
+  group-by-field="StageName"
+  value-field="Amount"
+  operation="Sum"
+  height="300"
+>
 </c-d3-bar-chart>
 ```
 
@@ -155,11 +157,12 @@ sf lightning dev app -o <your-org-alias>
 
 ```html
 <c-d3-line-chart
-    soql-query="SELECT CloseDate, Amount FROM Opportunity"
-    date-field="CloseDate"
-    value-field="Amount"
-    curve-type="monotone"
-    show-points="true">
+  soql-query="SELECT CloseDate, Amount FROM Opportunity"
+  date-field="CloseDate"
+  value-field="Amount"
+  curve-type="monotone"
+  show-points="true"
+>
 </c-d3-line-chart>
 ```
 
@@ -167,10 +170,11 @@ sf lightning dev app -o <your-org-alias>
 
 ```html
 <c-d3-scatter-plot
-    record-collection={records}
-    x-field="AnnualRevenue"
-    y-field="NumberOfEmployees"
-    show-trend-line="true">
+  record-collection="{records}"
+  x-field="AnnualRevenue"
+  y-field="NumberOfEmployees"
+  show-trend-line="true"
+>
 </c-d3-scatter-plot>
 ```
 
@@ -178,10 +182,11 @@ sf lightning dev app -o <your-org-alias>
 
 ```html
 <c-d3-choropleth
-    record-collection={records}
-    region-field="BillingState"
-    value-field="Amount"
-    map-type="us-states">
+  record-collection="{records}"
+  region-field="BillingState"
+  value-field="Amount"
+  map-type="us-states"
+>
 </c-d3-choropleth>
 ```
 
@@ -189,14 +194,15 @@ sf lightning dev app -o <your-org-alias>
 
 Four built-in color palettes:
 
-| Theme | Colors |
-|-------|--------|
+| Theme                   | Colors                                                   |
+| ----------------------- | -------------------------------------------------------- |
 | **Salesforce Standard** | Brand blue, orange, green, red, purple, pink, cyan, lime |
-| **Warm** | Reds, oranges, yellows |
-| **Cool** | Blues, purples, cyans |
-| **Vibrant** | High-contrast mixed colors |
+| **Warm**                | Reds, oranges, yellows                                   |
+| **Cool**                | Blues, purples, cyans                                    |
+| **Vibrant**             | High-contrast mixed colors                               |
 
 Custom colors via `advancedConfig`:
+
 ```json
 {
   "customColors": ["#FF5733", "#33FF57", "#3357FF"]
@@ -208,28 +214,40 @@ Custom colors via `advancedConfig`:
 ### dataService
 
 ```javascript
-import { validateData, prepareData, aggregateData, OPERATIONS } from 'c/dataService';
+import {
+  validateData,
+  prepareData,
+  aggregateData,
+  OPERATIONS
+} from "c/dataService";
 
-const { data, truncated } = prepareData(records, { requiredFields: ['Amount'] });
-const chartData = aggregateData(records, 'StageName', 'Amount', OPERATIONS.SUM);
+const { data, truncated } = prepareData(records, {
+  requiredFields: ["Amount"]
+});
+const chartData = aggregateData(records, "StageName", "Amount", OPERATIONS.SUM);
 ```
 
 ### themeService
 
 ```javascript
-import { getColors, createColorScale, THEMES } from 'c/themeService';
+import { getColors, createColorScale, THEMES } from "c/themeService";
 
-const colors = getColors('Warm', 5);
-const colorScale = createColorScale('Salesforce Standard', categories);
+const colors = getColors("Warm", 5);
+const colorScale = createColorScale("Salesforce Standard", categories);
 ```
 
 ### chartUtils
 
 ```javascript
-import { formatNumber, formatCurrency, formatPercent, createTooltip } from 'c/chartUtils';
+import {
+  formatNumber,
+  formatCurrency,
+  formatPercent,
+  createTooltip
+} from "c/chartUtils";
 
-formatNumber(1500000);  // "1.5M"
-formatCurrency(50000);  // "$50,000"
+formatNumber(1500000); // "1.5M"
+formatCurrency(50000); // "$50,000"
 ```
 
 ## 📁 Project Structure
@@ -292,4 +310,4 @@ MIT
 
 ---
 
-*Built with ⚔️ by Excalibur*
+_Built with ⚔️ by Excalibur_

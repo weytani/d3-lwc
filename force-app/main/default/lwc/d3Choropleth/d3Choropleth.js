@@ -2,7 +2,12 @@
 // ABOUTME: Displays regions colored by aggregated values, supporting US states, world maps, or custom GeoJSON.
 import { LightningElement, api, track } from "lwc";
 import { loadD3 } from "c/d3Lib";
-import { prepareData, aggregateData, OPERATIONS, CHART_LIMITS } from "c/dataService";
+import {
+  prepareData,
+  aggregateData,
+  OPERATIONS,
+  CHART_LIMITS
+} from "c/dataService";
 import { DEFAULT_THEME } from "c/themeService";
 import {
   formatNumber,

@@ -1237,7 +1237,9 @@ describe("c-d3-funnel-chart", () => {
       const firstDataArg = dataCalls[0][0];
       if (Array.isArray(firstDataArg) && firstDataArg.length > 1) {
         // First item should have the highest value (descending sort)
-        expect(firstDataArg[0].value).toBeGreaterThanOrEqual(firstDataArg[1].value);
+        expect(firstDataArg[0].value).toBeGreaterThanOrEqual(
+          firstDataArg[1].value
+        );
       }
     });
 

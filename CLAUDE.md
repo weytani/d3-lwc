@@ -51,6 +51,7 @@ Pre-commit hook (husky + lint-staged) auto-runs Prettier, ESLint, and related Je
 ### Chart Component Pattern
 
 Every chart component follows this structure:
+
 - **@api properties**: `recordCollection`, `soqlQuery`, field mappings (`groupByField`/`valueField` or `xField`/`yField`), `operation`, `height`, `theme`, `advancedConfig` (JSON string), `objectApiName`/`filterField` for drill-down
 - **Lifecycle**: `connectedCallback` loads D3 + fetches data; `renderedCallback` initializes chart with layout retry for container measurement; `disconnectedCallback` cleans up ResizeObserver
 - **State guards**: `chartRendered` flag prevents re-rendering; `_layoutRetry` handles cases where container has no dimensions yet
@@ -58,6 +59,7 @@ Every chart component follows this structure:
 ### Apex Controller
 
 `D3ChartController` (`with sharing`) — four `@AuraEnabled(cacheable=true)` methods:
+
 - `executeQuery(queryString)` — Raw SOQL execution with FLS enforcement. Auto-adds LIMIT 2000.
 - `getAggregatedData(objectName, groupByField, valueField, operation, filterClause)` — Server-side GROUP BY aggregation. Validates object/field existence via Schema describe. Returns label/value pairs. LIMIT 200 groups.
 - `getStatistics(queryString, valueField)` — Computes count, min, max, mean, median, and population stdDev server-side.
@@ -95,12 +97,12 @@ This project is the **source of truth**. Changes flow one direction: d3-lwc → 
 
 ### Path Mapping
 
-| d3-lwc | agentforce-dev |
-|--------|---------------|
-| `force-app/main/default/lwc/` | `force-app/main/d3/lwc/` |
-| `force-app/main/default/classes/` | `force-app/main/d3/classes/` |
-| `__mocks__/` | `__mocks__/` (project root) |
-| `jest.config.js` | `jest.config.js` (merge moduleNameMapper) |
+| d3-lwc                            | agentforce-dev                            |
+| --------------------------------- | ----------------------------------------- |
+| `force-app/main/default/lwc/`     | `force-app/main/d3/lwc/`                  |
+| `force-app/main/default/classes/` | `force-app/main/d3/classes/`              |
+| `__mocks__/`                      | `__mocks__/` (project root)               |
+| `jest.config.js`                  | `jest.config.js` (merge moduleNameMapper) |
 
 ### Sync Checklist
 

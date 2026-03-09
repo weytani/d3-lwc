@@ -10,8 +10,8 @@ random.seed(42)
 
 # --- Configuration ---
 
-ACCOUNT_COUNT = 300
-OPPORTUNITY_COUNT = 5000
+ACCOUNT_COUNT = 600
+OPPORTUNITY_COUNT = 10000
 
 INDUSTRIES = [
     "Technology",

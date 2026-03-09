@@ -2,7 +2,12 @@
 // ABOUTME: Displays nested rectangles sized by value, supporting flat data with auto-nesting via groupByField.
 import { LightningElement, api, track } from "lwc";
 import { loadD3 } from "c/d3Lib";
-import { prepareData, aggregateData, OPERATIONS, MAX_RECORDS } from "c/dataService";
+import {
+  prepareData,
+  aggregateData,
+  OPERATIONS,
+  MAX_RECORDS
+} from "c/dataService";
 import { getColors, DEFAULT_THEME } from "c/themeService";
 import {
   formatNumber,
