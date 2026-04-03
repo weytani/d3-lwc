@@ -17,7 +17,6 @@ import {
   truncateLabel
 } from "c/chartUtils";
 import { NavigationMixin } from "lightning/navigation";
-import { ShowToastEvent } from "lightning/platformShowToastEvent";
 import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
 import US_STATES from "@salesforce/resourceUrl/usStates";
 
@@ -180,6 +179,9 @@ export default class D3Choropleth extends NavigationMixin(LightningElement) {
   /** Record ID field for navigation */
   @api recordIdField = "";
 
+  /** Maximum records to process (overrides default chart limit) */
+  @api recordLimit;
+
   /** Advanced configuration JSON */
   @api advancedConfig = "{}";
 
@@ -190,7 +192,6 @@ export default class D3Choropleth extends NavigationMixin(LightningElement) {
   @track isLoading = true;
   @track error = null;
   @track chartData = null;
-  @track truncatedWarning = null;
 
   // ═══════════════════════════════════════════════════════════════
   // PRIVATE PROPERTIES
@@ -515,22 +516,11 @@ export default class D3Choropleth extends NavigationMixin(LightningElement) {
 
     const prepared = prepareData(rawData, {
       requiredFields,
-      limit: MAX_REGIONS * 10 // Allow more records since we aggregate
+      limit: (this.recordLimit || MAX_REGIONS) * 10 // Allow more records since we aggregate
     });
 
     if (!prepared.valid) {
       throw new Error(prepared.error);
-    }
-
-    if (prepared.truncated) {
-      this.truncatedWarning = `Displaying first ${MAX_REGIONS * 10} of ${prepared.originalCount} records`;
-      this.dispatchEvent(
-        new ShowToastEvent({
-          title: "Data Truncated",
-          message: this.truncatedWarning,
-          variant: "warning"
-        })
-      );
     }
 
     // Aggregate data by region

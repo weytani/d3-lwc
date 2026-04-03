@@ -17,7 +17,6 @@ import {
   createLayoutRetry
 } from "c/chartUtils";
 import { NavigationMixin } from "lightning/navigation";
-import { ShowToastEvent } from "lightning/platformShowToastEvent";
 import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
 import getAggregatedData from "@salesforce/apex/D3ChartController.getAggregatedData";
 
@@ -56,6 +55,9 @@ export default class D3DonutChart extends NavigationMixin(LightningElement) {
   /** Advanced configuration JSON */
   @api advancedConfig = "{}";
 
+  /** Maximum records to process (overrides default limit) */
+  @api recordLimit;
+
   /** Object API name for drill-down navigation */
   @api objectApiName = "";
 
@@ -72,7 +74,6 @@ export default class D3DonutChart extends NavigationMixin(LightningElement) {
   @track isLoading = true;
   @track error = null;
   @track chartData = [];
-  @track truncatedWarning = null;
   @track totalValue = 0;
 
   // ═══════════════════════════════════════════════════════════════
@@ -250,21 +251,13 @@ export default class D3DonutChart extends NavigationMixin(LightningElement) {
       requiredFields.push(this.valueField);
     }
 
-    const prepared = prepareData(rawData, { requiredFields });
+    const prepared = prepareData(rawData, {
+      requiredFields,
+      limit: this.recordLimit || MAX_RECORDS
+    });
 
     if (!prepared.valid) {
       throw new Error(prepared.error);
-    }
-
-    if (prepared.truncated) {
-      this.truncatedWarning = `Displaying first ${MAX_RECORDS.toLocaleString()} of ${prepared.originalCount} records`;
-      this.dispatchEvent(
-        new ShowToastEvent({
-          title: "Data Truncated",
-          message: this.truncatedWarning,
-          variant: "warning"
-        })
-      );
     }
 
     const aggregated = aggregateData(

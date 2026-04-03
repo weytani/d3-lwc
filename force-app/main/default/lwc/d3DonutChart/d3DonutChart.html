@@ -30,24 +30,8 @@
 
     <!-- Chart Container (has data) -->
     <template lwc:elseif={hasData}>
-      <!-- Truncation Warning -->
-      <template lwc:if={truncatedWarning}>
-        <div
-          class="slds-notify slds-notify_alert slds-alert_warning slds-m-bottom_x-small"
-          role="alert"
-        >
-          <lightning-icon
-            icon-name="utility:warning"
-            size="x-small"
-            variant="warning"
-            class="slds-m-right_x-small"
-          ></lightning-icon>
-          <span>{truncatedWarning}</span>
-        </div>
-      </template>
-
       <div class="chart-wrapper">
-        <div class="chart-container" style={containerStyle}></div>
+        <div class="chart-container" lwc:dom="manual" style={containerStyle}></div>
 
         <!-- Legend -->
         <template lwc:if={effectiveShowLegend}>

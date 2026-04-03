@@ -482,7 +482,7 @@ describe("c-d3-bar-chart e2e", () => {
       expect(labels).toContain("B");
     });
 
-    it("truncation warning appears for >2000 records", async () => {
+    it("silently truncates data exceeding 2000 records", async () => {
       // Build 2500 records
       const largeData = [];
       for (let i = 0; i < 2500; i++) {
@@ -501,21 +501,20 @@ describe("c-d3-bar-chart e2e", () => {
         valueField: "Amount"
       });
 
-      // Extra flush to allow the truncatedWarning @track update to re-render
+      // Extra flush to ensure all async work completes
       await flushPromises();
 
-      // ShowToastEvent should have been constructed with truncation warning
-      expect(ShowToastEvent).toHaveBeenCalledWith(
+      // Truncation happens silently — no ShowToastEvent constructed
+      expect(ShowToastEvent).not.toHaveBeenCalledWith(
         expect.objectContaining({
-          title: "Data Truncated",
-          variant: "warning"
+          title: "Data Truncated"
         })
       );
 
-      // The truncation warning banner should be visible in the template
+      // No truncation warning banner in the template
       const warningBanner =
         element.shadowRoot.querySelector(".slds-notify_alert");
-      expect(warningBanner).toBeTruthy();
+      expect(warningBanner).toBeFalsy();
 
       // Chart should still render despite truncation
       const container = element.shadowRoot.querySelector(".chart-container");

@@ -16,7 +16,6 @@ import {
   createLayoutRetry
 } from "c/chartUtils";
 import { NavigationMixin } from "lightning/navigation";
-import { ShowToastEvent } from "lightning/platformShowToastEvent";
 import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
 import getCorrelation from "@salesforce/apex/D3ChartController.getCorrelation";
 
@@ -67,6 +66,9 @@ export default class D3ScatterPlot extends NavigationMixin(LightningElement) {
   /** Show correlation coefficient */
   @api showCorrelation = false;
 
+  /** Maximum records to process (overrides default chart limit) */
+  @api recordLimit;
+
   /** Advanced configuration JSON */
   @api advancedConfig = "{}";
 
@@ -77,7 +79,6 @@ export default class D3ScatterPlot extends NavigationMixin(LightningElement) {
   @track isLoading = true;
   @track error = null;
   @track chartData = [];
-  @track truncatedWarning = null;
   @track correlationCoefficient = null;
 
   // ═══════════════════════════════════════════════════════════════
@@ -226,22 +227,11 @@ export default class D3ScatterPlot extends NavigationMixin(LightningElement) {
 
     const prepared = prepareData(rawData, {
       requiredFields,
-      limit: CHART_LIMITS.SCATTER
+      limit: this.recordLimit || CHART_LIMITS.SCATTER
     });
 
     if (!prepared.valid) {
       throw new Error(prepared.error);
-    }
-
-    if (prepared.truncated) {
-      this.truncatedWarning = `Displaying first ${CHART_LIMITS.SCATTER.toLocaleString()} of ${prepared.originalCount} records`;
-      this.dispatchEvent(
-        new ShowToastEvent({
-          title: "Data Truncated",
-          message: this.truncatedWarning,
-          variant: "warning"
-        })
-      );
     }
 
     // Process data into scatter format
@@ -251,18 +241,6 @@ export default class D3ScatterPlot extends NavigationMixin(LightningElement) {
     if (this.chartData.length > SVG_ELEMENT_CAP) {
       const sampleResult = sampleData(this.chartData, "x", SVG_ELEMENT_CAP);
       this.chartData = sampleResult.data;
-
-      const sampledMsg = `Rendering ${SVG_ELEMENT_CAP} of ${sampleResult.originalCount} points for performance`;
-      if (!this.truncatedWarning) {
-        this.truncatedWarning = sampledMsg;
-      }
-      this.dispatchEvent(
-        new ShowToastEvent({
-          title: "Data Sampled",
-          message: sampledMsg,
-          variant: "info"
-        })
-      );
     }
 
     if (this.chartData.length === 0) {

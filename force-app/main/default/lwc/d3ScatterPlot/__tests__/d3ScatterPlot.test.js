@@ -997,7 +997,7 @@ describe("c-d3-scatter-plot", () => {
   // ═══════════════════════════════════════════════════════════════
 
   describe("data sampling", () => {
-    it("samples chartData to 500 when recordCollection exceeds SVG_ELEMENT_CAP", async () => {
+    it("silently samples chartData to 500 when recordCollection exceeds SVG_ELEMENT_CAP", async () => {
       // Generate 600 records (above SVG_ELEMENT_CAP of 500)
       const largeData = Array.from({ length: 600 }, (_, i) => ({
         Id: `00${i}`,
@@ -1026,13 +1026,8 @@ describe("c-d3-scatter-plot", () => {
       await Promise.resolve();
       await flushPromises();
 
-      // Verify toast was dispatched with "Data Sampled" title
-      expect(toastHandler).toHaveBeenCalled();
-      const toastDetail = toastHandler.mock.calls[0][0].detail;
-      expect(toastDetail.title).toBe("Data Sampled");
-      expect(toastDetail.variant).toBe("info");
-      expect(toastDetail.message).toContain("500");
-      expect(toastDetail.message).toContain("600");
+      // Sampling happens silently — no toast is dispatched
+      expect(toastHandler).not.toHaveBeenCalled();
     });
 
     it("does not sample when data is within SVG_ELEMENT_CAP", async () => {

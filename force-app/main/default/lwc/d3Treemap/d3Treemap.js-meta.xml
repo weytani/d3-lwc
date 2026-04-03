@@ -146,6 +146,15 @@
         description="Field to use for filtering when navigating (defaults to groupByField)"
       />
             
+            <property
+        name="recordLimit"
+        type="Integer"
+        label="Record Limit"
+        description="Maximum records to process. Leave empty for default."
+        min="1"
+        max="10000"
+      />
+
             <!-- Advanced -->
             <property
         name="advancedConfig"

@@ -12,7 +12,6 @@ import {
   truncateLabel
 } from "c/chartUtils";
 import { NavigationMixin } from "lightning/navigation";
-import { ShowToastEvent } from "lightning/platformShowToastEvent";
 import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
 
 // Lower default limit for force graphs due to performance
@@ -116,6 +115,9 @@ export default class D3ForceGraph extends NavigationMixin(LightningElement) {
   /** Alpha decay rate controlling how quickly the simulation settles (0-1, higher = faster) */
   @api alphaDecay = 0.05;
 
+  /** Maximum records to process (overrides default chart limit) */
+  @api recordLimit;
+
   /** Advanced configuration JSON */
   @api advancedConfig = "{}";
 
@@ -126,7 +128,6 @@ export default class D3ForceGraph extends NavigationMixin(LightningElement) {
   @track isLoading = true;
   @track error = null;
   @track networkData = null;
-  @track truncatedWarning = null;
 
   // ═══════════════════════════════════════════════════════════════
   // PRIVATE PROPERTIES
@@ -270,22 +271,11 @@ export default class D3ForceGraph extends NavigationMixin(LightningElement) {
 
     const prepared = prepareData(rawData, {
       requiredFields,
-      limit: MAX_NODES * 2 // Allow more links than nodes
+      limit: (this.recordLimit || MAX_NODES) * 2 // Allow more links than nodes
     });
 
     if (!prepared.valid) {
       throw new Error(prepared.error);
-    }
-
-    if (prepared.truncated) {
-      this.truncatedWarning = `Displaying first ${MAX_NODES * 2} of ${prepared.originalCount} records`;
-      this.dispatchEvent(
-        new ShowToastEvent({
-          title: "Data Truncated",
-          message: this.truncatedWarning,
-          variant: "warning"
-        })
-      );
     }
 
     // Build graph data from flat records
@@ -314,7 +304,7 @@ export default class D3ForceGraph extends NavigationMixin(LightningElement) {
     const links = data.links && Array.isArray(data.links) ? data.links : [];
 
     // Normalize nodes to ensure they have id and label
-    const nodes = data.nodes.slice(0, MAX_NODES).map((node, index) => ({
+    const nodes = data.nodes.slice(0, this.recordLimit || MAX_NODES).map((node, index) => ({
       id: node.id || node[this.nodeIdField] || `node-${index}`,
       label:
         node.label || node[this.nodeLabelField] || node.name || `Node ${index}`,
@@ -405,7 +395,7 @@ export default class D3ForceGraph extends NavigationMixin(LightningElement) {
     });
 
     // Enforce node limit
-    const nodes = Array.from(nodeMap.values()).slice(0, MAX_NODES);
+    const nodes = Array.from(nodeMap.values()).slice(0, this.recordLimit || MAX_NODES);
     const nodeIds = new Set(nodes.map((n) => n.id));
 
     // Filter links to only include valid node references

@@ -179,6 +179,16 @@
         description="Preferred distance between connected nodes"
       />
             
+            <!-- Record Limit -->
+            <property
+        name="recordLimit"
+        type="Integer"
+        label="Record Limit"
+        description="Maximum records to process. Leave empty for default."
+        min="1"
+        max="10000"
+      />
+
             <!-- Advanced -->
             <property
         name="advancedConfig"
@@ -254,6 +264,14 @@
         type="Boolean"
         label="Enable Drag"
         default="true"
+      />
+            <property
+        name="recordLimit"
+        type="Integer"
+        label="Record Limit"
+        description="Maximum records to process. Leave empty for default."
+        min="1"
+        max="10000"
       />
         </targetConfig>
     </targetConfigs>

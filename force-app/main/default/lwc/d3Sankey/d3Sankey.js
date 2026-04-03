@@ -15,7 +15,6 @@ import {
   truncateLabel
 } from "c/chartUtils";
 import { NavigationMixin } from "lightning/navigation";
-import { ShowToastEvent } from "lightning/platformShowToastEvent";
 import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
 import D3_SANKEY_RESOURCE from "@salesforce/resourceUrl/d3Sankey";
 
@@ -84,6 +83,9 @@ export default class D3Sankey extends NavigationMixin(LightningElement) {
   /** Filter field for navigation */
   @api filterField = "";
 
+  /** Maximum records to process (overrides default chart limit) */
+  @api recordLimit;
+
   /** Advanced configuration JSON */
   @api advancedConfig = "{}";
 
@@ -94,7 +96,6 @@ export default class D3Sankey extends NavigationMixin(LightningElement) {
   @track isLoading = true;
   @track error = null;
   @track graphData = null;
-  @track truncatedWarning = null;
   @track totalValue = 0;
 
   // ═══════════════════════════════════════════════════════════════
@@ -231,22 +232,11 @@ export default class D3Sankey extends NavigationMixin(LightningElement) {
 
     const prepared = prepareData(rawData, {
       requiredFields,
-      limit: CHART_LIMITS.SANKEY
+      limit: this.recordLimit || CHART_LIMITS.SANKEY
     });
 
     if (!prepared.valid) {
       throw new Error(prepared.error);
-    }
-
-    if (prepared.truncated) {
-      this.truncatedWarning = `Displaying first ${CHART_LIMITS.SANKEY.toLocaleString()} of ${prepared.originalCount} records`;
-      this.dispatchEvent(
-        new ShowToastEvent({
-          title: "Data Truncated",
-          message: this.truncatedWarning,
-          variant: "warning"
-        })
-      );
     }
 
     // Build sankey data from flat records

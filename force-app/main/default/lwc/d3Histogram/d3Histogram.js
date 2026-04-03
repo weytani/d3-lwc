@@ -11,7 +11,6 @@ import {
   createLayoutRetry
 } from "c/chartUtils";
 import { NavigationMixin } from "lightning/navigation";
-import { ShowToastEvent } from "lightning/platformShowToastEvent";
 import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
 import getStatistics from "@salesforce/apex/D3ChartController.getStatistics";
 
@@ -53,6 +52,9 @@ export default class D3Histogram extends NavigationMixin(LightningElement) {
   /** Filter field name for navigation */
   @api filterField = "";
 
+  /** Maximum records to process (overrides default chart limit) */
+  @api recordLimit;
+
   /** Advanced configuration JSON */
   @api advancedConfig = "{}";
 
@@ -64,7 +66,6 @@ export default class D3Histogram extends NavigationMixin(LightningElement) {
   @track error = null;
   @track rawValues = [];
   @track binData = [];
-  @track truncatedWarning = null;
   @track statistics = {
     mean: 0,
     median: 0,
@@ -208,22 +209,11 @@ export default class D3Histogram extends NavigationMixin(LightningElement) {
     const requiredFields = [this.valueField];
     const prepared = prepareData(rawData, {
       requiredFields,
-      limit: CHART_LIMITS.HISTOGRAM
+      limit: this.recordLimit || CHART_LIMITS.HISTOGRAM
     });
 
     if (!prepared.valid) {
       throw new Error(prepared.error);
-    }
-
-    if (prepared.truncated) {
-      this.truncatedWarning = `Displaying first ${CHART_LIMITS.HISTOGRAM.toLocaleString()} of ${prepared.originalCount} records`;
-      this.dispatchEvent(
-        new ShowToastEvent({
-          title: "Data Truncated",
-          message: this.truncatedWarning,
-          variant: "warning"
-        })
-      );
     }
 
     // Extract numeric values, filtering out nulls and non-numbers

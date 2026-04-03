@@ -396,7 +396,7 @@ describe("c-d3-bar-chart integration", () => {
   // ═══════════════════════════════════════════════════════════════
 
   describe("truncation pipeline integration", () => {
-    it("truncates data at 2000 records and dispatches toast", async () => {
+    it("silently truncates data at 2000 records without toast", async () => {
       const largeData = Array.from({ length: 2500 }, (_, i) => ({
         StageName: `Stage${i % 5}`,
         Amount: (i + 1) * 10
@@ -423,11 +423,8 @@ describe("c-d3-bar-chart integration", () => {
       await flushPromises();
       await flushPromises();
 
-      // The component dispatches a ShowToastEvent for truncation warning
-      expect(toastHandler).toHaveBeenCalled();
-      const toastDetail = toastHandler.mock.calls[0][0].detail;
-      expect(toastDetail.title).toBe("Data Truncated");
-      expect(toastDetail.variant).toBe("warning");
+      // Truncation happens silently — no toast is dispatched
+      expect(toastHandler).not.toHaveBeenCalled();
 
       // Verify the component rendered the chart container (not stuck in error/loading)
       const container = element.shadowRoot.querySelector(".chart-container");
