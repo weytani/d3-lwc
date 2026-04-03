@@ -18,7 +18,6 @@ import {
   getContrastColor
 } from "c/chartUtils";
 import { NavigationMixin } from "lightning/navigation";
-import { ShowToastEvent } from "lightning/platformShowToastEvent";
 import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
 import getMultiGroupData from "@salesforce/apex/D3ChartController.getMultiGroupData";
 
@@ -53,6 +52,9 @@ export default class D3Heatmap extends NavigationMixin(LightningElement) {
   /** Color theme */
   @api theme = DEFAULT_THEME;
 
+  /** Maximum records to process (leave empty for default) */
+  @api recordLimit;
+
   /** Advanced configuration JSON */
   @api advancedConfig = "{}";
 
@@ -72,8 +74,6 @@ export default class D3Heatmap extends NavigationMixin(LightningElement) {
   @track isLoading = true;
   @track error = null;
   @track chartData = [];
-  @track truncatedWarning = null;
-
   // ═══════════════════════════════════════════════════════════════
   // PRIVATE PROPERTIES
   // ═══════════════════════════════════════════════════════════════
@@ -231,15 +231,13 @@ export default class D3Heatmap extends NavigationMixin(LightningElement) {
     }
 
     // Prepare data (validate + truncate)
-    const prepared = prepareData(rawData, { requiredFields });
+    const prepared = prepareData(rawData, {
+      requiredFields,
+      limit: this.recordLimit || MAX_RECORDS
+    });
 
     if (!prepared.valid) {
       throw new Error(prepared.error);
-    }
-
-    if (prepared.truncated) {
-      this.truncatedWarning = `Displaying first ${MAX_RECORDS.toLocaleString()} of ${prepared.originalCount} records`;
-      this.showTruncationToast(prepared.originalCount);
     }
 
     // Aggregate using series-aware function: xField=groupBy, yField=series
@@ -256,16 +254,6 @@ export default class D3Heatmap extends NavigationMixin(LightningElement) {
     }
 
     return aggregated;
-  }
-
-  showTruncationToast(originalCount) {
-    this.dispatchEvent(
-      new ShowToastEvent({
-        title: "Data Truncated",
-        message: `Displaying first ${MAX_RECORDS.toLocaleString()} of ${originalCount} records for performance`,
-        variant: "warning"
-      })
-    );
   }
 
   // ═══════════════════════════════════════════════════════════════

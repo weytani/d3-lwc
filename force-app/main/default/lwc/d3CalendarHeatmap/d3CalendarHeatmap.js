@@ -10,7 +10,6 @@ import {
   buildCalendarGrid,
   createLayoutRetry
 } from "c/chartUtils";
-import { ShowToastEvent } from "lightning/platformShowToastEvent";
 import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
 
 const MONTH_LABELS = [
@@ -76,6 +75,9 @@ export default class D3CalendarHeatmap extends LightningElement {
   /** Optional WHERE clause fragment */
   @api filterClause = "";
 
+  /** Maximum records to process (overrides default limit) */
+  @api recordLimit;
+
   // ═══════════════════════════════════════════════════════════════
   // TRACKED STATE
   // ═══════════════════════════════════════════════════════════════
@@ -83,7 +85,6 @@ export default class D3CalendarHeatmap extends LightningElement {
   @track isLoading = true;
   @track error = null;
   @track rawData = [];
-  @track truncatedWarning = null;
   @track _displayYear;
 
   // ═══════════════════════════════════════════════════════════════
@@ -216,29 +217,14 @@ export default class D3CalendarHeatmap extends LightningElement {
 
     const prepared = prepareData(data, {
       requiredFields,
-      limit: CHART_LIMITS.CALENDAR_HEATMAP
+      limit: this.recordLimit || CHART_LIMITS.CALENDAR_HEATMAP
     });
 
     if (!prepared.valid) {
       throw new Error(prepared.error);
     }
 
-    if (prepared.truncated) {
-      this.truncatedWarning = `Displaying first ${CHART_LIMITS.CALENDAR_HEATMAP.toLocaleString()} of ${prepared.originalCount} records`;
-      this.showTruncationToast(prepared.originalCount);
-    }
-
     return prepared.data;
-  }
-
-  showTruncationToast(originalCount) {
-    this.dispatchEvent(
-      new ShowToastEvent({
-        title: "Data Truncated",
-        message: `Displaying first ${CHART_LIMITS.CALENDAR_HEATMAP.toLocaleString()} of ${originalCount} records for performance`,
-        variant: "warning"
-      })
-    );
   }
 
   // ═══════════════════════════════════════════════════════════════

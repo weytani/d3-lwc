@@ -424,7 +424,7 @@ describe("c-d3-calendar-heatmap", () => {
       expect(fillCalls.length).toBeGreaterThan(0);
     });
 
-    it("uses CHART_LIMITS.CALENDAR_HEATMAP for truncation", async () => {
+    it("silently truncates data exceeding record limit", async () => {
       // Build data that exceeds CALENDAR_HEATMAP limit (2000)
       const largeData = Array.from({ length: 2500 }, (_, i) => ({
         CloseDate: `2025-01-${String((i % 28) + 1).padStart(2, "0")}`,
@@ -447,7 +447,7 @@ describe("c-d3-calendar-heatmap", () => {
       await flushPromises();
       await flushPromises();
 
-      expect(toastHandler).toHaveBeenCalled();
+      expect(toastHandler).not.toHaveBeenCalled();
     });
   });
 

@@ -381,7 +381,7 @@ describe("c-d3-funnel-chart", () => {
       expect(errorElement).toBeTruthy();
     });
 
-    it("dispatches toast when data exceeds 2000 records", async () => {
+    it("silently truncates data exceeding record limit", async () => {
       const largeData = Array.from({ length: 2500 }, (_, i) => ({
         StageName: `Stage${i % 10}`,
         Amount: i * 10
@@ -401,8 +401,8 @@ describe("c-d3-funnel-chart", () => {
       await flushPromises();
       await flushPromises();
 
-      // The component should have dispatched a toast for truncation
-      expect(toastHandler).toHaveBeenCalled();
+      // Truncation happens silently via prepareData() without toast
+      expect(toastHandler).not.toHaveBeenCalled();
     });
   });
 

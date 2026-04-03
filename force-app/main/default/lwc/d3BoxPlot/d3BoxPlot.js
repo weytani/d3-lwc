@@ -12,7 +12,6 @@ import {
   createLayoutRetry
 } from "c/chartUtils";
 import { NavigationMixin } from "lightning/navigation";
-import { ShowToastEvent } from "lightning/platformShowToastEvent";
 import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
 
 export default class D3BoxPlot extends NavigationMixin(LightningElement) {
@@ -38,6 +37,9 @@ export default class D3BoxPlot extends NavigationMixin(LightningElement) {
   /** Color theme */
   @api theme = DEFAULT_THEME;
 
+  /** Maximum records to process (leave empty for chart default) */
+  @api recordLimit;
+
   /** Advanced configuration JSON */
   @api advancedConfig = "{}";
 
@@ -57,8 +59,6 @@ export default class D3BoxPlot extends NavigationMixin(LightningElement) {
   @track isLoading = true;
   @track error = null;
   @track chartData = [];
-  @track truncatedWarning = null;
-
   // ═══════════════════════════════════════════════════════════════
   // PRIVATE PROPERTIES
   // ═══════════════════════════════════════════════════════════════
@@ -193,16 +193,11 @@ export default class D3BoxPlot extends NavigationMixin(LightningElement) {
     // Prepare data (validate + truncate using BOX_PLOT limit)
     const prepared = prepareData(rawData, {
       requiredFields,
-      limit: CHART_LIMITS.BOX_PLOT
+      limit: this.recordLimit || CHART_LIMITS.BOX_PLOT
     });
 
     if (!prepared.valid) {
       throw new Error(prepared.error);
-    }
-
-    if (prepared.truncated) {
-      this.truncatedWarning = `Displaying first ${CHART_LIMITS.BOX_PLOT.toLocaleString()} of ${prepared.originalCount} records`;
-      this.showTruncationToast(prepared.originalCount);
     }
 
     // Group raw records by groupByField
@@ -229,16 +224,6 @@ export default class D3BoxPlot extends NavigationMixin(LightningElement) {
     }
 
     return result;
-  }
-
-  showTruncationToast(originalCount) {
-    this.dispatchEvent(
-      new ShowToastEvent({
-        title: "Data Truncated",
-        message: `Displaying first ${CHART_LIMITS.BOX_PLOT.toLocaleString()} of ${originalCount} records for performance`,
-        variant: "warning"
-      })
-    );
   }
 
   // ═══════════════════════════════════════════════════════════════

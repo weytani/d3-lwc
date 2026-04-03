@@ -17,7 +17,6 @@ import {
   createLayoutRetry
 } from "c/chartUtils";
 import { NavigationMixin } from "lightning/navigation";
-import { ShowToastEvent } from "lightning/platformShowToastEvent";
 import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
 
 export default class D3SparklineGrid extends NavigationMixin(LightningElement) {
@@ -62,6 +61,9 @@ export default class D3SparklineGrid extends NavigationMixin(LightningElement) {
   /** Optional WHERE clause fragment */
   @api filterClause = "";
 
+  /** Maximum records to process (overrides default limit) */
+  @api recordLimit;
+
   // ===============================================================
   // TRACKED STATE
   // ===============================================================
@@ -69,8 +71,6 @@ export default class D3SparklineGrid extends NavigationMixin(LightningElement) {
   @track isLoading = true;
   @track error = null;
   @track entityData = [];
-  @track truncatedWarning = null;
-
   // ===============================================================
   // PRIVATE PROPERTIES
   // ===============================================================
@@ -186,22 +186,11 @@ export default class D3SparklineGrid extends NavigationMixin(LightningElement) {
 
     const prepared = prepareData(rawData, {
       requiredFields,
-      limit: CHART_LIMITS.SPARKLINE_GRID
+      limit: this.recordLimit || CHART_LIMITS.SPARKLINE_GRID
     });
 
     if (!prepared.valid) {
       throw new Error(prepared.error);
-    }
-
-    if (prepared.truncated) {
-      this.truncatedWarning = `Displaying first ${CHART_LIMITS.SPARKLINE_GRID.toLocaleString()} of ${prepared.originalCount} records`;
-      this.dispatchEvent(
-        new ShowToastEvent({
-          title: "Data Truncated",
-          message: this.truncatedWarning,
-          variant: "warning"
-        })
-      );
     }
 
     // Process into entity-grouped sparkline data

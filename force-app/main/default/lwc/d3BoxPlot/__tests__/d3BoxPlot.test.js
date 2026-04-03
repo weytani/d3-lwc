@@ -384,9 +384,7 @@ describe("c-d3-box-plot", () => {
         Amount: i * 10
       }));
 
-      const toastHandler = jest.fn();
       element = createElement("c-d3-box-plot", { is: D3BoxPlot });
-      element.addEventListener("lightning__showtoast", toastHandler);
       Object.assign(element, {
         groupByField: "StageName",
         valueField: "Amount",
@@ -397,8 +395,9 @@ describe("c-d3-box-plot", () => {
       await flushPromises();
       await flushPromises();
 
-      // Should have dispatched a truncation toast
-      expect(toastHandler).toHaveBeenCalled();
+      // Chart should render without error (data truncated silently)
+      const container = element.shadowRoot.querySelector(".chart-container");
+      expect(container).toBeTruthy();
     });
   });
 

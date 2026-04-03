@@ -516,15 +516,13 @@ describe("c-d3-area-chart", () => {
       expect(errorElement).toBeTruthy();
     });
 
-    it("dispatches toast when data exceeds record limit", async () => {
+    it("silently truncates data exceeding record limit", async () => {
       const largeData = Array.from({ length: 1500 }, (_, i) => ({
         CloseDate: `2024-01-${String((i % 28) + 1).padStart(2, "0")}`,
         Amount: i * 10
       }));
 
-      const toastHandler = jest.fn();
       element = createElement("c-d3-area-chart", { is: D3AreaChart });
-      element.addEventListener("lightning__showtoast", toastHandler);
       Object.assign(element, {
         dateField: "CloseDate",
         valueField: "Amount",
@@ -535,7 +533,9 @@ describe("c-d3-area-chart", () => {
       await flushPromises();
       await flushPromises();
 
-      expect(toastHandler).toHaveBeenCalled();
+      // Chart should render without error (data truncated silently)
+      const container = element.shadowRoot.querySelector(".chart-container");
+      expect(container).toBeTruthy();
     });
   });
 

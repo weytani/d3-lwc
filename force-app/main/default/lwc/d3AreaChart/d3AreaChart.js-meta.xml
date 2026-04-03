@@ -92,6 +92,16 @@
         description="Field to filter by on drill-down (defaults to Date Field)"
       />
 
+            <!-- Record Limit -->
+            <property
+        name="recordLimit"
+        type="Integer"
+        label="Record Limit"
+        description="Maximum records to process. Leave empty for default."
+        min="1"
+        max="10000"
+      />
+
             <!-- Advanced -->
             <property
         name="advancedConfig"
@@ -153,6 +163,14 @@
         type="String"
         label="Color Theme"
         default="Salesforce Standard"
+      />
+            <property
+        name="recordLimit"
+        type="Integer"
+        label="Record Limit"
+        description="Maximum records to process. Leave empty for default."
+        min="1"
+        max="10000"
       />
         </targetConfig>
     </targetConfigs>

@@ -19,7 +19,6 @@ import {
   createLayoutRetry
 } from "c/chartUtils";
 import { NavigationMixin } from "lightning/navigation";
-import { ShowToastEvent } from "lightning/platformShowToastEvent";
 import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
 import getAggregatedData from "@salesforce/apex/D3ChartController.getAggregatedData";
 
@@ -61,6 +60,9 @@ export default class D3FunnelChart extends NavigationMixin(LightningElement) {
   /** Optional WHERE clause fragment for server-side aggregation */
   @api filterClause = "";
 
+  /** Maximum records to process (overrides default limit) */
+  @api recordLimit;
+
   /** Whether to hide conversion rate percentages between segments */
   @api hideConversionRates = false;
 
@@ -71,8 +73,6 @@ export default class D3FunnelChart extends NavigationMixin(LightningElement) {
   @track isLoading = true;
   @track error = null;
   @track chartData = [];
-  @track truncatedWarning = null;
-
   // ═══════════════════════════════════════════════════════════════
   // PRIVATE PROPERTIES
   // ═══════════════════════════════════════════════════════════════
@@ -235,15 +235,13 @@ export default class D3FunnelChart extends NavigationMixin(LightningElement) {
     }
 
     // Prepare data (validate + truncate)
-    const prepared = prepareData(rawData, { requiredFields });
+    const prepared = prepareData(rawData, {
+      requiredFields,
+      limit: this.recordLimit || MAX_RECORDS
+    });
 
     if (!prepared.valid) {
       throw new Error(prepared.error);
-    }
-
-    if (prepared.truncated) {
-      this.truncatedWarning = `Displaying first ${MAX_RECORDS.toLocaleString()} of ${prepared.originalCount} records`;
-      this.showTruncationToast(prepared.originalCount);
     }
 
     // Aggregate data
@@ -259,16 +257,6 @@ export default class D3FunnelChart extends NavigationMixin(LightningElement) {
     }
 
     return aggregated;
-  }
-
-  showTruncationToast(originalCount) {
-    this.dispatchEvent(
-      new ShowToastEvent({
-        title: "Data Truncated",
-        message: `Displaying first ${MAX_RECORDS.toLocaleString()} of ${originalCount} records for performance`,
-        variant: "warning"
-      })
-    );
   }
 
   // ═══════════════════════════════════════════════════════════════

@@ -499,16 +499,14 @@ describe("c-d3-heatmap", () => {
       expect(container).toBeTruthy();
     });
 
-    it("dispatches toast when data exceeds 2000 records", async () => {
+    it("silently truncates data exceeding 2000 records", async () => {
       const largeData = Array.from({ length: 2500 }, (_, i) => ({
         Quarter: `Q${(i % 4) + 1}`,
         Product: `Product ${i % 10}`,
         Amount: Math.random() * 1000
       }));
 
-      const toastHandler = jest.fn();
       element = createElement("c-d3-heatmap", { is: D3Heatmap });
-      element.addEventListener("lightning__showtoast", toastHandler);
       Object.assign(element, {
         xField: "Quarter",
         yField: "Product",
@@ -521,7 +519,9 @@ describe("c-d3-heatmap", () => {
       await flushPromises();
       await flushPromises();
 
-      expect(toastHandler).toHaveBeenCalled();
+      // Chart should render without error (data truncated silently)
+      const container = element.shadowRoot.querySelector(".chart-container");
+      expect(container).toBeTruthy();
     });
 
     it("handles empty server response with error", async () => {

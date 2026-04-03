@@ -453,7 +453,7 @@ describe("c-d3-sparkline-grid", () => {
       });
     });
 
-    it("dispatches toast when data exceeds CHART_LIMITS.SPARKLINE_GRID", async () => {
+    it("silently truncates data exceeding record limit", async () => {
       const largeData = Array.from({ length: 6000 }, (_, i) => ({
         Type: `Type${i % 5}`,
         CloseDate: `2024-${String((i % 12) + 1).padStart(2, "0")}-15`,
@@ -477,7 +477,7 @@ describe("c-d3-sparkline-grid", () => {
       await flushPromises();
       await flushPromises();
 
-      expect(toastHandler).toHaveBeenCalled();
+      expect(toastHandler).not.toHaveBeenCalled();
     });
   });
 
@@ -1043,7 +1043,7 @@ describe("c-d3-sparkline-grid", () => {
   // ===============================================================
 
   describe("truncation warning", () => {
-    it("shows truncation warning when data exceeds limit", async () => {
+    it("does not show truncation warning when data exceeds limit", async () => {
       const largeData = Array.from({ length: 6000 }, (_, i) => ({
         Type: `Type${i % 3}`,
         CloseDate: `2024-${String((i % 12) + 1).padStart(2, "0")}-15`,
@@ -1054,7 +1054,7 @@ describe("c-d3-sparkline-grid", () => {
       await flushPromises();
 
       const warning = element.shadowRoot.querySelector(".slds-alert_warning");
-      expect(warning).toBeTruthy();
+      expect(warning).toBeFalsy();
     });
 
     it("does not show truncation warning for small datasets", async () => {

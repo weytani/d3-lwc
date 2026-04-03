@@ -404,16 +404,14 @@ describe("c-d3-radar-chart", () => {
       expect(errorElement).toBeTruthy();
     });
 
-    it("dispatches toast when data exceeds 2000 records", async () => {
+    it("silently truncates data exceeding 2000 records", async () => {
       const largeData = Array.from({ length: 2500 }, (_, i) => ({
         Type: `Type${i % 10}`,
         Amount: i * 10,
         Probability: (i % 100) / 100
       }));
 
-      const toastHandler = jest.fn();
       element = createElement("c-d3-radar-chart", { is: D3RadarChart });
-      element.addEventListener("lightning__showtoast", toastHandler);
       Object.assign(element, {
         groupByField: "Type",
         valueField: "Amount",
@@ -425,7 +423,9 @@ describe("c-d3-radar-chart", () => {
       await flushPromises();
       await flushPromises();
 
-      expect(toastHandler).toHaveBeenCalled();
+      // Chart should render without error (data truncated silently)
+      const container = element.shadowRoot.querySelector(".chart-container");
+      expect(container).toBeTruthy();
     });
   });
 

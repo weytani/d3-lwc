@@ -30,24 +30,6 @@
 
     <!-- Chart Container (has data) -->
     <template lwc:elseif={hasData}>
-      <!-- Truncation Warning -->
-      <template lwc:if={truncatedWarning}>
-        <div
-          class="slds-notify slds-notify_alert slds-alert_warning slds-m-bottom_x-small"
-          role="alert"
-        >
-          <span class="slds-assistive-text">warning</span>
-          <span class="slds-icon_container slds-m-right_x-small">
-            <lightning-icon
-              icon-name="utility:warning"
-              size="x-small"
-              variant="warning"
-            ></lightning-icon>
-          </span>
-          <h2>{truncatedWarning}</h2>
-        </div>
-      </template>
-
       <!-- Year Navigation -->
       <div class="slds-grid slds-grid_align-center slds-m-bottom_x-small">
         <button class="slds-button slds-button_icon" onclick={handlePrevYear}>
@@ -67,7 +49,7 @@
         </button>
       </div>
 
-      <div class="chart-container" style={containerStyle}></div>
+      <div class="chart-container" lwc:dom="manual" style={containerStyle}></div>
     </template>
 
     <!-- No Data State -->

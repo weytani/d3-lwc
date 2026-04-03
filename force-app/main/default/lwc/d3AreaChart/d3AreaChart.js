@@ -12,7 +12,6 @@ import {
   createLayoutRetry
 } from "c/chartUtils";
 import { NavigationMixin } from "lightning/navigation";
-import { ShowToastEvent } from "lightning/platformShowToastEvent";
 import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
 
 export default class D3AreaChart extends NavigationMixin(LightningElement) {
@@ -51,6 +50,9 @@ export default class D3AreaChart extends NavigationMixin(LightningElement) {
   /** Curve type: linear, monotone, step */
   @api curveType = "monotone";
 
+  /** Maximum records to process (leave empty for chart default) */
+  @api recordLimit;
+
   /** Advanced configuration JSON */
   @api advancedConfig = "{}";
 
@@ -71,8 +73,6 @@ export default class D3AreaChart extends NavigationMixin(LightningElement) {
   @track error = null;
   @track chartData = [];
   @track seriesData = [];
-  @track truncatedWarning = null;
-
   // ═══════════════════════════════════════════════════════════════
   // PRIVATE PROPERTIES
   // ═══════════════════════════════════════════════════════════════
@@ -204,22 +204,11 @@ export default class D3AreaChart extends NavigationMixin(LightningElement) {
     const requiredFields = [this.dateField, this.valueField];
     const prepared = prepareData(rawData, {
       requiredFields,
-      limit: CHART_LIMITS.AREA
+      limit: this.recordLimit || CHART_LIMITS.AREA
     });
 
     if (!prepared.valid) {
       throw new Error(prepared.error);
-    }
-
-    if (prepared.truncated) {
-      this.truncatedWarning = `Displaying first ${CHART_LIMITS.AREA.toLocaleString()} of ${prepared.originalCount} records`;
-      this.dispatchEvent(
-        new ShowToastEvent({
-          title: "Data Truncated",
-          message: this.truncatedWarning,
-          variant: "warning"
-        })
-      );
     }
 
     this.processTimeSeriesData(prepared.data);

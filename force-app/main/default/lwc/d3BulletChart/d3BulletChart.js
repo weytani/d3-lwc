@@ -63,8 +63,6 @@ export default class D3BulletChart extends NavigationMixin(LightningElement) {
   @track isLoading = true;
   @track error = null;
   @track currentValue = 0;
-  @track truncatedWarning = null;
-
   // ═══════════════════════════════════════════════════════════════
   // PRIVATE PROPERTIES
   // ═══════════════════════════════════════════════════════════════
