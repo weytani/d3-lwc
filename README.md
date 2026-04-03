@@ -1,38 +1,57 @@
 # Salesforce D3.js Chart Component Library
 
-A complete suite of 10 Lightning Web Components (LWC) that wrap D3.js charts for use in Salesforce App Builder, Experience Builder, and Screen Flows. Components are drag-and-drop ready, capable of ingesting raw Salesforce record collections, and intelligently handle aggregation via server-side SOQL GROUP BY (preferred) or client-side JavaScript (fallback).
+A complete suite of 20 Lightning Web Components (LWC) that wrap D3.js charts for use in Salesforce App Builder, Experience Builder, and Screen Flows. Components are drag-and-drop ready, capable of ingesting raw Salesforce record collections, and intelligently handle aggregation via server-side SOQL GROUP BY (preferred) or client-side JavaScript (fallback).
 
-## Screenshot
+## Screenshots
 
 ![D3 LWC Charts in Salesforce](d3-lwc-smoke-test.png)
 
+![App Builder Configuration Panel](docs/d3-bar-chart-config.png)
+
 ## Features
 
-- **10 Chart Types**: Bar, Line, Donut, Gauge, Scatter, Histogram, Treemap, Sankey, Force Graph, Choropleth
+- **20 Chart Types**: Bar, Line, Donut, Gauge, Scatter, Histogram, Treemap, Sankey, Force Graph, Choropleth, Area, Stacked Bar, Funnel, Radar, Heatmap, Box Plot, Waterfall, Bullet, Calendar Heatmap, Sparkline Grid
 - **Drag-and-Drop Ready**: Fully configurable in Lightning App Builder
 - **Server-Side Aggregation**: GROUP BY queries run in Apex, processing 50K+ records and sending pre-bucketed results to the browser
 - **Dual Data Path**: Server-preferred when `objectApiName` is configured; client-side fallback for `recordCollection` and `soqlQuery`-only usage
 - **Server-Side Analytics**: Statistics (mean, median, stdDev) and correlation (Pearson r, linear regression) computed in Apex
+- **Configurable Limits**: Per-chart `recordLimit` property in App Builder — set your own data ceiling or use smart defaults
 - **Responsive**: Uses ResizeObserver for adaptive reflow
 - **SLDS Styled**: Consistent with Salesforce Lightning Design System
 - **Theme Support**: 4 built-in palettes + custom colors via JSON config
-- **Performance Guardrails**: 2,000 record limit on client-side path; no practical limit on server-aggregated path
-- **903 Tests**: Comprehensive Jest test coverage across 21 suites
+- **1,790 Tests**: Comprehensive Jest test coverage across 31 suites
 
 ## 📦 Components
 
-| Component           | Description          | Status          | Key Features                                   |
-| ------------------- | -------------------- | --------------- | ---------------------------------------------- |
-| `c-d3-gauge`        | Single KPI gauge     | Done            | Zones, thresholds, color coding                |
-| `c-d3-bar-chart`    | Aggregated bar chart | Done            | Vertical bars, drill-down, grid                |
-| `c-d3-donut-chart`  | Part-to-whole        | Done            | Animated slices, center total, legend          |
-| `c-d3-line-chart`   | Time series          | Done            | Multi-series, date parsing, curve types        |
-| `c-d3-scatter-plot` | Correlation          | Done            | Trend line, Pearson coefficient, point sizing  |
-| `c-d3-histogram`    | Distribution         | Done            | Auto-binning, normal curve overlay, statistics |
-| `c-d3-treemap`      | Hierarchical         | Done            | Nested rectangles, zoom/drill, breadcrumbs     |
-| `c-d3-sankey`       | Flow/process         | Done            | Nodes + links, gradient colors, flow values    |
-| `c-d3-force-graph`  | Network graph        | Done            | Force simulation, drag, zoom/pan, node sizing  |
-| `c-d3-choropleth`   | Geographic map       | **In Progress** | US states, world, custom GeoJSON, color scales |
+### Phase 1
+
+| Component           | Description          | Key Features                                   |
+| ------------------- | -------------------- | ---------------------------------------------- |
+| `c-d3-gauge`        | Single KPI gauge     | Zones, thresholds, color coding                |
+| `c-d3-bar-chart`    | Aggregated bar chart | Vertical bars, drill-down, grid                |
+| `c-d3-donut-chart`  | Part-to-whole        | Animated slices, center total, legend          |
+| `c-d3-line-chart`   | Time series          | Multi-series, date parsing, curve types        |
+| `c-d3-scatter-plot` | Correlation          | Trend line, Pearson coefficient, point sizing  |
+| `c-d3-histogram`    | Distribution         | Auto-binning, normal curve overlay, statistics |
+| `c-d3-treemap`      | Hierarchical         | Nested rectangles, zoom/drill, breadcrumbs     |
+| `c-d3-sankey`       | Flow/process         | Nodes + links, gradient colors, flow values    |
+| `c-d3-force-graph`  | Network graph        | Force simulation, drag, zoom/pan, node sizing  |
+| `c-d3-choropleth`   | Geographic map       | US states, world, custom GeoJSON, color scales |
+
+### Phase 2
+
+| Component                | Description        | Key Features                                          |
+| ------------------------ | ------------------ | ----------------------------------------------------- |
+| `c-d3-area-chart`        | Filled time series | Stacked areas, gradients, multi-series                |
+| `c-d3-stacked-bar-chart` | Multi-series bars  | Grouped or stacked, series comparison                 |
+| `c-d3-funnel-chart`      | Conversion funnel  | Stage progression, drop-off rates                     |
+| `c-d3-radar-chart`       | Multi-axis         | Polygon overlay, category comparison                  |
+| `c-d3-heatmap`           | 2D categorical     | Color intensity grid, sequential ramps                |
+| `c-d3-box-plot`          | Distribution stats | Quartiles, whiskers, outliers                         |
+| `c-d3-waterfall-chart`   | Bridge/variance    | Running totals, positive/negative coloring            |
+| `c-d3-bullet-chart`      | KPI vs target      | Actual vs target, qualitative ranges                  |
+| `c-d3-calendar-heatmap`  | Daily data grid    | Year view, day-level color intensity                  |
+| `c-d3-sparkline-grid`    | Small multiples    | Inline mini-charts, entity comparison, monthly rollup |
 
 ## 🏗️ Architecture
 
@@ -68,6 +87,12 @@ A complete suite of 10 Lightning Web Components (LWC) that wrap D3.js charts for
 │  │  ┌───────────┐ ┌─────────┐ ┌────────┐ ┌───────┐ ┌─────┐ │  │
 │  │  │ Histogram │ │ Treemap │ │ Sankey │ │ Force │ │ Map │ │  │
 │  │  └───────────┘ └─────────┘ └────────┘ └───────┘ └─────┘ │  │
+│  │  ┌──────┐ ┌─────────┐ ┌────────┐ ┌───────┐ ┌─────────┐  │  │
+│  │  │ Area │ │ Stacked │ │ Funnel │ │ Radar │ │ Heatmap │  │  │
+│  │  └──────┘ └─────────┘ └────────┘ └───────┘ └─────────┘  │  │
+│  │  ┌─────────┐ ┌───────────┐ ┌────────┐ ┌──────────┐       │  │
+│  │  │ BoxPlot │ │ Waterfall │ │ Bullet │ │ Calendar │       │  │
+│  │  └─────────┘ └───────────┘ └────────┘ └──────────┘       │  │
 │  └──────────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -120,6 +145,7 @@ sf lightning dev app -o <your-org-alias>
 | `soqlQuery`        | String   | SOQL query (used if recordCollection empty)            |
 | `objectApiName`    | String   | SObject API name — enables server-side aggregation     |
 | `filterClause`     | String   | Optional WHERE clause for server aggregation           |
+| `recordLimit`      | Integer  | Max records to process (1–10,000). Leave empty for smart defaults per chart type |
 | `height`           | Integer  | Chart height in pixels                                 |
 | `theme`            | String   | Color theme (Salesforce Standard, Warm, Cool, Vibrant) |
 | `advancedConfig`   | String   | JSON for advanced options                              |
@@ -190,6 +216,23 @@ sf lightning dev app -o <your-org-alias>
 </c-d3-choropleth>
 ```
 
+## Record Limits
+
+Each chart has a default record limit tuned to its visual capacity. Set `recordLimit` in App Builder to override.
+
+| Chart Type     | Default Limit | Why                                     |
+| -------------- | ------------- | --------------------------------------- |
+| Aggregation charts (Bar, Donut, Treemap, Funnel, Stacked Bar, Heatmap, Radar) | 2,000 | Client-side fallback path; server-side GROUP BY has no practical limit |
+| Histogram      | 10,000        | Raw values needed for binning math      |
+| Scatter        | 5,000         | SVG sampling kicks in at 500 points     |
+| Box Plot       | 5,000         | Raw values needed for quartile math     |
+| Sparkline Grid | 5,000         | Multiple small charts, raw values       |
+| Calendar Heatmap | 2,000       | Daily data points (~5.5 years)          |
+| Line, Area, Sankey | 1,000     | Visual comprehension ceiling            |
+| Force Graph    | 500           | O(n log n) simulation cost              |
+| Waterfall, Choropleth | 500    | Sequential/geographic readability       |
+| Gauge, Bullet  | 1             | Single value (no `recordLimit` exposed) |
+
 ## 🎨 Themes
 
 Four built-in color palettes:
@@ -218,11 +261,13 @@ import {
   validateData,
   prepareData,
   aggregateData,
+  CHART_LIMITS,
   OPERATIONS
 } from "c/dataService";
 
-const { data, truncated } = prepareData(records, {
-  requiredFields: ["Amount"]
+const { data, valid, error } = prepareData(records, {
+  requiredFields: ["Amount"],
+  limit: CHART_LIMITS.HISTOGRAM // or pass a custom limit
 });
 const chartData = aggregateData(records, "StageName", "Amount", OPERATIONS.SUM);
 ```
@@ -260,10 +305,10 @@ d3-lwc/
 │   │   └── D3ChartControllerTest.cls
 │   ├── lwc/
 │   │   ├── d3Lib/              # D3.js loader
-│   │   ├── dataService/        # Data processing
-│   │   ├── themeService/       # Color palettes
-│   │   ├── chartUtils/         # Shared utilities
-│   │   ├── d3Gauge/
+│   │   ├── dataService/        # Data processing, limits, aggregation
+│   │   ├── themeService/       # Color palettes + sequential ramps
+│   │   ├── chartUtils/         # Shared utilities (tooltips, resize, formatting)
+│   │   ├── d3Gauge/            # Phase 1
 │   │   ├── d3BarChart/
 │   │   ├── d3DonutChart/
 │   │   ├── d3LineChart/
@@ -272,7 +317,17 @@ d3-lwc/
 │   │   ├── d3Treemap/
 │   │   ├── d3Sankey/
 │   │   ├── d3ForceGraph/
-│   │   └── d3Choropleth/
+│   │   ├── d3Choropleth/
+│   │   ├── d3AreaChart/        # Phase 2
+│   │   ├── d3StackedBarChart/
+│   │   ├── d3FunnelChart/
+│   │   ├── d3RadarChart/
+│   │   ├── d3Heatmap/
+│   │   ├── d3BoxPlot/
+│   │   ├── d3WaterfallChart/
+│   │   ├── d3BulletChart/
+│   │   ├── d3CalendarHeatmap/
+│   │   └── d3SparklineGrid/
 │   └── staticresources/
 │       ├── d3.js               # D3.js v7
 │       └── usStates.js         # US states GeoJSON
@@ -296,7 +351,7 @@ npm test -- --testPathPattern=d3BarChart
 npm test -- --coverage
 ```
 
-**Test Coverage:** 903 tests across 21 suites (includes server-side aggregation path tests)
+**Test Coverage:** 1,790 tests across 31 suites (includes server-side aggregation path tests)
 
 ## 📚 References
 
