@@ -54,9 +54,6 @@ export default class D3SunburstChart extends NavigationMixin(LightningElement) {
   /** Color theme */
   @api theme = DEFAULT_THEME;
 
-  /** Show ring labels (defaults to true via getter) */
-  @api showLabels;
-
   /** Object API name for drill-down navigation */
   @api objectApiName = "";
 
@@ -100,10 +97,6 @@ export default class D3SunburstChart extends NavigationMixin(LightningElement) {
 
   get containerStyle() {
     return `height: ${this.height}px;`;
-  }
-
-  get effectiveShowLabels() {
-    return this.showLabels !== false;
   }
 
   get hasError() {
@@ -423,7 +416,7 @@ export default class D3SunburstChart extends NavigationMixin(LightningElement) {
       .innerRadius((d) => d.y0)
       .outerRadius((d) => d.y1);
 
-    const arcs = this.svg
+    this.svg
       .selectAll(".sunburst-arc")
       .data(nodes)
       .enter()
@@ -449,15 +442,6 @@ export default class D3SunburstChart extends NavigationMixin(LightningElement) {
       .on("click", (_event, d) => {
         this.handleArcClick(d);
       });
-
-    if (this.effectiveShowLabels) {
-      arcs.each((d, i, n) => {
-        const angle = d.x1 - d.x0;
-        if (angle > 0.1) {
-          d3.select(n[i]);
-        }
-      });
-    }
 
     // Center label = total value.
     this.svg

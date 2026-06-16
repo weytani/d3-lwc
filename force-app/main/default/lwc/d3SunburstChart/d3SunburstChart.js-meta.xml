@@ -68,13 +68,6 @@
         description="Color palette for the sunburst"
       />
             <property
-        name="showLabels"
-        type="Boolean"
-        label="Show Labels"
-        default="true"
-        description="Display labels on arcs"
-      />
-            <property
         name="objectApiName"
         type="String"
         label="Object API Name"
