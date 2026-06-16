@@ -1,0 +1,226 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<LightningComponentBundle xmlns="http://soap.sforce.com/2006/04/metadata">
+    <apiVersion>65.0</apiVersion>
+    <isExposed>true</isExposed>
+    <masterLabel>D3 Bubble Chart</masterLabel>
+    <description
+  >Interactive bubble chart: a scatter plot where a third numeric field drives bubble area (sqrt-scaled). Click bubbles to navigate to records.</description>
+    <targets>
+        <target>lightning__AppPage</target>
+        <target>lightning__RecordPage</target>
+        <target>lightning__HomePage</target>
+        <target>lightningCommunity__Default</target>
+        <target>lightning__FlowScreen</target>
+    </targets>
+    <targetConfigs>
+        <targetConfig
+      targets="lightning__AppPage,lightning__RecordPage,lightning__HomePage,lightningCommunity__Default"
+    >
+            <property
+        name="soqlQuery"
+        type="String"
+        label="SOQL Query"
+        description="SOQL query to fetch bubble data (used if Object API Name is not set)"
+        placeholder="SELECT Id, Amount, Probability, Forecast_Units__c, Name FROM Opportunity WHERE Amount > 0"
+      />
+            <property
+        name="objectApiName"
+        type="String"
+        label="Object API Name"
+        description="Object for the typed getXYData server path and record navigation"
+        placeholder="Opportunity"
+      />
+            <property
+        name="filterClause"
+        type="String"
+        label="Filter Clause"
+        description="Optional WHERE clause appended on the server path"
+        placeholder="Amount > 1000"
+      />
+            <property
+        name="xAxisField"
+        type="String"
+        label="X-Axis Field"
+        default="Amount"
+        description="API name of the numeric field for X-axis"
+        placeholder="Amount"
+      />
+            <property
+        name="xAxisLabel"
+        type="String"
+        label="X-Axis Label"
+        description="Display label for X-axis (defaults to field name)"
+        placeholder="Deal Amount"
+      />
+            <property
+        name="yAxisField"
+        type="String"
+        label="Y-Axis Field"
+        default="Probability"
+        description="API name of the numeric field for Y-axis"
+        placeholder="Probability"
+      />
+            <property
+        name="yAxisLabel"
+        type="String"
+        label="Y-Axis Label"
+        description="Display label for Y-axis (defaults to field name)"
+        placeholder="Win Probability"
+      />
+            <property
+        name="sizeField"
+        type="String"
+        label="Size Field"
+        default="Forecast_Units__c"
+        description="API name of the numeric field driving bubble area"
+        placeholder="Forecast_Units__c"
+      />
+            <property
+        name="sizeLabel"
+        type="String"
+        label="Size Label"
+        description="Display label for the size dimension (defaults to field name)"
+        placeholder="Forecast Units"
+      />
+            <property
+        name="labelField"
+        type="String"
+        label="Label Field"
+        description="Optional field used as each bubble's tooltip label"
+        placeholder="Name"
+      />
+            <property
+        name="recordIdField"
+        type="String"
+        label="Record ID Field"
+        default="Id"
+        description="Field containing the record ID for navigation"
+      />
+            <property
+        name="height"
+        type="Integer"
+        label="Height (px)"
+        default="300"
+        description="Chart height in pixels"
+        min="150"
+        max="800"
+      />
+            <property
+        name="theme"
+        type="String"
+        label="Color Theme"
+        default="Salesforce Standard"
+        datasource="Salesforce Standard,Warm,Cool,Vibrant"
+        description="Color palette for the chart"
+      />
+            <property
+        name="recordLimit"
+        type="Integer"
+        label="Record Limit"
+        description="Maximum records to process. Leave empty for default."
+        min="1"
+        max="10000"
+      />
+            <property
+        name="advancedConfig"
+        type="String"
+        label="Advanced Config (JSON)"
+        description='{"showGrid": true, "customColors": ["#1589EE"]}'
+      />
+        </targetConfig>
+
+        <!-- Flow Screen Configuration -->
+        <targetConfig targets="lightning__FlowScreen">
+            <propertyType
+        name="T"
+        extends="SObject"
+        label="Record Type"
+        description="SObject type for the record collection"
+      />
+            <property
+        name="recordCollection"
+        type="{T[]}"
+        label="Record Collection"
+        role="inputOnly"
+        description="Collection of records from Flow"
+      />
+            <property
+        name="xAxisField"
+        type="String"
+        label="X-Axis Field"
+        required="true"
+        description="API name of the numeric field for X-axis"
+      />
+            <property
+        name="yAxisField"
+        type="String"
+        label="Y-Axis Field"
+        required="true"
+        description="API name of the numeric field for Y-axis"
+      />
+            <property
+        name="sizeField"
+        type="String"
+        label="Size Field"
+        required="true"
+        description="API name of the numeric field driving bubble area"
+      />
+            <property
+        name="xAxisLabel"
+        type="String"
+        label="X-Axis Label"
+        description="Display label for X-axis"
+      />
+            <property
+        name="yAxisLabel"
+        type="String"
+        label="Y-Axis Label"
+        description="Display label for Y-axis"
+      />
+            <property
+        name="sizeLabel"
+        type="String"
+        label="Size Label"
+        description="Display label for the size dimension"
+      />
+            <property
+        name="labelField"
+        type="String"
+        label="Label Field"
+        description="Optional field used as each bubble's tooltip label"
+      />
+            <property
+        name="recordIdField"
+        type="String"
+        label="Record ID Field"
+        default="Id"
+      />
+            <property
+        name="objectApiName"
+        type="String"
+        label="Object API Name"
+        description="Object for navigation on click"
+      />
+            <property
+        name="height"
+        type="Integer"
+        label="Height (px)"
+        default="300"
+      />
+            <property
+        name="theme"
+        type="String"
+        label="Color Theme"
+        default="Salesforce Standard"
+      />
+            <property
+        name="recordLimit"
+        type="Integer"
+        label="Record Limit"
+        description="Maximum records to process. Leave empty for default."
+        min="1"
+        max="10000"
+      />
+        </targetConfig>
+    </targetConfigs>
+</LightningComponentBundle>
