@@ -34,12 +34,12 @@
 | —   | Waterfall        | Planned |
 | —   | Calendar Heatmap | Planned |
 | —   | Sparkline Grid   | Planned |
-| —   | Sunburst         | Planned |
-| —   | Chord Diagram    | Planned |
-| —   | Gantt            | Planned |
-| —   | Diverging Bar    | Planned |
-| —   | Bubble           | Planned |
-| —   | Waffle           | Planned |
+| —   | Sunburst         | Done    |
+| —   | Chord Diagram    | Done    |
+| —   | Gantt            | Done    |
+| —   | Diverging Bar    | Done    |
+| —   | Bubble           | Done    |
+| —   | Waffle           | Done    |
 
 ---
 
@@ -49,18 +49,18 @@
 
 Minor variants of existing components or well-established D3 patterns with minimal new concepts. Each can reuse existing `dataService` and `chartUtils` almost entirely.
 
-| #   | Chart                           | D3 Gallery Ref                      | Component Name           | Salesforce Use Case                                                                             | New D3 Concepts                                                         |
-| --- | ------------------------------- | ----------------------------------- | ------------------------ | ----------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| 1   | **Horizontal Bar Chart**        | Bars → Horizontal bar chart         | `d3HorizontalBarChart`   | Long field labels (Account Name, Product Name, full picklist values) that clip in vertical bars | Rotate axes from existing `d3BarChart`; bandScale on Y                  |
-| 2   | **Pie Chart**                   | Radial → Pie chart                  | `d3PieChart`             | Admins who specifically want pie over donut; simpler mental model for part-to-whole             | `d3.pie()` + `d3.arc()` — simpler than existing donut (no inner radius) |
-| 3   | **Progress Bar (Linear Gauge)** | — (custom)                          | `d3ProgressBar`          | Quota attainment, goal completion, adoption percentage — simpler than gauge for single KPIs     | Single rect + target marker; minimal D3                                 |
-| 4   | **Lollipop Chart**              | — (custom)                          | `d3LollipopChart`        | Rep leaderboards, ranked metrics — cleaner than bars, less ink                                  | Line + circle per category; extends bar chart pattern                   |
-| 5   | **Dot Plot (Cleveland)**        | Dots → Dot plot                     | `d3DotPlot`              | Precise value comparison across categories; better than bars when values are close              | Points on categorical Y axis; `d3.scalePoint()`                         |
-| 6   | **Sorted Bar Chart**            | Animation → Sortable bar chart      | `d3SortedBarChart`       | Interactive ranking — sort by name, value, or custom field; animated reordering                 | `d3.transition()` on bar positions; sort comparators                    |
-| 7   | **Step Chart**                  | — (custom, `d3.curveStepAfter`)     | `d3StepChart`            | Stage duration, pricing tiers, discrete state changes over time                                 | `d3.curveStepAfter` on existing line pattern                            |
-| 8   | **Slope Chart**                 | Lines → Slope chart                 | `d3SlopeChart`           | Period-over-period comparison (Q1 vs Q2, this year vs last year, before/after intervention)     | Two vertical axes + connecting lines; `d3.scalePoint()`                 |
-| 9   | **Stacked Horizontal Bar**      | Bars → Stacked horizontal bar chart | `d3StackedHorizontalBar` | Composition by category with long labels; multi-field breakdown                                 | `d3.stack()` + horizontal layout                                        |
-| 10  | **Icon Array (Unit Chart)**     | — (custom)                          | `d3IconArray`            | Executive dashboards — "37 out of 100 deals closed" as filled squares; visceral impact          | Grid of rects/symbols; `d3.symbol()` optional                           |
+| #   | Chart                                  | D3 Gallery Ref                      | Component Name           | Salesforce Use Case                                                                             | New D3 Concepts                                                         |
+| --- | -------------------------------------- | ----------------------------------- | ------------------------ | ----------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| 1   | **Horizontal Bar Chart** ✓ Done        | Bars → Horizontal bar chart         | `d3HorizontalBarChart`   | Long field labels (Account Name, Product Name, full picklist values) that clip in vertical bars | Rotate axes from existing `d3BarChart`; bandScale on Y                  |
+| 2   | **Pie Chart** ✓ Done                   | Radial → Pie chart                  | `d3PieChart`             | Admins who specifically want pie over donut; simpler mental model for part-to-whole             | `d3.pie()` + `d3.arc()` — simpler than existing donut (no inner radius) |
+| 3   | **Progress Bar (Linear Gauge)** ✓ Done | — (custom)                          | `d3ProgressBar`          | Quota attainment, goal completion, adoption percentage — simpler than gauge for single KPIs     | Single rect + target marker; minimal D3                                 |
+| 4   | **Lollipop Chart** ✓ Done              | — (custom)                          | `d3LollipopChart`        | Rep leaderboards, ranked metrics — cleaner than bars, less ink                                  | Line + circle per category; extends bar chart pattern                   |
+| 5   | **Dot Plot (Cleveland)**               | Dots → Dot plot                     | `d3DotPlot`              | Precise value comparison across categories; better than bars when values are close              | Points on categorical Y axis; `d3.scalePoint()`                         |
+| 6   | **Sorted Bar Chart**                   | Animation → Sortable bar chart      | `d3SortedBarChart`       | Interactive ranking — sort by name, value, or custom field; animated reordering                 | `d3.transition()` on bar positions; sort comparators                    |
+| 7   | **Step Chart**                         | — (custom, `d3.curveStepAfter`)     | `d3StepChart`            | Stage duration, pricing tiers, discrete state changes over time                                 | `d3.curveStepAfter` on existing line pattern                            |
+| 8   | **Slope Chart**                        | Lines → Slope chart                 | `d3SlopeChart`           | Period-over-period comparison (Q1 vs Q2, this year vs last year, before/after intervention)     | Two vertical axes + connecting lines; `d3.scalePoint()`                 |
+| 9   | **Stacked Horizontal Bar**             | Bars → Stacked horizontal bar chart | `d3StackedHorizontalBar` | Composition by category with long labels; multi-field breakdown                                 | `d3.stack()` + horizontal layout                                        |
+| 10  | **Icon Array (Unit Chart)**            | — (custom)                          | `d3IconArray`            | Executive dashboards — "37 out of 100 deals closed" as filled squares; visceral impact          | Grid of rects/symbols; `d3.symbol()` optional                           |
 
 ### Tier 2: Low-Medium (Complexity 3–4)
 
