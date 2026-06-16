@@ -906,6 +906,38 @@ describe("c-d3-bubble-chart", () => {
       expect(getXYData).not.toHaveBeenCalled();
       expect(executeQuery).not.toHaveBeenCalled();
     });
+
+    it("calls getXYData with null labelField when labelField is omitted", async () => {
+      // Unlabeled bubble chart: object + x + y + size set, Label Field left blank.
+      // The server path must still fire (labelField is optional) and render.
+      await createChart({
+        recordCollection: [],
+        soqlQuery: "",
+        objectApiName: "Opportunity",
+        xAxisField: "Amount",
+        yAxisField: "Probability",
+        sizeField: "Forecast_Units__c"
+      });
+
+      await flushPromises();
+
+      expect(getXYData).toHaveBeenCalledWith({
+        objectName: "Opportunity",
+        xField: "Amount",
+        yField: "Probability",
+        sizeField: "Forecast_Units__c",
+        labelField: null,
+        filterClause: null
+      });
+      expect(executeQuery).not.toHaveBeenCalled();
+
+      const container = element.shadowRoot.querySelector(".chart-container");
+      expect(container).toBeTruthy();
+      const errorElement = element.shadowRoot.querySelector(
+        ".slds-text-color_error"
+      );
+      expect(errorElement).toBeFalsy();
+    });
   });
 
   // ═══════════════════════════════════════════════════════════════

@@ -446,7 +446,7 @@ public with sharing class D3ChartController {
    * @param xField       - Numeric field for the x axis
    * @param yField       - Numeric field for the y axis
    * @param sizeField    - Optional numeric field for bubble area (blank = no size)
-   * @param labelField   - Field used as the point label
+   * @param labelField   - Optional field for the point label (blank = no label)
    * @param filterClause - Optional WHERE clause (without the WHERE keyword)
    * @return List of maps with 'x', 'y', 'size', and 'label' keys (max 2000 rows)
    * @throws AuraHandledException for invalid inputs
@@ -480,7 +480,11 @@ public with sharing class D3ChartController {
     if (String.isBlank(yField) || !fieldMap.containsKey(yField)) {
       throw buildException('Invalid yField: ' + yField);
     }
-    if (String.isBlank(labelField) || !fieldMap.containsKey(labelField)) {
+    // labelField is optional; validate only when supplied (a blank label is
+    // valid — bubbles without point labels are allowed). A non-blank field that
+    // does not exist still throws.
+    Boolean hasLabel = String.isNotBlank(labelField);
+    if (hasLabel && !fieldMap.containsKey(labelField)) {
       throw buildException('Invalid labelField: ' + labelField);
     }
 
@@ -518,7 +522,9 @@ public with sharing class D3ChartController {
     Set<String> selectedFields = new Set<String>();
     selectedFields.add(String.escapeSingleQuotes(xField));
     selectedFields.add(String.escapeSingleQuotes(yField));
-    selectedFields.add(String.escapeSingleQuotes(labelField));
+    if (hasLabel) {
+      selectedFields.add(String.escapeSingleQuotes(labelField));
+    }
     if (hasSize) {
       selectedFields.add(String.escapeSingleQuotes(sizeField));
     }
@@ -552,7 +558,7 @@ public with sharing class D3ChartController {
         row.put('x', rec.get(xField));
         row.put('y', rec.get(yField));
         row.put('size', hasSize ? rec.get(sizeField) : null);
-        row.put('label', rec.get(labelField));
+        row.put('label', hasLabel ? rec.get(labelField) : null);
         output.add(row);
       }
 

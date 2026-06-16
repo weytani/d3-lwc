@@ -1356,6 +1356,46 @@ private class D3ChartControllerTest {
   }
 
   @isTest
+  static void testGetXYDataOptionalLabelField() {
+    // labelField is optional — when blank, label should be null but x/y present.
+    // An unlabeled bubble chart is valid (App Builder admin sets object+x+y+size
+    // but leaves Label Field empty).
+    Test.startTest();
+    List<Map<String, Object>> results = D3ChartController.getXYData(
+      'Account',
+      'AnnualRevenue',
+      'NumberOfEmployees',
+      'NumberOfEmployees',
+      '',
+      null
+    );
+    Test.stopTest();
+
+    System.assertEquals(
+      5,
+      results.size(),
+      'Should return one row per Account when labelField is blank'
+    );
+    for (Integer i = 0; i < results.size(); i++) {
+      System.assertEquals(
+        null,
+        results[i].get('label'),
+        'label should be null when labelField is blank'
+      );
+      System.assertNotEquals(
+        null,
+        results[i].get('x'),
+        'x should still be populated when labelField is blank'
+      );
+      System.assertNotEquals(
+        null,
+        results[i].get('y'),
+        'y should still be populated when labelField is blank'
+      );
+    }
+  }
+
+  @isTest
   static void testGetXYDataWithFilter() {
     Test.startTest();
     List<Map<String, Object>> results = D3ChartController.getXYData(
