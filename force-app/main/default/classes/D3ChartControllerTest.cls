@@ -1257,4 +1257,209 @@ private class D3ChartControllerTest {
     }
     Test.stopTest();
   }
+
+  // ═══════════════════════════════════════════════════════════════
+  // getXYData TESTS
+  // ═══════════════════════════════════════════════════════════════
+
+  @isTest
+  static void testGetXYDataReturnsRows() {
+    Test.startTest();
+    List<Map<String, Object>> results = D3ChartController.getXYData(
+      'Account',
+      'AnnualRevenue',
+      'NumberOfEmployees',
+      'NumberOfEmployees',
+      'Name',
+      null
+    );
+    Test.stopTest();
+
+    System.assertEquals(5, results.size(), 'Should return one row per Account');
+    System.assert(results[0].containsKey('x'), 'Row should contain x key');
+    System.assert(results[0].containsKey('y'), 'Row should contain y key');
+    System.assert(
+      results[0].containsKey('size'),
+      'Row should contain size key'
+    );
+    System.assert(
+      results[0].containsKey('label'),
+      'Row should contain label key'
+    );
+  }
+
+  @isTest
+  static void testGetXYDataValues() {
+    Test.startTest();
+    List<Map<String, Object>> results = D3ChartController.getXYData(
+      'Account',
+      'AnnualRevenue',
+      'NumberOfEmployees',
+      'NumberOfEmployees',
+      'Name',
+      'Name = \'Tech Alpha\''
+    );
+    Test.stopTest();
+
+    System.assertEquals(1, results.size(), 'Filter should isolate one Account');
+    System.assertEquals(
+      100,
+      (Decimal) results[0].get('x'),
+      'x should be the AnnualRevenue value'
+    );
+    System.assertEquals(
+      10,
+      (Decimal) results[0].get('y'),
+      'y should be the NumberOfEmployees value'
+    );
+    System.assertEquals(
+      10,
+      (Decimal) results[0].get('size'),
+      'size should be the sizeField (NumberOfEmployees) value'
+    );
+    System.assertEquals(
+      'Tech Alpha',
+      (String) results[0].get('label'),
+      'label should be the Name value'
+    );
+  }
+
+  @isTest
+  static void testGetXYDataNullSizeField() {
+    // sizeField is optional — when blank, size should be null but x/y/label present
+    Test.startTest();
+    List<Map<String, Object>> results = D3ChartController.getXYData(
+      'Account',
+      'AnnualRevenue',
+      'NumberOfEmployees',
+      '',
+      'Name',
+      'Name = \'Tech Alpha\''
+    );
+    Test.stopTest();
+
+    System.assertEquals(
+      1,
+      results.size(),
+      'Should return the filtered Account'
+    );
+    System.assertEquals(
+      100,
+      (Decimal) results[0].get('x'),
+      'x should still be populated when sizeField is blank'
+    );
+    System.assertEquals(
+      null,
+      results[0].get('size'),
+      'size should be null when sizeField is blank'
+    );
+  }
+
+  @isTest
+  static void testGetXYDataWithFilter() {
+    Test.startTest();
+    List<Map<String, Object>> results = D3ChartController.getXYData(
+      'Account',
+      'AnnualRevenue',
+      'NumberOfEmployees',
+      'NumberOfEmployees',
+      'Name',
+      'Industry = \'Finance\''
+    );
+    Test.stopTest();
+
+    System.assertEquals(
+      2,
+      results.size(),
+      'Finance filter should return the 2 Finance accounts'
+    );
+  }
+
+  @isTest
+  static void testGetXYDataInvalidObject() {
+    Test.startTest();
+    try {
+      D3ChartController.getXYData(
+        'TotallyFakeObject__xyz',
+        'AnnualRevenue',
+        'NumberOfEmployees',
+        'NumberOfEmployees',
+        'Name',
+        null
+      );
+      System.assert(false, 'Expected exception for invalid object');
+    } catch (AuraHandledException e) {
+      System.assert(
+        e.getMessage().contains('Invalid object'),
+        'Error should mention invalid object'
+      );
+    }
+    Test.stopTest();
+  }
+
+  @isTest
+  static void testGetXYDataInvalidXField() {
+    Test.startTest();
+    try {
+      D3ChartController.getXYData(
+        'Account',
+        'FakeX__xyz',
+        'NumberOfEmployees',
+        'NumberOfEmployees',
+        'Name',
+        null
+      );
+      System.assert(false, 'Expected exception for invalid x field');
+    } catch (AuraHandledException e) {
+      System.assert(
+        e.getMessage().contains('Invalid xField'),
+        'Error should mention invalid xField'
+      );
+    }
+    Test.stopTest();
+  }
+
+  @isTest
+  static void testGetXYDataInvalidYField() {
+    Test.startTest();
+    try {
+      D3ChartController.getXYData(
+        'Account',
+        'AnnualRevenue',
+        'FakeY__xyz',
+        'NumberOfEmployees',
+        'Name',
+        null
+      );
+      System.assert(false, 'Expected exception for invalid y field');
+    } catch (AuraHandledException e) {
+      System.assert(
+        e.getMessage().contains('Invalid yField'),
+        'Error should mention invalid yField'
+      );
+    }
+    Test.stopTest();
+  }
+
+  @isTest
+  static void testGetXYDataInjectionPrevention() {
+    Test.startTest();
+    try {
+      D3ChartController.getXYData(
+        'Account',
+        'AnnualRevenue',
+        'NumberOfEmployees',
+        'NumberOfEmployees',
+        'Name',
+        'AnnualRevenue > 0; DELETE FROM Account'
+      );
+      System.assert(false, 'Expected exception for injection attempt');
+    } catch (AuraHandledException e) {
+      System.assert(
+        e.getMessage().contains('forbidden keyword'),
+        'Error should mention forbidden keyword: ' + e.getMessage()
+      );
+    }
+    Test.stopTest();
+  }
 }

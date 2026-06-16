@@ -436,6 +436,135 @@ public with sharing class D3ChartController {
   }
 
   /**
+   * Returns raw XY rows for a scatter or bubble chart: one row per record with
+   * x, y, an optional bubble size, and a display label. Validates the object and
+   * the required x/y/label fields (and sizeField when supplied) via Schema
+   * describe, sanitizes the optional filter clause against injection, and
+   * enforces field-level security on the returned rows.
+   *
+   * @param objectName   - API name of the SObject to query
+   * @param xField       - Numeric field for the x axis
+   * @param yField       - Numeric field for the y axis
+   * @param sizeField    - Optional numeric field for bubble area (blank = no size)
+   * @param labelField   - Field used as the point label
+   * @param filterClause - Optional WHERE clause (without the WHERE keyword)
+   * @return List of maps with 'x', 'y', 'size', and 'label' keys (max 2000 rows)
+   * @throws AuraHandledException for invalid inputs
+   */
+  @AuraEnabled(cacheable=true)
+  public static List<Map<String, Object>> getXYData(
+    String objectName,
+    String xField,
+    String yField,
+    String sizeField,
+    String labelField,
+    String filterClause
+  ) {
+    // Validate object exists
+    if (
+      String.isBlank(objectName) ||
+      !Schema.getGlobalDescribe().containsKey(objectName)
+    ) {
+      throw buildException('Invalid object: ' + objectName);
+    }
+
+    Schema.DescribeSObjectResult objDescribe = Schema.getGlobalDescribe()
+      .get(objectName)
+      .getDescribe();
+    Map<String, Schema.SObjectField> fieldMap = objDescribe.fields.getMap();
+
+    // Validate required fields exist
+    if (String.isBlank(xField) || !fieldMap.containsKey(xField)) {
+      throw buildException('Invalid xField: ' + xField);
+    }
+    if (String.isBlank(yField) || !fieldMap.containsKey(yField)) {
+      throw buildException('Invalid yField: ' + yField);
+    }
+    if (String.isBlank(labelField) || !fieldMap.containsKey(labelField)) {
+      throw buildException('Invalid labelField: ' + labelField);
+    }
+
+    // sizeField is optional; validate only when supplied
+    Boolean hasSize = String.isNotBlank(sizeField);
+    if (hasSize && !fieldMap.containsKey(sizeField)) {
+      throw buildException('Invalid sizeField: ' + sizeField);
+    }
+
+    // Sanitize filter clause
+    String sanitizedFilter = '';
+    if (String.isNotBlank(filterClause)) {
+      sanitizedFilter = filterClause.replaceAll('[;]', '');
+      String upperFilter = sanitizedFilter.toUpperCase();
+      List<String> blockedKeywords = new List<String>{
+        'INSERT',
+        'UPDATE',
+        'DELETE',
+        'UPSERT',
+        'MERGE'
+      };
+      for (String keyword : blockedKeywords) {
+        if (upperFilter.contains(keyword)) {
+          throw buildException(
+            'Filter clause contains forbidden keyword: ' + keyword
+          );
+        }
+      }
+    }
+
+    // Build a de-duplicated SELECT column list. The same field may serve more
+    // than one role (e.g. yField and sizeField pointing at one numeric field),
+    // and SOQL rejects a duplicate field in the SELECT clause. The output map
+    // below still reads each role from its own field, so de-duping is safe.
+    Set<String> selectedFields = new Set<String>();
+    selectedFields.add(String.escapeSingleQuotes(xField));
+    selectedFields.add(String.escapeSingleQuotes(yField));
+    selectedFields.add(String.escapeSingleQuotes(labelField));
+    if (hasSize) {
+      selectedFields.add(String.escapeSingleQuotes(sizeField));
+    }
+    String selectClause = String.join(new List<String>(selectedFields), ', ');
+
+    String query =
+      'SELECT ' +
+      selectClause +
+      ' FROM ' +
+      String.escapeSingleQuotes(objectName);
+
+    if (String.isNotBlank(sanitizedFilter)) {
+      query += ' WHERE ' + sanitizedFilter;
+    }
+
+    query += ' LIMIT ' + MAX_RAW_ROWS;
+
+    try {
+      List<SObject> records = Database.query(query);
+
+      // Enforce field-level security on raw rows
+      SObjectAccessDecision decision = Security.stripInaccessible(
+        AccessType.READABLE,
+        records
+      );
+      records = decision.getRecords();
+
+      List<Map<String, Object>> output = new List<Map<String, Object>>();
+      for (SObject rec : records) {
+        Map<String, Object> row = new Map<String, Object>();
+        row.put('x', rec.get(xField));
+        row.put('y', rec.get(yField));
+        row.put('size', hasSize ? rec.get(sizeField) : null);
+        row.put('label', rec.get(labelField));
+        output.add(row);
+      }
+
+      return output;
+    } catch (QueryException e) {
+      throw buildException('XY query failed: ' + e.getMessage());
+    } catch (Exception e) {
+      throw buildException('XY retrieval failed: ' + e.getMessage());
+    }
+  }
+
+  /**
    * Detects aggregate functions in a query to avoid appending LIMIT
    * (non-grouped aggregates cannot use LIMIT, and grouped aggregates
    * return few rows by nature).
