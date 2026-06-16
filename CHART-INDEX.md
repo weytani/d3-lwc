@@ -22,24 +22,24 @@
 
 ## Already Planned in ROADMAP.md (16)
 
-| #   | Chart            | Status  |
-| --- | ---------------- | ------- |
-| —   | Funnel           | Planned |
-| —   | Stacked Bar      | Planned |
-| —   | Area             | Planned |
-| —   | Bullet           | Planned |
-| —   | Heatmap          | Planned |
-| —   | Box Plot         | Planned |
-| —   | Radar            | Planned |
-| —   | Waterfall        | Planned |
-| —   | Calendar Heatmap | Planned |
-| —   | Sparkline Grid   | Planned |
-| —   | Sunburst         | Done    |
-| —   | Chord Diagram    | Done    |
-| —   | Gantt            | Done    |
-| —   | Diverging Bar    | Done    |
-| —   | Bubble           | Done    |
-| —   | Waffle           | Done    |
+| #   | Chart            | Status |
+| --- | ---------------- | ------ |
+| —   | Funnel           | Done   |
+| —   | Stacked Bar      | Done   |
+| —   | Area             | Done   |
+| —   | Bullet           | Done   |
+| —   | Heatmap          | Done   |
+| —   | Box Plot         | Done   |
+| —   | Radar            | Done   |
+| —   | Waterfall        | Done   |
+| —   | Calendar Heatmap | Done   |
+| —   | Sparkline Grid   | Done   |
+| —   | Sunburst         | Done   |
+| —   | Chord Diagram    | Done   |
+| —   | Gantt            | Done   |
+| —   | Diverging Bar    | Done   |
+| —   | Bubble           | Done   |
+| —   | Waffle           | Done   |
 
 ---
 
