@@ -1,6 +1,6 @@
 # Salesforce D3.js Chart Component Library
 
-A complete suite of 20 Lightning Web Components (LWC) that wrap D3.js charts for use in Salesforce App Builder, Experience Builder, and Screen Flows. Components are drag-and-drop ready, capable of ingesting raw Salesforce record collections, and intelligently handle aggregation via server-side SOQL GROUP BY (preferred) or client-side JavaScript (fallback).
+A complete suite of 30 Lightning Web Components (LWC) that wrap D3.js charts for use in Salesforce App Builder, Experience Builder, and Screen Flows. Components are drag-and-drop ready, capable of ingesting raw Salesforce record collections, and intelligently handle aggregation via server-side SOQL GROUP BY (preferred) or client-side JavaScript (fallback).
 
 ## Screenshots
 
@@ -10,7 +10,7 @@ A complete suite of 20 Lightning Web Components (LWC) that wrap D3.js charts for
 
 ## Features
 
-- **20 Chart Types**: Bar, Line, Donut, Gauge, Scatter, Histogram, Treemap, Sankey, Force Graph, Choropleth, Area, Stacked Bar, Funnel, Radar, Heatmap, Box Plot, Waterfall, Bullet, Calendar Heatmap, Sparkline Grid
+- **30 Chart Types**: Bar, Line, Donut, Gauge, Scatter, Histogram, Treemap, Sankey, Force Graph, Choropleth, Area, Stacked Bar, Funnel, Radar, Heatmap, Box Plot, Waterfall, Bullet, Calendar Heatmap, Sparkline Grid, Pie, Horizontal Bar, Lollipop, Progress Bar, Diverging Bar, Waffle, Sunburst, Bubble, Chord Diagram, Gantt
 - **Drag-and-Drop Ready**: Fully configurable in Lightning App Builder
 - **Server-Side Aggregation**: GROUP BY queries run in Apex, processing 50K+ records and sending pre-bucketed results to the browser
 - **Dual Data Path**: Server-preferred when `objectApiName` is configured; client-side fallback for `recordCollection` and `soqlQuery`-only usage
@@ -19,7 +19,7 @@ A complete suite of 20 Lightning Web Components (LWC) that wrap D3.js charts for
 - **Responsive**: Uses ResizeObserver for adaptive reflow
 - **SLDS Styled**: Consistent with Salesforce Lightning Design System
 - **Theme Support**: 4 built-in palettes + custom colors via JSON config
-- **1,790 Tests**: Comprehensive Jest test coverage across 31 suites
+- **2,561 Tests**: Comprehensive Jest test coverage across 61 suites
 
 ## 📦 Components
 
@@ -52,6 +52,21 @@ A complete suite of 20 Lightning Web Components (LWC) that wrap D3.js charts for
 | `c-d3-bullet-chart`      | KPI vs target      | Actual vs target, qualitative ranges                  |
 | `c-d3-calendar-heatmap`  | Daily data grid    | Year view, day-level color intensity                  |
 | `c-d3-sparkline-grid`    | Small multiples    | Inline mini-charts, entity comparison, monthly rollup |
+
+### Phase 3
+
+| Component                   | Description          | Key Features                                         |
+| --------------------------- | -------------------- | ---------------------------------------------------- |
+| `c-d3-pie-chart`            | Part-to-whole        | Full-circle slices, legend, percentage labels        |
+| `c-d3-horizontal-bar-chart` | Ranked categories    | Y-axis bands, long-label support, drill-down         |
+| `c-d3-lollipop-chart`       | Ranked metrics       | Stem + circle, low ink, leaderboard style            |
+| `c-d3-progress-bar`         | Single KPI vs target | Linear gauge, target marker, percentage fill         |
+| `c-d3-diverging-bar-chart`  | Positive/negative    | Centered axis, semantic up/down coloring             |
+| `c-d3-waffle-chart`         | Percentage grid      | 10×10 cells, contrast-aware labels, goal progress    |
+| `c-d3-sunburst-chart`       | Radial hierarchy     | Concentric rings, two-level grouping, part-to-whole  |
+| `c-d3-bubble-chart`         | Three-variable       | X/Y position + area-scaled size, category color      |
+| `c-d3-chord-diagram`        | Relationship matrix  | Circular arcs, ribbons, bidirectional flow           |
+| `c-d3-gantt-chart`          | Project timeline     | Time axis, date-range bars, today marker, drill-down |
 
 ## 🏗️ Architecture
 
@@ -139,16 +154,16 @@ sf lightning dev app -o <your-org-alias>
 
 ### Common Properties (All Charts)
 
-| Property           | Type     | Description                                            |
-| ------------------ | -------- | ------------------------------------------------------ |
-| `recordCollection` | Object[] | Data from Flow or parent component                     |
-| `soqlQuery`        | String   | SOQL query (used if recordCollection empty)            |
-| `objectApiName`    | String   | SObject API name — enables server-side aggregation     |
-| `filterClause`     | String   | Optional WHERE clause for server aggregation           |
+| Property           | Type     | Description                                                                      |
+| ------------------ | -------- | -------------------------------------------------------------------------------- |
+| `recordCollection` | Object[] | Data from Flow or parent component                                               |
+| `soqlQuery`        | String   | SOQL query (used if recordCollection empty)                                      |
+| `objectApiName`    | String   | SObject API name — enables server-side aggregation                               |
+| `filterClause`     | String   | Optional WHERE clause for server aggregation                                     |
 | `recordLimit`      | Integer  | Max records to process (1–10,000). Leave empty for smart defaults per chart type |
-| `height`           | Integer  | Chart height in pixels                                 |
-| `theme`            | String   | Color theme (Salesforce Standard, Warm, Cool, Vibrant) |
-| `advancedConfig`   | String   | JSON for advanced options                              |
+| `height`           | Integer  | Chart height in pixels                                                           |
+| `theme`            | String   | Color theme (Salesforce Standard, Warm, Cool, Vibrant)                           |
+| `advancedConfig`   | String   | JSON for advanced options                                                        |
 
 ### D3 Bar Chart (Server Aggregation)
 
@@ -220,18 +235,18 @@ sf lightning dev app -o <your-org-alias>
 
 Each chart has a default record limit tuned to its visual capacity. Set `recordLimit` in App Builder to override.
 
-| Chart Type     | Default Limit | Why                                     |
-| -------------- | ------------- | --------------------------------------- |
-| Aggregation charts (Bar, Donut, Treemap, Funnel, Stacked Bar, Heatmap, Radar) | 2,000 | Client-side fallback path; server-side GROUP BY has no practical limit |
-| Histogram      | 10,000        | Raw values needed for binning math      |
-| Scatter        | 5,000         | SVG sampling kicks in at 500 points     |
-| Box Plot       | 5,000         | Raw values needed for quartile math     |
-| Sparkline Grid | 5,000         | Multiple small charts, raw values       |
-| Calendar Heatmap | 2,000       | Daily data points (~5.5 years)          |
-| Line, Area, Sankey | 1,000     | Visual comprehension ceiling            |
-| Force Graph    | 500           | O(n log n) simulation cost              |
-| Waterfall, Choropleth | 500    | Sequential/geographic readability       |
-| Gauge, Bullet  | 1             | Single value (no `recordLimit` exposed) |
+| Chart Type                                                                    | Default Limit | Why                                                                    |
+| ----------------------------------------------------------------------------- | ------------- | ---------------------------------------------------------------------- |
+| Aggregation charts (Bar, Donut, Treemap, Funnel, Stacked Bar, Heatmap, Radar) | 2,000         | Client-side fallback path; server-side GROUP BY has no practical limit |
+| Histogram                                                                     | 10,000        | Raw values needed for binning math                                     |
+| Scatter                                                                       | 5,000         | SVG sampling kicks in at 500 points                                    |
+| Box Plot                                                                      | 5,000         | Raw values needed for quartile math                                    |
+| Sparkline Grid                                                                | 5,000         | Multiple small charts, raw values                                      |
+| Calendar Heatmap                                                              | 2,000         | Daily data points (~5.5 years)                                         |
+| Line, Area, Sankey                                                            | 1,000         | Visual comprehension ceiling                                           |
+| Force Graph                                                                   | 500           | O(n log n) simulation cost                                             |
+| Waterfall, Choropleth                                                         | 500           | Sequential/geographic readability                                      |
+| Gauge, Bullet                                                                 | 1             | Single value (no `recordLimit` exposed)                                |
 
 ## 🎨 Themes
 
@@ -351,7 +366,7 @@ npm test -- --testPathPattern=d3BarChart
 npm test -- --coverage
 ```
 
-**Test Coverage:** 1,790 tests across 31 suites (includes server-side aggregation path tests)
+**Test Coverage:** 2,561 tests across 61 suites (includes server-side aggregation path tests)
 
 ## 📚 References
 
