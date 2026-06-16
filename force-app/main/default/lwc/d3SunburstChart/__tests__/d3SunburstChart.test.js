@@ -353,7 +353,7 @@ describe("c-d3-sunburst-chart", () => {
     });
 
     it("accepts advancedConfig JSON", async () => {
-      await createChart({ advancedConfig: '{"showBreadcrumb": false}' });
+      await createChart({ advancedConfig: '{"customColors": ["#FF5733"]}' });
       await flushPromises();
       expect(element.shadowRoot.querySelector(".chart-container")).toBeTruthy();
     });
