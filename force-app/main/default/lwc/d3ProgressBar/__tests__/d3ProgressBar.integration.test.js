@@ -147,7 +147,7 @@ describe("d3ProgressBar integration tests", () => {
       expect(textCalls).toContain("25.0%");
     });
 
-    it("clamps the percent label at 100% when value exceeds target", async () => {
+    it("renders an un-clamped percent label when value exceeds target (rect width clamps, label does not)", async () => {
       // value 300, target 200 → fraction 1.5 → real formatPercent(1.5) = '150.0%'
       await createChart({
         recordCollection: [{ Amount: 300 }],
