@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<LightningComponentBundle xmlns="http://soap.sforce.com/2006/04/metadata">
+    <apiVersion>65.0</apiVersion>
+    <isExposed>true</isExposed>
+    <masterLabel>D3 Chord Chart</masterLabel>
+    <description
+  >Interactive chord diagram powered by D3.js showing weighted flows between two categorical dimensions.</description>
+    <targets>
+        <target>lightning__AppPage</target>
+        <target>lightning__RecordPage</target>
+        <target>lightning__HomePage</target>
+    </targets>
+    <targetConfigs>
+        <targetConfig
+      targets="lightning__AppPage,lightning__RecordPage,lightning__HomePage"
+    >
+            <!-- Data Source -->
+            <property
+        name="soqlQuery"
+        type="String"
+        label="SOQL Query"
+        description="SOQL query to fetch source/target/value rows"
+        placeholder="SELECT StageName, LeadSource, Amount FROM Opportunity"
+      />
+
+            <!-- Field Mapping -->
+            <property
+        name="groupByField"
+        type="String"
+        label="Source Field"
+        default="StageName"
+        description="API name of the flow source field"
+        placeholder="StageName"
+      />
+            <property
+        name="seriesField"
+        type="String"
+        label="Target Field"
+        default="LeadSource"
+        description="API name of the flow target field"
+        placeholder="LeadSource"
+      />
+            <property
+        name="valueField"
+        type="String"
+        label="Value Field"
+        default="Amount"
+        description="API name of the numeric field to aggregate (not required for Count)"
+        placeholder="Amount"
+      />
+            <property
+        name="operation"
+        type="String"
+        label="Aggregation"
+        default="Sum"
+        datasource="Sum,Count,Average"
+        description="How to aggregate the edge values"
+      />
+
+            <!-- Appearance -->
+            <property
+        name="height"
+        type="Integer"
+        label="Height (px)"
+        default="300"
+        description="Chart height in pixels"
+        min="150"
+        max="800"
+      />
+            <property
+        name="theme"
+        type="String"
+        label="Color Theme"
+        default="Salesforce Standard"
+        datasource="Salesforce Standard,Warm,Cool,Vibrant"
+        description="Color palette for the chart"
+      />
+
+            <!-- Drill-Down -->
+            <property
+        name="objectApiName"
+        type="String"
+        label="Drill-Down Object"
+        description="Object API name for navigation on arc click"
+        placeholder="Opportunity"
+      />
+            <property
+        name="filterField"
+        type="String"
+        label="Filter Field"
+        description="Field to filter by on drill-down (defaults to Source Field)"
+      />
+            <property
+        name="recordLimit"
+        type="Integer"
+        label="Record Limit"
+        description="Maximum records to process. Leave empty for default."
+        min="1"
+        max="10000"
+      />
+
+            <!-- Advanced -->
+            <property
+        name="advancedConfig"
+        type="String"
+        label="Advanced Config (JSON)"
+        description='{"padAngle": 0.05, "customColors": ["#FF5733"]}'
+      />
+        </targetConfig>
+    </targetConfigs>
+</LightningComponentBundle>
