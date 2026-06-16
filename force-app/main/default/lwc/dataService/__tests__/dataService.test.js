@@ -10,6 +10,7 @@ import {
   computeQuartiles,
   computeRunningTotal,
   buildMatrix,
+  buildHierarchy,
   sampleData,
   MAX_RECORDS,
   CHART_LIMITS,
@@ -773,6 +774,126 @@ describe("dataService", () => {
       const pIdx = labels.indexOf("Prospecting");
       const webIdx = labels.indexOf("Web");
       expect(matrix[pIdx][webIdx]).toBe(100);
+    });
+  });
+
+  describe("buildHierarchy", () => {
+    const ROWS = [
+      { Region: "West", Stage: "Prospecting", Amount: 100 },
+      { Region: "West", Stage: "Prospecting", Amount: 50 },
+      { Region: "West", Stage: "Closed Won", Amount: 200 },
+      { Region: "East", Stage: "Prospecting", Amount: 75 },
+      { Region: "East", Stage: "Closed Won", Amount: 300 }
+    ];
+
+    it("wraps everything under a Root node", () => {
+      const tree = buildHierarchy(ROWS, ["Region"], "Amount", "Sum");
+      expect(tree.name).toBe("Root");
+      expect(Array.isArray(tree.children)).toBe(true);
+    });
+
+    it("builds a single-level hierarchy with Sum", () => {
+      const tree = buildHierarchy(ROWS, ["Region"], "Amount", "Sum");
+      expect(tree.children).toHaveLength(2);
+      const west = tree.children.find((c) => c.name === "West");
+      const east = tree.children.find((c) => c.name === "East");
+      expect(west.value).toBe(350); // 100 + 50 + 200
+      expect(east.value).toBe(375); // 75 + 300
+    });
+
+    it("builds a two-level nested hierarchy with Sum", () => {
+      const tree = buildHierarchy(ROWS, ["Region", "Stage"], "Amount", "Sum");
+      const west = tree.children.find((c) => c.name === "West");
+      expect(west.children).toHaveLength(2);
+      const westProspecting = west.children.find(
+        (c) => c.name === "Prospecting"
+      );
+      const westClosedWon = west.children.find((c) => c.name === "Closed Won");
+      expect(westProspecting.value).toBe(150); // 100 + 50
+      expect(westClosedWon.value).toBe(200);
+      // Leaf nodes carry a value, not children.
+      expect(westProspecting.children).toBeUndefined();
+    });
+
+    it("builds a three-level nested hierarchy", () => {
+      const rows = [
+        { L1: "a", L2: "x", L3: "p", v: 1 },
+        { L1: "a", L2: "x", L3: "q", v: 2 },
+        { L1: "a", L2: "y", L3: "p", v: 4 },
+        { L1: "b", L2: "x", L3: "p", v: 8 }
+      ];
+      const tree = buildHierarchy(rows, ["L1", "L2", "L3"], "v", "Sum");
+      const a = tree.children.find((c) => c.name === "a");
+      const ax = a.children.find((c) => c.name === "x");
+      const axp = ax.children.find((c) => c.name === "p");
+      const axq = ax.children.find((c) => c.name === "q");
+      expect(axp.value).toBe(1);
+      expect(axq.value).toBe(2);
+      const ay = a.children.find((c) => c.name === "y");
+      expect(ay.children.find((c) => c.name === "p").value).toBe(4);
+      const b = tree.children.find((c) => c.name === "b");
+      expect(b.children[0].children[0].value).toBe(8);
+    });
+
+    it("aggregates leaves with Count", () => {
+      const tree = buildHierarchy(ROWS, ["Region"], "Amount", "Count");
+      const west = tree.children.find((c) => c.name === "West");
+      const east = tree.children.find((c) => c.name === "East");
+      expect(west.value).toBe(3);
+      expect(east.value).toBe(2);
+    });
+
+    it("aggregates leaves with Average", () => {
+      const tree = buildHierarchy(ROWS, ["Region"], "Amount", "Average");
+      const west = tree.children.find((c) => c.name === "West");
+      expect(west.value).toBe(350 / 3); // (100 + 50 + 200) / 3
+    });
+
+    it("falls back to Count for an unknown operation", () => {
+      const tree = buildHierarchy(ROWS, ["Region"], "Amount", "Median");
+      const west = tree.children.find((c) => c.name === "West");
+      expect(west.value).toBe(3); // count, not sum
+    });
+
+    it("collapses null field values into a Null bucket", () => {
+      const rows = [
+        { Region: null, Amount: 10 },
+        { Region: null, Amount: 20 }
+      ];
+      const tree = buildHierarchy(rows, ["Region"], "Amount", "Sum");
+      const nullNode = tree.children.find((c) => c.name === "Null");
+      expect(nullNode).toBeDefined();
+      expect(nullNode.value).toBe(30);
+    });
+
+    it("coerces non-numeric values to 0 in the leaf sum", () => {
+      const rows = [
+        { Region: "A", Amount: "bad" },
+        { Region: "A", Amount: 100 }
+      ];
+      const tree = buildHierarchy(rows, ["Region"], "Amount", "Sum");
+      expect(tree.children[0].value).toBe(100); // NaN -> 0
+    });
+
+    it("returns an empty Root for null rows", () => {
+      expect(buildHierarchy(null, ["Region"], "Amount", "Sum")).toEqual({
+        name: "Root",
+        children: []
+      });
+    });
+
+    it("returns an empty Root for empty rows", () => {
+      expect(buildHierarchy([], ["Region"], "Amount", "Sum")).toEqual({
+        name: "Root",
+        children: []
+      });
+    });
+
+    it("returns an empty Root when fields list is empty", () => {
+      expect(buildHierarchy(ROWS, [], "Amount", "Sum")).toEqual({
+        name: "Root",
+        children: []
+      });
     });
   });
 });

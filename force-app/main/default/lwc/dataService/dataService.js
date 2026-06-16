@@ -455,3 +455,76 @@ export const buildMatrix = (edges, sourceKey, targetKey, valueKey) => {
 
   return { matrix, labels };
 };
+
+/**
+ * Builds a nested hierarchy tree from flat rows for the Sunburst chart,
+ * which feeds the tree to d3.hierarchy() + d3.partition().
+ * Rows are nested under each field in `fields` (level 0 = fields[0]).
+ * Leaf nodes aggregate `valueField` using OPERATIONS semantics
+ * (Sum / Count / Average; unknown operation falls back to Count).
+ * Null field values collapse to the literal "Null" bucket, matching
+ * aggregateData. Non-leaf nodes are { name, children }; leaves are
+ * { name, value }.
+ * @param {Array} rows - Flat records
+ * @param {Array} fields - Ordered field names defining the nesting levels
+ * @param {String} valueField - Numeric field aggregated at the leaves
+ * @param {String} operation - 'Sum', 'Count', or 'Average'
+ * @returns {Object} - { name: "Root", children: [...] }
+ */
+export const buildHierarchy = (rows, fields, valueField, operation) => {
+  if (!rows || rows.length === 0 || !fields || fields.length === 0) {
+    return { name: "Root", children: [] };
+  }
+
+  // Accumulate sum + count at each leaf bucket keyed by the full field path.
+  const leaves = new Map();
+  rows.forEach((row) => {
+    const path = fields.map((field) => String(row[field] ?? "Null"));
+    const key = path.join("|||");
+    if (!leaves.has(key)) {
+      leaves.set(key, { path, sum: 0, count: 0 });
+    }
+    const leaf = leaves.get(key);
+    leaf.count += 1;
+    if (valueField && row[valueField] != null) {
+      leaf.sum += Number(row[valueField]) || 0;
+    }
+  });
+
+  const resolveValue = (sum, count) => {
+    switch (operation) {
+      case OPERATIONS.SUM:
+        return sum;
+      case OPERATIONS.COUNT:
+        return count;
+      case OPERATIONS.AVERAGE:
+        return count > 0 ? sum / count : 0;
+      default:
+        return count;
+    }
+  };
+
+  // Walk each leaf path, creating intermediate { name, children } nodes
+  // on demand and attaching { name, value } at the final level.
+  const root = { name: "Root", children: [] };
+  leaves.forEach((leaf) => {
+    let node = root;
+    leaf.path.forEach((name, depth) => {
+      const isLeaf = depth === leaf.path.length - 1;
+      if (isLeaf) {
+        node.children.push({ name, value: resolveValue(leaf.sum, leaf.count) });
+        return;
+      }
+      let child = node.children.find(
+        (c) => c.name === name && Array.isArray(c.children)
+      );
+      if (!child) {
+        child = { name, children: [] };
+        node.children.push(child);
+      }
+      node = child;
+    });
+  });
+
+  return root;
+};
