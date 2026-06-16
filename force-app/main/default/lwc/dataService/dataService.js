@@ -43,7 +43,18 @@ export const CHART_LIMITS = {
   RADAR: null, // Server GROUP BY, no raw record cap
   WATERFALL: 500, // Sequential step readability
   CALENDAR_HEATMAP: 2000, // Daily data points (~5.5 years)
-  SPARKLINE_GRID: 5000 // Multiple small charts, raw values
+  SPARKLINE_GRID: 5000, // Multiple small charts, raw values
+  // Phase 3 charts
+  SUNBURST: 2000, // Raw hierarchy rows for client nest
+  CHORD: 2000, // Raw edge rows for matrix pivot
+  GANTT: 2000, // Raw date-range rows
+  BUBBLE: 5000, // Raw xy rows; SVG_ELEMENT_CAP handles rendering separately
+  DIVERGING_BAR: null, // Server GROUP BY (signed), no raw record cap
+  WAFFLE: null, // Server GROUP BY Count, no raw record cap
+  HORIZONTAL_BAR: null, // Server GROUP BY, no raw record cap
+  PIE: null, // Server GROUP BY, no raw record cap
+  PROGRESS_BAR: null, // Server GROUP BY (single row), no raw record cap
+  LOLLIPOP: null // Server GROUP BY, no raw record cap
 };
 
 /**

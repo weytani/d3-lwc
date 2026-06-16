@@ -274,7 +274,7 @@ describe("dataService", () => {
   describe("CHART_LIMITS", () => {
     it("defines limits for all chart types", () => {
       expect(CHART_LIMITS).toBeDefined();
-      expect(Object.keys(CHART_LIMITS)).toHaveLength(20);
+      expect(Object.keys(CHART_LIMITS)).toHaveLength(30);
     });
 
     it("has null limits for aggregation charts (server GROUP BY)", () => {
@@ -324,6 +324,39 @@ describe("dataService", () => {
     });
     it("exports SPARKLINE_GRID limit as 5000", () => {
       expect(CHART_LIMITS.SPARKLINE_GRID).toBe(5000);
+    });
+  });
+
+  describe("CHART_LIMITS for Phase 3 charts", () => {
+    it("exports SUNBURST limit as 2000 (raw hierarchy rows)", () => {
+      expect(CHART_LIMITS.SUNBURST).toBe(2000);
+    });
+    it("exports CHORD limit as 2000 (raw edge rows)", () => {
+      expect(CHART_LIMITS.CHORD).toBe(2000);
+    });
+    it("exports GANTT limit as 2000 (raw date-range rows)", () => {
+      expect(CHART_LIMITS.GANTT).toBe(2000);
+    });
+    it("exports BUBBLE limit as 5000 (raw xy rows, SVG cap separate)", () => {
+      expect(CHART_LIMITS.BUBBLE).toBe(5000);
+    });
+    it("exports DIVERGING_BAR limit as null (server GROUP BY)", () => {
+      expect(CHART_LIMITS.DIVERGING_BAR).toBeNull();
+    });
+    it("exports WAFFLE limit as null (server GROUP BY Count)", () => {
+      expect(CHART_LIMITS.WAFFLE).toBeNull();
+    });
+    it("exports HORIZONTAL_BAR limit as null (server GROUP BY)", () => {
+      expect(CHART_LIMITS.HORIZONTAL_BAR).toBeNull();
+    });
+    it("exports PIE limit as null (server GROUP BY)", () => {
+      expect(CHART_LIMITS.PIE).toBeNull();
+    });
+    it("exports PROGRESS_BAR limit as null (server GROUP BY, single row)", () => {
+      expect(CHART_LIMITS.PROGRESS_BAR).toBeNull();
+    });
+    it("exports LOLLIPOP limit as null (server GROUP BY)", () => {
+      expect(CHART_LIMITS.LOLLIPOP).toBeNull();
     });
   });
 
