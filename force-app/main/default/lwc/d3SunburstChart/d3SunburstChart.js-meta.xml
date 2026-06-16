@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<LightningComponentBundle xmlns="http://soap.sforce.com/2006/04/metadata">
+    <apiVersion>65.0</apiVersion>
+    <isExposed>true</isExposed>
+    <masterLabel>D3 Sunburst Chart</masterLabel>
+    <description
+  >Radial hierarchical visualization using concentric rings (d3.partition + d3.arc). Supports flat auto-nesting, two-level server hierarchy, and pre-built hierarchy data.</description>
+    <targets>
+        <target>lightning__AppPage</target>
+        <target>lightning__RecordPage</target>
+        <target>lightning__HomePage</target>
+    </targets>
+    <targetConfigs>
+        <targetConfig
+      targets="lightning__AppPage,lightning__RecordPage,lightning__HomePage"
+    >
+            <property
+        name="soqlQuery"
+        type="String"
+        label="SOQL Query"
+        description="SOQL query to fetch data for the sunburst"
+        placeholder="SELECT StageName, Type, Amount FROM Opportunity WHERE Amount > 0"
+      />
+            <property
+        name="groupByField"
+        type="String"
+        label="Group By Field"
+        description="API name of the field for the inner ring (primary hierarchy level)"
+        placeholder="StageName"
+      />
+            <property
+        name="secondaryGroupByField"
+        type="String"
+        label="Secondary Group Field"
+        description="Optional second field for an outer ring (creates a third level)"
+        placeholder="Type"
+      />
+            <property
+        name="valueField"
+        type="String"
+        label="Value Field"
+        description="API name of the numeric field to aggregate (not needed for Count)"
+        placeholder="Amount"
+      />
+            <property
+        name="operation"
+        type="String"
+        label="Aggregation"
+        default="Sum"
+        datasource="Sum,Count,Average"
+        description="How to aggregate values within each group"
+      />
+            <property
+        name="height"
+        type="Integer"
+        label="Height (px)"
+        default="400"
+        description="Chart height in pixels"
+        min="200"
+        max="1000"
+      />
+            <property
+        name="theme"
+        type="String"
+        label="Color Theme"
+        default="Salesforce Standard"
+        datasource="Salesforce Standard,Warm,Cool,Vibrant"
+        description="Color palette for the sunburst"
+      />
+            <property
+        name="showLabels"
+        type="Boolean"
+        label="Show Labels"
+        default="true"
+        description="Display labels on arcs"
+      />
+            <property
+        name="objectApiName"
+        type="String"
+        label="Object API Name"
+        description="Object API name for navigation on click"
+        placeholder="Opportunity"
+      />
+            <property
+        name="filterField"
+        type="String"
+        label="Filter Field"
+        description="Field to use for filtering when navigating (defaults to groupByField)"
+      />
+            <property
+        name="filterClause"
+        type="String"
+        label="Filter Clause"
+        description="Optional SOQL WHERE clause for server-side aggregation (without WHERE keyword)"
+      />
+            <property
+        name="recordLimit"
+        type="Integer"
+        label="Record Limit"
+        description="Maximum records to process. Leave empty for default."
+        min="1"
+        max="10000"
+      />
+            <property
+        name="advancedConfig"
+        type="String"
+        label="Advanced Config (JSON)"
+        description='{"customColors": ["#FF5733", "#33FF57"]}'
+      />
+        </targetConfig>
+    </targetConfigs>
+</LightningComponentBundle>
