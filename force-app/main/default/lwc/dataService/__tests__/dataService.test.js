@@ -9,6 +9,7 @@ import {
   aggregateSeriesData,
   computeQuartiles,
   computeRunningTotal,
+  buildMatrix,
   sampleData,
   MAX_RECORDS,
   CHART_LIMITS,
@@ -679,6 +680,99 @@ describe("dataService", () => {
       const result = computeRunningTotal(data);
       expect(result[0].cumulative).toBe(-10);
       expect(result[1].cumulative).toBe(-30);
+    });
+  });
+
+  describe("buildMatrix", () => {
+    it("builds a square matrix from a directed edge list", () => {
+      const edges = [
+        { src: "A", tgt: "B", val: 5 },
+        { src: "A", tgt: "C", val: 3 },
+        { src: "B", tgt: "C", val: 2 }
+      ];
+      const { matrix, labels } = buildMatrix(edges, "src", "tgt", "val");
+      // Union in first-seen order: A (src e0), B (tgt e0), C (tgt e1)
+      expect(labels).toEqual(["A", "B", "C"]);
+      expect(matrix).toEqual([
+        [0, 5, 3],
+        [0, 0, 2],
+        [0, 0, 0]
+      ]);
+    });
+
+    it("sums duplicate source->target edges into one cell", () => {
+      const edges = [
+        { s: "X", t: "Y", v: 10 },
+        { s: "X", t: "Y", v: 4 }
+      ];
+      const { matrix, labels } = buildMatrix(edges, "s", "t", "v");
+      expect(labels).toEqual(["X", "Y"]);
+      expect(matrix[0][1]).toBe(14);
+    });
+
+    it("collects the union of source and target labels", () => {
+      const edges = [
+        { s: "Prospecting", t: "Web", v: 1 },
+        { s: "Closed Won", t: "Phone", v: 2 }
+      ];
+      const { labels } = buildMatrix(edges, "s", "t", "v");
+      expect(labels).toEqual(["Prospecting", "Web", "Closed Won", "Phone"]);
+      expect(labels).toHaveLength(4);
+    });
+
+    it("produces an NxN matrix where N equals label count", () => {
+      const edges = [
+        { s: "A", t: "B", v: 1 },
+        { s: "C", t: "D", v: 1 }
+      ];
+      const { matrix, labels } = buildMatrix(edges, "s", "t", "v");
+      expect(labels).toHaveLength(4);
+      expect(matrix).toHaveLength(4);
+      matrix.forEach((row) => expect(row).toHaveLength(4));
+    });
+
+    it("handles self-referencing edges on the diagonal", () => {
+      const edges = [{ s: "A", t: "A", v: 7 }];
+      const { matrix, labels } = buildMatrix(edges, "s", "t", "v");
+      expect(labels).toEqual(["A"]);
+      expect(matrix).toEqual([[7]]);
+    });
+
+    it("coerces non-numeric and null values to 0", () => {
+      const edges = [
+        { s: "A", t: "B", v: "oops" },
+        { s: "A", t: "B", v: null },
+        { s: "A", t: "B", v: 5 }
+      ];
+      const { matrix } = buildMatrix(edges, "s", "t", "v");
+      expect(matrix[0][1]).toBe(5);
+    });
+
+    it("returns empty matrix and labels for empty edge list", () => {
+      expect(buildMatrix([], "s", "t", "v")).toEqual({
+        matrix: [],
+        labels: []
+      });
+    });
+
+    it("returns empty matrix and labels for null edges", () => {
+      expect(buildMatrix(null, "s", "t", "v")).toEqual({
+        matrix: [],
+        labels: []
+      });
+    });
+
+    it("consumes a getMultiGroupData edge list shape", () => {
+      const edges = [
+        { label: "Prospecting", series: "Web", value: 100 },
+        { label: "Prospecting", series: "Phone", value: 50 },
+        { label: "Closed Won", series: "Web", value: 200 }
+      ];
+      const { matrix, labels } = buildMatrix(edges, "label", "series", "value");
+      expect(labels).toEqual(["Prospecting", "Web", "Phone", "Closed Won"]);
+      const pIdx = labels.indexOf("Prospecting");
+      const webIdx = labels.indexOf("Web");
+      expect(matrix[pIdx][webIdx]).toBe(100);
     });
   });
 });

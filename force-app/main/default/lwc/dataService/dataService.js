@@ -409,3 +409,49 @@ export const computeRunningTotal = (data) => {
     };
   });
 };
+
+/**
+ * Builds a square adjacency matrix from a directed edge list.
+ * Used by the Chord diagram, which feeds the matrix to d3.chord().
+ * Labels are the union of source + target values in first-seen order
+ * (source of an edge before its target). Duplicate source->target
+ * edges are summed into a single cell.
+ * @param {Array} edges - Edge records, e.g. getMultiGroupData output
+ * @param {String} sourceKey - Field holding the source label
+ * @param {String} targetKey - Field holding the target label
+ * @param {String} valueKey - Field holding the numeric edge weight
+ * @returns {Object} - { matrix: number[][], labels: string[] }
+ */
+export const buildMatrix = (edges, sourceKey, targetKey, valueKey) => {
+  if (!edges || edges.length === 0) {
+    return { matrix: [], labels: [] };
+  }
+
+  // Collect union of labels in first-seen order (source before target).
+  const labels = [];
+  const indexOf = new Map();
+  const register = (value) => {
+    const label = String(value ?? "Null");
+    if (!indexOf.has(label)) {
+      indexOf.set(label, labels.length);
+      labels.push(label);
+    }
+    return indexOf.get(label);
+  };
+
+  edges.forEach((edge) => {
+    register(edge[sourceKey]);
+    register(edge[targetKey]);
+  });
+
+  const size = labels.length;
+  const matrix = Array.from({ length: size }, () => new Array(size).fill(0));
+
+  edges.forEach((edge) => {
+    const sourceIndex = indexOf.get(String(edge[sourceKey] ?? "Null"));
+    const targetIndex = indexOf.get(String(edge[targetKey] ?? "Null"));
+    matrix[sourceIndex][targetIndex] += Number(edge[valueKey]) || 0;
+  });
+
+  return { matrix, labels };
+};
