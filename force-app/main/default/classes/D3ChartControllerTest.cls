@@ -59,6 +59,35 @@ private class D3ChartControllerTest {
     );
 
     insert accounts;
+
+    // Opportunities for getDateRangeData / getXYData tests.
+    // Known Amount, StageName, and CloseDate so assertions are deterministic.
+    List<Opportunity> opps = new List<Opportunity>();
+    opps.add(
+      new Opportunity(
+        Name = 'Opp One',
+        StageName = 'Prospecting',
+        Amount = 1000,
+        CloseDate = Date.newInstance(2026, 3, 31)
+      )
+    );
+    opps.add(
+      new Opportunity(
+        Name = 'Opp Two',
+        StageName = 'Negotiation',
+        Amount = 2000,
+        CloseDate = Date.newInstance(2026, 6, 30)
+      )
+    );
+    opps.add(
+      new Opportunity(
+        Name = 'Opp Three',
+        StageName = 'Closed Won',
+        Amount = 3000,
+        CloseDate = Date.newInstance(2026, 9, 30)
+      )
+    );
+    insert opps;
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -947,7 +976,11 @@ private class D3ChartControllerTest {
       'Sum',
       'Amount > 0'
     );
-    System.assertNotEquals(null, results, 'Filtered results should not be null');
+    System.assertNotEquals(
+      null,
+      results,
+      'Filtered results should not be null'
+    );
     Test.stopTest();
   }
 
@@ -1034,6 +1067,192 @@ private class D3ChartControllerTest {
       System.assert(
         e.getMessage().contains('forbidden keyword'),
         'Error should mention forbidden keyword'
+      );
+    }
+    Test.stopTest();
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // getDateRangeData TESTS
+  // ═══════════════════════════════════════════════════════════════
+
+  @isTest
+  static void testGetDateRangeDataReturnsRows() {
+    Test.startTest();
+    List<Map<String, Object>> results = D3ChartController.getDateRangeData(
+      'Opportunity',
+      'Name',
+      'CreatedDate',
+      'CloseDate',
+      null
+    );
+    Test.stopTest();
+
+    System.assertEquals(
+      3,
+      results.size(),
+      'Should return one row per Opportunity'
+    );
+    System.assert(
+      results[0].containsKey('label'),
+      'Row should contain label key'
+    );
+    System.assert(
+      results[0].containsKey('start'),
+      'Row should contain start key'
+    );
+    System.assert(results[0].containsKey('end'), 'Row should contain end key');
+  }
+
+  @isTest
+  static void testGetDateRangeDataValues() {
+    Test.startTest();
+    List<Map<String, Object>> results = D3ChartController.getDateRangeData(
+      'Opportunity',
+      'Name',
+      'CreatedDate',
+      'CloseDate',
+      'Name = \'Opp One\''
+    );
+    Test.stopTest();
+
+    System.assertEquals(1, results.size(), 'Filter should isolate one row');
+    System.assertEquals(
+      'Opp One',
+      (String) results[0].get('label'),
+      'Label should be the Name field value'
+    );
+    System.assertEquals(
+      Date.newInstance(2026, 3, 31),
+      (Date) results[0].get('end'),
+      'End should be the CloseDate value'
+    );
+    System.assertNotEquals(
+      null,
+      results[0].get('start'),
+      'Start (CreatedDate) should be populated'
+    );
+  }
+
+  @isTest
+  static void testGetDateRangeDataWithFilter() {
+    Test.startTest();
+    List<Map<String, Object>> results = D3ChartController.getDateRangeData(
+      'Opportunity',
+      'Name',
+      'CreatedDate',
+      'CloseDate',
+      'Amount > 1500'
+    );
+    Test.stopTest();
+
+    System.assertEquals(
+      2,
+      results.size(),
+      'Filter Amount > 1500 should return Opp Two and Opp Three'
+    );
+  }
+
+  @isTest
+  static void testGetDateRangeDataInvalidObject() {
+    Test.startTest();
+    try {
+      D3ChartController.getDateRangeData(
+        'TotallyFakeObject__xyz',
+        'Name',
+        'CreatedDate',
+        'CloseDate',
+        null
+      );
+      System.assert(false, 'Expected exception for invalid object');
+    } catch (AuraHandledException e) {
+      System.assert(
+        e.getMessage().contains('Invalid object'),
+        'Error should mention invalid object'
+      );
+    }
+    Test.stopTest();
+  }
+
+  @isTest
+  static void testGetDateRangeDataInvalidLabelField() {
+    Test.startTest();
+    try {
+      D3ChartController.getDateRangeData(
+        'Opportunity',
+        'NonExistentField__xyz',
+        'CreatedDate',
+        'CloseDate',
+        null
+      );
+      System.assert(false, 'Expected exception for invalid label field');
+    } catch (AuraHandledException e) {
+      System.assert(
+        e.getMessage().contains('Invalid labelField'),
+        'Error should mention invalid labelField'
+      );
+    }
+    Test.stopTest();
+  }
+
+  @isTest
+  static void testGetDateRangeDataInvalidStartField() {
+    Test.startTest();
+    try {
+      D3ChartController.getDateRangeData(
+        'Opportunity',
+        'Name',
+        'FakeStart__xyz',
+        'CloseDate',
+        null
+      );
+      System.assert(false, 'Expected exception for invalid start field');
+    } catch (AuraHandledException e) {
+      System.assert(
+        e.getMessage().contains('Invalid startField'),
+        'Error should mention invalid startField'
+      );
+    }
+    Test.stopTest();
+  }
+
+  @isTest
+  static void testGetDateRangeDataInvalidEndField() {
+    Test.startTest();
+    try {
+      D3ChartController.getDateRangeData(
+        'Opportunity',
+        'Name',
+        'CreatedDate',
+        'FakeEnd__xyz',
+        null
+      );
+      System.assert(false, 'Expected exception for invalid end field');
+    } catch (AuraHandledException e) {
+      System.assert(
+        e.getMessage().contains('Invalid endField'),
+        'Error should mention invalid endField'
+      );
+    }
+    Test.stopTest();
+  }
+
+  @isTest
+  static void testGetDateRangeDataInjectionPrevention() {
+    Test.startTest();
+    try {
+      D3ChartController.getDateRangeData(
+        'Opportunity',
+        'Name',
+        'CreatedDate',
+        'CloseDate',
+        'Amount > 0; DELETE FROM Opportunity'
+      );
+      System.assert(false, 'Expected exception for injection attempt');
+    } catch (AuraHandledException e) {
+      System.assert(
+        e.getMessage().contains('forbidden keyword'),
+        'Error should mention forbidden keyword: ' + e.getMessage()
       );
     }
     Test.stopTest();

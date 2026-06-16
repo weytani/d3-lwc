@@ -12,6 +12,12 @@ public with sharing class D3ChartController {
   private static final Integer MAX_RECORDS = 10000;
 
   /**
+   * Maximum number of raw (un-aggregated) rows returned by the typed
+   * date-range and XY endpoints, bounding payload size for the browser.
+   */
+  private static final Integer MAX_RAW_ROWS = 2000;
+
+  /**
    * Executes a SOQL query string and returns results.
    * Enforces field-level and record-level security.
    *
@@ -313,6 +319,119 @@ public with sharing class D3ChartController {
       throw buildException('Multi-group query failed: ' + e.getMessage());
     } catch (Exception e) {
       throw buildException('Multi-group aggregation failed: ' + e.getMessage());
+    }
+  }
+
+  /**
+   * Returns raw date-range rows for a Gantt chart: one row per record with
+   * a display label, a start date, and an end date. Validates the object and
+   * all three fields via Schema describe, sanitizes the optional filter clause
+   * against injection, and enforces field-level security on the returned rows.
+   *
+   * @param objectName   - API name of the SObject to query
+   * @param labelField   - Field used as the row label (task name)
+   * @param startField   - Date/Datetime field marking the bar start
+   * @param endField     - Date/Datetime field marking the bar end
+   * @param filterClause - Optional WHERE clause (without the WHERE keyword)
+   * @return List of maps with 'label', 'start', and 'end' keys (max 2000 rows)
+   * @throws AuraHandledException for invalid inputs
+   */
+  @AuraEnabled(cacheable=true)
+  public static List<Map<String, Object>> getDateRangeData(
+    String objectName,
+    String labelField,
+    String startField,
+    String endField,
+    String filterClause
+  ) {
+    // Validate object exists
+    if (
+      String.isBlank(objectName) ||
+      !Schema.getGlobalDescribe().containsKey(objectName)
+    ) {
+      throw buildException('Invalid object: ' + objectName);
+    }
+
+    Schema.DescribeSObjectResult objDescribe = Schema.getGlobalDescribe()
+      .get(objectName)
+      .getDescribe();
+    Map<String, Schema.SObjectField> fieldMap = objDescribe.fields.getMap();
+
+    // Validate fields exist
+    if (String.isBlank(labelField) || !fieldMap.containsKey(labelField)) {
+      throw buildException('Invalid labelField: ' + labelField);
+    }
+    if (String.isBlank(startField) || !fieldMap.containsKey(startField)) {
+      throw buildException('Invalid startField: ' + startField);
+    }
+    if (String.isBlank(endField) || !fieldMap.containsKey(endField)) {
+      throw buildException('Invalid endField: ' + endField);
+    }
+
+    // Sanitize filter clause
+    String sanitizedFilter = '';
+    if (String.isNotBlank(filterClause)) {
+      sanitizedFilter = filterClause.replaceAll('[;]', '');
+      String upperFilter = sanitizedFilter.toUpperCase();
+      List<String> blockedKeywords = new List<String>{
+        'INSERT',
+        'UPDATE',
+        'DELETE',
+        'UPSERT',
+        'MERGE'
+      };
+      for (String keyword : blockedKeywords) {
+        if (upperFilter.contains(keyword)) {
+          throw buildException(
+            'Filter clause contains forbidden keyword: ' + keyword
+          );
+        }
+      }
+    }
+
+    String escapedLabel = String.escapeSingleQuotes(labelField);
+    String escapedStart = String.escapeSingleQuotes(startField);
+    String escapedEnd = String.escapeSingleQuotes(endField);
+    String query =
+      'SELECT ' +
+      escapedLabel +
+      ', ' +
+      escapedStart +
+      ', ' +
+      escapedEnd +
+      ' FROM ' +
+      String.escapeSingleQuotes(objectName);
+
+    if (String.isNotBlank(sanitizedFilter)) {
+      query += ' WHERE ' + sanitizedFilter;
+    }
+
+    query += ' LIMIT ' + MAX_RAW_ROWS;
+
+    try {
+      List<SObject> records = Database.query(query);
+
+      // Enforce field-level security on raw rows
+      SObjectAccessDecision decision = Security.stripInaccessible(
+        AccessType.READABLE,
+        records
+      );
+      records = decision.getRecords();
+
+      List<Map<String, Object>> output = new List<Map<String, Object>>();
+      for (SObject rec : records) {
+        Map<String, Object> row = new Map<String, Object>();
+        row.put('label', rec.get(labelField));
+        row.put('start', rec.get(startField));
+        row.put('end', rec.get(endField));
+        output.add(row);
+      }
+
+      return output;
+    } catch (QueryException e) {
+      throw buildException('Date range query failed: ' + e.getMessage());
+    } catch (Exception e) {
+      throw buildException('Date range retrieval failed: ' + e.getMessage());
     }
   }
 
