@@ -17,6 +17,12 @@ module.exports = {
     "^@salesforce/apex/D3ChartController.getStatistics$":
       "<rootDir>/__mocks__/@salesforce/apex/D3ChartController.getStatistics.js",
     "^@salesforce/apex/D3ChartController.getCorrelation$":
-      "<rootDir>/__mocks__/@salesforce/apex/D3ChartController.getCorrelation.js"
+      "<rootDir>/__mocks__/@salesforce/apex/D3ChartController.getCorrelation.js",
+    "^@salesforce/apex/D3ChartController.getMultiGroupData$":
+      "<rootDir>/__mocks__/@salesforce/apex/D3ChartController.getMultiGroupData.js",
+    "^@salesforce/apex/D3ChartController.getDateRangeData$":
+      "<rootDir>/__mocks__/@salesforce/apex/D3ChartController.getDateRangeData.js",
+    "^@salesforce/apex/D3ChartController.getXYData$":
+      "<rootDir>/__mocks__/@salesforce/apex/D3ChartController.getXYData.js"
   }
 };
