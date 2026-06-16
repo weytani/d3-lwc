@@ -423,3 +423,49 @@ export const parseDate = (value) => {
 
   return null;
 };
+
+/**
+ * Computes the [min, max] Date extent across rows for a Gantt-style
+ * time domain. The minimum is taken from parsed startField values and
+ * the maximum from parsed endField values; unparseable values are
+ * skipped per-field (a bad start does not discard a good end).
+ * If only one pool has parseable dates, the missing bound falls back to
+ * that pool so the result is always [min, max] with min <= max.
+ * @param {Array} rows - Array of row objects
+ * @param {String} startField - Field name holding the start value
+ * @param {String} endField - Field name holding the end value
+ * @returns {Array|null} - [minDate, maxDate], or null when nothing parses
+ */
+export const computeDateExtent = (rows, startField, endField) => {
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return null;
+  }
+
+  const starts = [];
+  const ends = [];
+
+  rows.forEach((row) => {
+    const start = parseDate(row[startField]);
+    if (start) {
+      starts.push(start.getTime());
+    }
+    const end = parseDate(row[endField]);
+    if (end) {
+      ends.push(end.getTime());
+    }
+  });
+
+  if (starts.length === 0 && ends.length === 0) {
+    return null;
+  }
+
+  // Fall back to the other pool when one side has no parseable dates,
+  // guaranteeing a [min, max] pair with min <= max.
+  const minPool = starts.length > 0 ? starts : ends;
+  const maxPool = ends.length > 0 ? ends : starts;
+
+  const minTime = Math.min(...minPool);
+  const maxTime = Math.max(...maxPool);
+
+  return [new Date(minTime), new Date(maxTime)];
+};

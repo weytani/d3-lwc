@@ -11,7 +11,8 @@ import {
   createLayoutRetry,
   getContrastColor,
   buildCalendarGrid,
-  parseDate
+  parseDate,
+  computeDateExtent
 } from "c/chartUtils";
 
 describe("chartUtils", () => {
@@ -670,6 +671,92 @@ describe("chartUtils", () => {
       expect(parseDate(true)).toBeNull();
       expect(parseDate({})).toBeNull();
       expect(parseDate([])).toBeNull();
+    });
+  });
+
+  describe("computeDateExtent", () => {
+    it("returns [minStart, maxEnd] across all rows", () => {
+      const rows = [
+        { start: "2026-01-10", end: "2026-02-20" },
+        { start: "2026-03-01", end: "2026-04-15" },
+        { start: "2026-02-05", end: "2026-03-10" }
+      ];
+      const [min, max] = computeDateExtent(rows, "start", "end");
+      expect(min.getTime()).toBe(new Date("2026-01-10").getTime());
+      expect(max.getTime()).toBe(new Date("2026-04-15").getTime());
+    });
+
+    it("parses epoch-number fields", () => {
+      const a = Date.UTC(2026, 0, 1);
+      const b = Date.UTC(2026, 5, 30);
+      const rows = [{ s: a, e: b }];
+      const [min, max] = computeDateExtent(rows, "s", "e");
+      expect(min.getTime()).toBe(a);
+      expect(max.getTime()).toBe(b);
+    });
+
+    it("skips rows whose start is unparseable but keeps their end", () => {
+      const rows = [
+        { start: "garbage", end: "2026-05-01" },
+        { start: "2026-02-01", end: "2026-03-01" }
+      ];
+      const [min, max] = computeDateExtent(rows, "start", "end");
+      // only the second row's start counts toward min
+      expect(min.getTime()).toBe(new Date("2026-02-01").getTime());
+      // both ends count; the first row's end is the later one
+      expect(max.getTime()).toBe(new Date("2026-05-01").getTime());
+    });
+
+    it("keeps a row's start when its end is missing", () => {
+      const rows = [
+        { start: "2026-01-15", end: null },
+        { start: "2026-06-01", end: "2026-07-01" }
+      ];
+      const [min, max] = computeDateExtent(rows, "start", "end");
+      expect(min.getTime()).toBe(new Date("2026-01-15").getTime());
+      expect(max.getTime()).toBe(new Date("2026-07-01").getTime());
+    });
+
+    it("falls back to the start pool for max when no end parses", () => {
+      const rows = [
+        { start: "2026-01-01", end: "x" },
+        { start: "2026-04-01", end: "" }
+      ];
+      const [min, max] = computeDateExtent(rows, "start", "end");
+      expect(min.getTime()).toBe(new Date("2026-01-01").getTime());
+      // no end parses, so max falls back to the latest start
+      expect(max.getTime()).toBe(new Date("2026-04-01").getTime());
+      expect(min.getTime()).toBeLessThanOrEqual(max.getTime());
+    });
+
+    it("falls back to the end pool for min when no start parses", () => {
+      const rows = [
+        { start: "x", end: "2026-08-01" },
+        { start: "", end: "2026-09-01" }
+      ];
+      const [min, max] = computeDateExtent(rows, "start", "end");
+      // no start parses, so min falls back to the earliest end
+      expect(min.getTime()).toBe(new Date("2026-08-01").getTime());
+      expect(max.getTime()).toBe(new Date("2026-09-01").getTime());
+      expect(min.getTime()).toBeLessThanOrEqual(max.getTime());
+    });
+
+    it("returns null for an empty array", () => {
+      expect(computeDateExtent([], "start", "end")).toBeNull();
+    });
+
+    it("returns null when no field parses on any row", () => {
+      const rows = [
+        { start: "nope", end: "also nope" },
+        { start: null, end: undefined }
+      ];
+      expect(computeDateExtent(rows, "start", "end")).toBeNull();
+    });
+
+    it("returns null for non-array input", () => {
+      expect(computeDateExtent(null, "start", "end")).toBeNull();
+      expect(computeDateExtent(undefined, "start", "end")).toBeNull();
+      expect(computeDateExtent({}, "start", "end")).toBeNull();
     });
   });
 });
