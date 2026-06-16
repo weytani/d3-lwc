@@ -1,0 +1,488 @@
+/**
+ * ABOUTME: D3 Horizontal Bar Chart Lightning Web Component.
+ * ABOUTME: Displays aggregated data as horizontal bars (categories on Y, values on X) with drill-down support.
+ */
+import { LightningElement, api, track } from "lwc";
+import { loadD3 } from "c/d3Lib";
+import {
+  prepareData,
+  aggregateData,
+  OPERATIONS,
+  MAX_RECORDS
+} from "c/dataService";
+import { getColors, DEFAULT_THEME } from "c/themeService";
+import {
+  formatNumber,
+  truncateLabel,
+  createTooltip,
+  createResizeHandler,
+  buildTooltipContent,
+  createLayoutRetry
+} from "c/chartUtils";
+import { NavigationMixin } from "lightning/navigation";
+import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
+import getAggregatedData from "@salesforce/apex/D3ChartController.getAggregatedData";
+
+export default class D3HorizontalBarChart extends NavigationMixin(
+  LightningElement
+) {
+  // ═══════════════════════════════════════════════════════════════
+  // PUBLIC API PROPERTIES
+  // ═══════════════════════════════════════════════════════════════
+
+  /** Data collection from Flow or parent component */
+  @api recordCollection = [];
+
+  /** SOQL query string (used if recordCollection is empty) */
+  @api soqlQuery = "SELECT StageName, Amount FROM Opportunity";
+
+  /** Field to group by (category axis — rendered on Y) */
+  @api groupByField = "StageName";
+
+  /** Field to aggregate (value axis — rendered on X) */
+  @api valueField = "Amount";
+
+  /** Aggregation operation: Sum, Count, Average */
+  @api operation = OPERATIONS.SUM;
+
+  /** Chart height in pixels */
+  @api height = 300;
+
+  /** Color theme */
+  @api theme = DEFAULT_THEME;
+
+  /** Advanced configuration JSON */
+  @api advancedConfig = "{}";
+
+  /** Maximum records to process (overrides default limit) */
+  @api recordLimit;
+
+  /** Object API name for drill-down navigation */
+  @api objectApiName = "";
+
+  /** Filter field for drill-down (usually same as groupByField) */
+  @api filterField = "";
+
+  /** Optional WHERE clause fragment for server-side aggregation */
+  @api filterClause = "";
+
+  // ═══════════════════════════════════════════════════════════════
+  // TRACKED STATE
+  // ═══════════════════════════════════════════════════════════════
+
+  @track isLoading = true;
+  @track error = null;
+  @track chartData = [];
+
+  // ═══════════════════════════════════════════════════════════════
+  // PRIVATE PROPERTIES
+  // ═══════════════════════════════════════════════════════════════
+
+  d3 = null;
+  svg = null;
+  tooltip = null;
+  resizeHandler = null;
+  chartRendered = false;
+  _layoutRetry = null;
+  _config = {};
+  _configParsed = false;
+
+  // ═══════════════════════════════════════════════════════════════
+  // GETTERS
+  // ═══════════════════════════════════════════════════════════════
+
+  get containerStyle() {
+    return `height: ${this.height}px;`;
+  }
+
+  get hasError() {
+    return !!this.error;
+  }
+
+  get hasData() {
+    return this.chartData && this.chartData.length > 0;
+  }
+
+  get showChart() {
+    return !this.isLoading && !this.hasError && this.hasData;
+  }
+
+  get config() {
+    if (!this._configParsed) {
+      try {
+        this._config = JSON.parse(this.advancedConfig || "{}");
+      } catch {
+        this._config = {};
+      }
+      this._configParsed = true;
+    }
+    return this._config;
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // LIFECYCLE HOOKS
+  // ═══════════════════════════════════════════════════════════════
+
+  async connectedCallback() {
+    try {
+      this.d3 = await loadD3(this);
+      await this.loadData();
+    } catch (e) {
+      this.error = e.message || "Failed to initialize chart";
+      console.error("D3HorizontalBarChart initialization error:", e);
+    } finally {
+      this.isLoading = false;
+    }
+  }
+
+  renderedCallback() {
+    if (this.showChart && !this.chartRendered) {
+      this.chartRendered = this.initializeChart();
+      if (!this.chartRendered && !this._layoutRetry) {
+        const container = this.template.querySelector(".chart-container");
+        if (container) {
+          this._layoutRetry = createLayoutRetry(container, () => {
+            this._layoutRetry = null;
+            if (!this.chartRendered) {
+              this.chartRendered = this.initializeChart();
+            }
+          });
+        }
+      }
+    }
+  }
+
+  disconnectedCallback() {
+    if (this._layoutRetry) {
+      this._layoutRetry.cancel();
+      this._layoutRetry = null;
+    }
+    this.cleanup();
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // DATA LOADING
+  // ═══════════════════════════════════════════════════════════════
+
+  async loadData() {
+    // Priority 1: Use recordCollection if provided (client-side aggregation)
+    if (this.recordCollection && this.recordCollection.length > 0) {
+      this.chartData = this._aggregateRawData([...this.recordCollection]);
+      return;
+    }
+
+    // Priority 2: Server-side aggregation when all required fields are set
+    if (
+      this.objectApiName &&
+      this.groupByField &&
+      this.valueField &&
+      this.operation
+    ) {
+      try {
+        const result = await getAggregatedData({
+          objectName: this.objectApiName,
+          groupByField: this.groupByField,
+          valueField: this.valueField,
+          operation: this.operation,
+          filterClause: this.filterClause || null
+        });
+        this.chartData = result;
+      } catch (e) {
+        throw new Error(`Aggregation Error: ${e.body?.message || e.message}`);
+      }
+
+      if (!this.chartData || this.chartData.length === 0) {
+        throw new Error("No data after aggregation");
+      }
+      return;
+    }
+
+    // Priority 3: Fall back to SOQL query with client-side aggregation
+    if (this.soqlQuery) {
+      let rawData = [];
+      try {
+        rawData = await executeQuery({ queryString: this.soqlQuery });
+      } catch (e) {
+        throw new Error(`SOQL Error: ${e.body?.message || e.message}`);
+      }
+      this.chartData = this._aggregateRawData(rawData);
+      return;
+    }
+
+    throw new Error(
+      "No data source provided. Set recordCollection or soqlQuery."
+    );
+  }
+
+  /**
+   * Validates, truncates, and aggregates raw record data client-side.
+   * Used by both recordCollection and soqlQuery paths.
+   */
+  _aggregateRawData(rawData) {
+    const requiredFields = [this.groupByField];
+    if (this.operation !== OPERATIONS.COUNT) {
+      requiredFields.push(this.valueField);
+    }
+
+    const prepared = prepareData(rawData, {
+      requiredFields,
+      limit: this.recordLimit || MAX_RECORDS
+    });
+
+    if (!prepared.valid) {
+      throw new Error(prepared.error);
+    }
+
+    const aggregated = aggregateData(
+      prepared.data,
+      this.groupByField,
+      this.valueField,
+      this.operation
+    );
+
+    if (aggregated.length === 0) {
+      throw new Error("No data after aggregation");
+    }
+
+    return aggregated;
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // CHART RENDERING
+  // ═══════════════════════════════════════════════════════════════
+
+  /**
+   * Initializes the chart SVG, tooltip, and resize observer.
+   * @returns {boolean} true if the chart was successfully initialized
+   */
+  initializeChart() {
+    const container = this.template.querySelector(".chart-container");
+    if (!container) return false;
+
+    const { width } = container.getBoundingClientRect();
+    if (width === 0) return false;
+
+    this.tooltip = createTooltip(container);
+
+    this.renderChart(width);
+
+    this.resizeHandler = createResizeHandler(
+      container,
+      ({ width: newWidth }) => {
+        if (newWidth > 0) {
+          this.renderChart(newWidth);
+        }
+      }
+    );
+    this.resizeHandler.observe();
+    return true;
+  }
+
+  renderChart(containerWidth) {
+    const d3 = this.d3;
+    const container = this.template.querySelector(".chart-container");
+    if (!container || !d3) return;
+
+    // Clear existing SVG
+    d3.select(container).select("svg").remove();
+
+    // Margins — wider left margin to fit long category labels on the Y axis
+    const margin = {
+      top: 20,
+      right: 30,
+      bottom: this.config.showGrid !== false ? 50 : 40,
+      left: 120
+    };
+
+    const width = containerWidth - margin.left - margin.right;
+    const height = this.height - margin.top - margin.bottom;
+
+    if (width <= 0 || height <= 0) return;
+
+    // Create SVG
+    this.svg = d3
+      .select(container)
+      .append("svg")
+      .attr("width", containerWidth)
+      .attr("height", this.height)
+      .attr("class", "horizontal-bar-chart-svg")
+      .append("g")
+      .attr("transform", `translate(${margin.left},${margin.top})`);
+
+    // Scales — SWAPPED vs vertical bar: band on Y (categories), linear on X (values)
+    const yScale = d3
+      .scaleBand()
+      .domain(this.chartData.map((d) => d.label))
+      .range([0, height])
+      .padding(0.2);
+
+    const xMax = d3.max(this.chartData, (d) => d.value) || 0;
+    const xScale = d3
+      .scaleLinear()
+      .domain([0, xMax * 1.1]) // 10% headroom
+      .nice()
+      .range([0, width]);
+
+    // Colors
+    const colors = getColors(
+      this.theme,
+      this.chartData.length,
+      this.config.customColors
+    );
+
+    // Grid lines (optional) — vertical grid lines along the value (X) axis
+    if (this.config.showGrid !== false) {
+      this.svg
+        .append("g")
+        .attr("class", "grid")
+        .attr("transform", `translate(0,${height})`)
+        .call(d3.axisBottom(xScale).tickSize(-height).tickFormat(""))
+        .selectAll("line")
+        .attr("stroke", "#e0e0e0")
+        .attr("stroke-dasharray", "2,2");
+
+      this.svg.select(".grid .domain").remove();
+    }
+
+    // X Axis (values, bottom)
+    this.svg
+      .append("g")
+      .attr("class", "x-axis")
+      .attr("transform", `translate(0,${height})`)
+      .call(d3.axisBottom(xScale).tickFormat((d) => formatNumber(d)));
+
+    // Y Axis (categories, left) — truncate long labels
+    this.svg
+      .append("g")
+      .attr("class", "y-axis")
+      .call(d3.axisLeft(yScale).tickFormat((d) => truncateLabel(d, 16)));
+
+    // Bars — grow horizontally from x=0
+    const bars = this.svg
+      .selectAll(".bar")
+      .data(this.chartData)
+      .enter()
+      .append("rect")
+      .attr("class", "bar")
+      .attr("x", 0)
+      .attr("y", (d) => yScale(d.label))
+      .attr("width", 0) // Start at zero width for animation
+      .attr("height", yScale.bandwidth())
+      .attr("fill", (d, i) => colors[i])
+      .attr("rx", 2)
+      .attr("cursor", this.objectApiName ? "pointer" : "default");
+
+    // Animate bars to their value width
+    bars
+      .transition()
+      .duration(750)
+      .delay((d, i) => i * 50)
+      .attr("width", (d) => xScale(d.value));
+
+    // Tooltip interactions
+    bars
+      .on("mouseenter", (event, d) => {
+        this.showTooltip(event, d);
+        d3.select(event.currentTarget)
+          .transition()
+          .duration(100)
+          .attr("opacity", 0.8);
+      })
+      .on("mousemove", (event) => {
+        this.moveTooltip(event);
+      })
+      .on("mouseleave", (event) => {
+        this.hideTooltip();
+        d3.select(event.currentTarget)
+          .transition()
+          .duration(100)
+          .attr("opacity", 1);
+      })
+      .on("click", (event, d) => {
+        this.handleBarClick(d);
+      });
+
+    if (this.config.showLegend) {
+      this.renderLegend(colors);
+    }
+  }
+
+  // eslint-disable-next-line no-unused-vars
+  renderLegend(colors) {
+    // eslint-disable-next-line no-unused-vars
+    const legendPosition = this.config.legendPosition || "bottom";
+    // Legend implementation for horizontal bar chart (simplified — typically less needed for bar charts)
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // TOOLTIP HANDLERS
+  // ═══════════════════════════════════════════════════════════════
+
+  showTooltip(event, d) {
+    if (!this.tooltip) return;
+
+    const content = buildTooltipContent(d.label, d.value, {
+      prefix: `${this.operation || "Value"}: `
+    });
+
+    this.tooltip.show(content, event.offsetX, event.offsetY);
+  }
+
+  // eslint-disable-next-line no-unused-vars
+  moveTooltip(event) {
+    // Tooltip position is set in show()
+  }
+
+  hideTooltip() {
+    if (!this.tooltip) return;
+    this.tooltip.hide();
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // CLICK HANDLER - DRILL DOWN
+  // ═══════════════════════════════════════════════════════════════
+
+  handleBarClick(d) {
+    if (!this.objectApiName) return;
+
+    const filterFieldName = this.filterField || this.groupByField;
+
+    this[NavigationMixin.Navigate]({
+      type: "standard__objectPage",
+      attributes: {
+        objectApiName: this.objectApiName,
+        actionName: "list"
+      },
+      state: {
+        filterName: "Recent"
+      }
+    });
+
+    this.dispatchEvent(
+      new CustomEvent("barclick", {
+        detail: {
+          label: d.label,
+          value: d.value,
+          filterField: filterFieldName
+        },
+        bubbles: true,
+        composed: true
+      })
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // CLEANUP
+  // ═══════════════════════════════════════════════════════════════
+
+  cleanup() {
+    if (this.resizeHandler) {
+      this.resizeHandler.disconnect();
+      this.resizeHandler = null;
+    }
+    if (this.tooltip) {
+      this.tooltip.destroy();
+      this.tooltip = null;
+    }
+  }
+}
