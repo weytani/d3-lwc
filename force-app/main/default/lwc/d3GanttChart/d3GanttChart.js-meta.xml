@@ -48,12 +48,6 @@
         description="API name of the task end date field"
         placeholder="Project_End__c"
       />
-            <property
-        name="groupByField"
-        type="String"
-        label="Swimlane Field"
-        description="Optional API name of a field to group tasks into swimlanes"
-      />
 
             <!-- Appearance -->
             <property

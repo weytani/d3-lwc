@@ -1,6 +1,6 @@
 /**
  * ABOUTME: D3 Gantt Chart Lightning Web Component.
- * ABOUTME: Renders date-range tasks as horizontal bars on a time axis with optional swimlanes and a today marker.
+ * ABOUTME: Renders date-range tasks as horizontal bars on a time axis with an optional today marker.
  */
 import { LightningElement, api, track } from "lwc";
 import { loadD3 } from "c/d3Lib";
@@ -38,9 +38,6 @@ export default class D3GanttChart extends NavigationMixin(LightningElement) {
 
   /** Field holding the task end date */
   @api endDateField = "Project_End__c";
-
-  /** Optional field to group tasks into swimlanes */
-  @api groupByField = "";
 
   /** Chart height in pixels */
   @api height = 300;
