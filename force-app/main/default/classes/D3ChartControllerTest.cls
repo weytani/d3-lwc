@@ -1442,6 +1442,50 @@ private class D3ChartControllerTest {
   }
 
   @isTest
+  static void testGetXYDataInvalidSizeField() {
+    Test.startTest();
+    try {
+      D3ChartController.getXYData(
+        'Account',
+        'AnnualRevenue',
+        'NumberOfEmployees',
+        'FakeSize__xyz',
+        'Name',
+        null
+      );
+      System.assert(false, 'Expected exception for invalid size field');
+    } catch (AuraHandledException e) {
+      System.assert(
+        e.getMessage().contains('Invalid sizeField'),
+        'Error should mention invalid sizeField'
+      );
+    }
+    Test.stopTest();
+  }
+
+  @isTest
+  static void testGetXYDataInvalidLabelField() {
+    Test.startTest();
+    try {
+      D3ChartController.getXYData(
+        'Account',
+        'AnnualRevenue',
+        'NumberOfEmployees',
+        'NumberOfEmployees',
+        'FakeLabel__xyz',
+        null
+      );
+      System.assert(false, 'Expected exception for invalid label field');
+    } catch (AuraHandledException e) {
+      System.assert(
+        e.getMessage().contains('Invalid labelField'),
+        'Error should mention invalid labelField'
+      );
+    }
+    Test.stopTest();
+  }
+
+  @isTest
   static void testGetXYDataInjectionPrevention() {
     Test.startTest();
     try {
