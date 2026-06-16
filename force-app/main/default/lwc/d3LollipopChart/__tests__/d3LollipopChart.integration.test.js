@@ -347,7 +347,7 @@ describe("c-d3-lollipop-chart integration", () => {
   // ═══════════════════════════════════════════════════════════════
 
   describe("theme pipeline integration", () => {
-    it("applies Salesforce Standard palette colors to bar fills", async () => {
+    it("applies Salesforce Standard palette colors to head fills", async () => {
       await createChart({
         theme: "Salesforce Standard",
         recordCollection: SAMPLE_DATA,
@@ -364,15 +364,15 @@ describe("c-d3-lollipop-chart integration", () => {
       const fillFn = fillCalls[fillCalls.length - 1][1];
       expect(typeof fillFn).toBe("function");
 
-      // First bar should get the first Salesforce Standard color
+      // First head should get the first Salesforce Standard color
       const firstColor = fillFn({}, 0);
       expect(firstColor).toBe("#1589EE");
 
-      // Second bar gets the second color
+      // Second head gets the second color
       const secondColor = fillFn({}, 1);
       expect(secondColor).toBe("#FF9E2C");
 
-      // Third bar gets the third color
+      // Third head gets the third color
       const thirdColor = fillFn({}, 2);
       expect(thirdColor).toBe("#4BCA81");
     });

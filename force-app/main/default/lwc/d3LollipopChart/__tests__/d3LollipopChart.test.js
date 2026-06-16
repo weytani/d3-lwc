@@ -593,7 +593,7 @@ describe("c-d3-lollipop-chart", () => {
   // ═══════════════════════════════════════════════════════════════
 
   describe("click events", () => {
-    it("configures for barclick when objectApiName is set", async () => {
+    it("configures for lollipopclick when objectApiName is set", async () => {
       await createChart({
         objectApiName: "Opportunity"
       });
@@ -652,7 +652,7 @@ describe("c-d3-lollipop-chart", () => {
   // ═══════════════════════════════════════════════════════════════
 
   describe("tooltip behavior", () => {
-    it("registers mouseenter handler on bars", async () => {
+    it("registers mouseenter handler on heads", async () => {
       await createChart();
       await flushPromises();
 
@@ -662,7 +662,7 @@ describe("c-d3-lollipop-chart", () => {
       expect(mouseenterCalls.length).toBeGreaterThan(0);
     });
 
-    it("registers mouseleave handler on bars", async () => {
+    it("registers mouseleave handler on heads", async () => {
       await createChart();
       await flushPromises();
 
@@ -671,7 +671,7 @@ describe("c-d3-lollipop-chart", () => {
       expect(mouseleaveCalls.length).toBeGreaterThan(0);
     });
 
-    it("registers mousemove handler on bars", async () => {
+    it("registers mousemove handler on heads", async () => {
       await createChart();
       await flushPromises();
 
@@ -680,7 +680,7 @@ describe("c-d3-lollipop-chart", () => {
       expect(moveCalls.length).toBeGreaterThan(0);
     });
 
-    it("registers click handler on bars", async () => {
+    it("registers click handler on heads", async () => {
       await createChart();
       await flushPromises();
 
