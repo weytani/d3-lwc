@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<LightningComponentBundle xmlns="http://soap.sforce.com/2006/04/metadata">
+    <apiVersion>65.0</apiVersion>
+    <isExposed>true</isExposed>
+    <masterLabel>D3 Gantt Chart</masterLabel>
+    <description
+  >Interactive Gantt chart powered by D3.js. Renders date-range tasks as horizontal bars on a time axis.</description>
+    <targets>
+        <target>lightning__AppPage</target>
+        <target>lightning__RecordPage</target>
+        <target>lightning__HomePage</target>
+    </targets>
+    <targetConfigs>
+        <targetConfig
+      targets="lightning__AppPage,lightning__RecordPage,lightning__HomePage"
+    >
+            <!-- Data Source -->
+            <property
+        name="soqlQuery"
+        type="String"
+        label="SOQL Query"
+        description="SOQL query to fetch tasks (used when no Drill-Down Object is set)"
+        placeholder="SELECT Name, Project_Start__c, Project_End__c FROM Opportunity"
+      />
+
+            <!-- Field Mapping -->
+            <property
+        name="labelField"
+        type="String"
+        label="Label Field"
+        default="Name"
+        description="API name of the task label field"
+        placeholder="Name"
+      />
+            <property
+        name="startDateField"
+        type="String"
+        label="Start Date Field"
+        default="Project_Start__c"
+        description="API name of the task start date field"
+        placeholder="Project_Start__c"
+      />
+            <property
+        name="endDateField"
+        type="String"
+        label="End Date Field"
+        default="Project_End__c"
+        description="API name of the task end date field"
+        placeholder="Project_End__c"
+      />
+            <property
+        name="groupByField"
+        type="String"
+        label="Swimlane Field"
+        description="Optional API name of a field to group tasks into swimlanes"
+      />
+
+            <!-- Appearance -->
+            <property
+        name="height"
+        type="Integer"
+        label="Height (px)"
+        default="300"
+        description="Chart height in pixels"
+        min="150"
+        max="800"
+      />
+            <property
+        name="theme"
+        type="String"
+        label="Color Theme"
+        default="Salesforce Standard"
+        datasource="Salesforce Standard,Warm,Cool,Vibrant"
+        description="Color palette for the chart"
+      />
+
+            <!-- Drill-Down / Server fetch -->
+            <property
+        name="objectApiName"
+        type="String"
+        label="Drill-Down Object"
+        description="Object API name for server-side fetch and navigation on task click"
+        placeholder="Opportunity"
+      />
+            <property
+        name="filterField"
+        type="String"
+        label="Filter Field"
+        description="Field to filter by on drill-down (defaults to Label Field)"
+      />
+            <property
+        name="filterClause"
+        type="String"
+        label="Filter Clause"
+        description="Optional WHERE clause fragment for the server-side fetch"
+      />
+
+            <property
+        name="recordLimit"
+        type="Integer"
+        label="Record Limit"
+        description="Maximum tasks to process. Leave empty for default."
+        min="1"
+        max="10000"
+      />
+
+            <!-- Advanced -->
+            <property
+        name="advancedConfig"
+        type="String"
+        label="Advanced Config (JSON)"
+        description='{"today": "2024-03-01", "customColors": ["#FF5733"]}'
+      />
+        </targetConfig>
+    </targetConfigs>
+</LightningComponentBundle>
