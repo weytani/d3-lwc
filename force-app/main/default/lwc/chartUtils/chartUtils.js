@@ -342,8 +342,9 @@ export const getContrastColor = (hexColor) => {
   const g = parseInt(hex.slice(2, 4), 16) / 255;
   const b = parseInt(hex.slice(4, 6), 16) / 255;
 
-  const toLinear = (c) =>
-    c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+  const toLinear = (c) => {
+    return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+  };
   const luminance =
     0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
 
@@ -383,4 +384,42 @@ export const buildCalendarGrid = (year) => {
   }
 
   return grid;
+};
+
+// ===== DATE-RANGE UTILITIES =====
+
+/**
+ * Coerces a value into a valid Date, or null.
+ * Accepts a Date instance, a parseable date string, or an
+ * epoch-milliseconds number. Returns null for empty, invalid, or
+ * non-date input.
+ * @param {Date|String|Number} value - Value to coerce
+ * @returns {Date|null} - A valid Date, or null
+ */
+export const parseDate = (value) => {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  if (value instanceof Date) {
+    return isNaN(value.getTime()) ? null : value;
+  }
+
+  if (typeof value === "number") {
+    if (isNaN(value)) {
+      return null;
+    }
+    const fromNumber = new Date(value);
+    return isNaN(fromNumber.getTime()) ? null : fromNumber;
+  }
+
+  if (typeof value === "string") {
+    if (value.trim() === "") {
+      return null;
+    }
+    const fromString = new Date(value);
+    return isNaN(fromString.getTime()) ? null : fromString;
+  }
+
+  return null;
 };

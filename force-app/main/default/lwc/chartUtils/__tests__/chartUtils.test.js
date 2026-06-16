@@ -10,7 +10,8 @@ import {
   shouldUseCompactMode,
   createLayoutRetry,
   getContrastColor,
-  buildCalendarGrid
+  buildCalendarGrid,
+  parseDate
 } from "c/chartUtils";
 
 describe("chartUtils", () => {
@@ -608,6 +609,67 @@ describe("chartUtils", () => {
         expect(entry.month).toBeGreaterThanOrEqual(0);
         expect(entry.month).toBeLessThanOrEqual(11);
       });
+    });
+  });
+
+  describe("parseDate", () => {
+    it("returns a valid Date instance unchanged", () => {
+      const d = new Date("2026-03-15T00:00:00.000Z");
+      const result = parseDate(d);
+      expect(result).toBeInstanceOf(Date);
+      expect(result.getTime()).toBe(d.getTime());
+    });
+
+    it("returns null for an invalid Date instance", () => {
+      expect(parseDate(new Date("not-a-date"))).toBeNull();
+    });
+
+    it("parses an ISO date-only string", () => {
+      const result = parseDate("2026-03-15");
+      expect(result).toBeInstanceOf(Date);
+      expect(result.getTime()).toBe(new Date("2026-03-15").getTime());
+    });
+
+    it("parses a full ISO datetime string", () => {
+      const result = parseDate("2026-03-15T08:30:00.000Z");
+      expect(result).toBeInstanceOf(Date);
+      expect(result.toISOString()).toBe("2026-03-15T08:30:00.000Z");
+    });
+
+    it("returns null for an unparseable string", () => {
+      expect(parseDate("not a date")).toBeNull();
+    });
+
+    it("returns null for an empty string", () => {
+      expect(parseDate("")).toBeNull();
+    });
+
+    it("treats a number as an epoch-milliseconds timestamp", () => {
+      const epoch = Date.UTC(2026, 2, 15); // 2026-03-15T00:00:00.000Z
+      const result = parseDate(epoch);
+      expect(result).toBeInstanceOf(Date);
+      expect(result.getTime()).toBe(epoch);
+    });
+
+    it("parses 0 (the Unix epoch) as a valid Date", () => {
+      const result = parseDate(0);
+      expect(result).toBeInstanceOf(Date);
+      expect(result.getTime()).toBe(0);
+    });
+
+    it("returns null for NaN", () => {
+      expect(parseDate(NaN)).toBeNull();
+    });
+
+    it("returns null for null and undefined", () => {
+      expect(parseDate(null)).toBeNull();
+      expect(parseDate(undefined)).toBeNull();
+    });
+
+    it("returns null for non-date types (boolean, object, array)", () => {
+      expect(parseDate(true)).toBeNull();
+      expect(parseDate({})).toBeNull();
+      expect(parseDate([])).toBeNull();
     });
   });
 });
