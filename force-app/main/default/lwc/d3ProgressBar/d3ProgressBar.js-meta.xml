@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!-- ABOUTME: Metadata configuration for d3ProgressBar Lightning Web Component. -->
+<!-- ABOUTME: Defines exposed properties for App Builder: soqlQuery, valueField, height, theme, objectApiName, filterField, advancedConfig. -->
+<LightningComponentBundle xmlns="http://soap.sforce.com/2006/04/metadata">
+    <apiVersion>65.0</apiVersion>
+    <isExposed>true</isExposed>
+    <masterLabel>D3 Progress Bar Chart</masterLabel>
+    <description
+  >KPI progress bar powered by D3.js showing a value against a target with a percent label.</description>
+    <targets>
+        <target>lightning__AppPage</target>
+        <target>lightning__RecordPage</target>
+        <target>lightning__HomePage</target>
+    </targets>
+    <targetConfigs>
+        <targetConfig
+      targets="lightning__AppPage,lightning__RecordPage,lightning__HomePage"
+    >
+            <!-- Data Source -->
+            <property
+        name="soqlQuery"
+        type="String"
+        label="SOQL Query"
+        description="SOQL query to fetch a single value (e.g., SELECT AVG(Amount) Amount FROM Opportunity)"
+        placeholder="SELECT AVG(Amount) Amount FROM Opportunity"
+      />
+
+            <!-- Field Mapping -->
+            <property
+        name="valueField"
+        type="String"
+        label="Value Field"
+        default="Amount"
+        description="API name of the numeric field to display"
+        placeholder="Amount"
+      />
+
+            <!-- Appearance -->
+            <property
+        name="height"
+        type="Integer"
+        label="Height (px)"
+        default="80"
+        description="Chart height in pixels"
+        min="40"
+        max="300"
+      />
+            <property
+        name="theme"
+        type="String"
+        label="Color Theme"
+        default="Salesforce Standard"
+        datasource="Salesforce Standard,Warm,Cool,Vibrant"
+        description="Color palette for the progress fill"
+      />
+
+            <!-- Drill-Down -->
+            <property
+        name="objectApiName"
+        type="String"
+        label="Drill-Down Object"
+        description="Object API name for navigation on bar click"
+        placeholder="Opportunity"
+      />
+            <property
+        name="filterField"
+        type="String"
+        label="Filter Field"
+        description="Field to filter by on drill-down"
+      />
+
+            <!-- Advanced -->
+            <property
+        name="advancedConfig"
+        type="String"
+        label="Advanced Config (JSON)"
+        description='{"target": 250000, "label": "Pipeline", "valueFormat": "currency"}'
+      />
+        </targetConfig>
+    </targetConfigs>
+</LightningComponentBundle>
