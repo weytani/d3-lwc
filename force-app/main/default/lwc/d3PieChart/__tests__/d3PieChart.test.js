@@ -356,7 +356,7 @@ describe("c-d3-pie-chart", () => {
 
     it("accepts advancedConfig JSON", async () => {
       await createChart({
-        advancedConfig: '{"showTotal": false}'
+        advancedConfig: '{"showLabels": false}'
       });
       await flushPromises();
 
