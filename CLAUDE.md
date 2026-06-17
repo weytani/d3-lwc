@@ -10,7 +10,9 @@ Salesforce LWC library providing 10 D3.js chart components for use in Lightning 
 
 ```bash
 npm test                                        # Run all unit tests
-npm test -- --testPathPattern=d3BarChart         # Run tests for a specific component
+# NOTE: --testPathPattern does NOT narrow in this jest config — it runs the FULL
+# suite regardless. There is no per-component narrowing flag; just run `npm test`
+# (the full ~2,561-test suite is fast). lint-staged runs the relevant tests on commit.
 npm run test:unit:watch                         # Watch mode
 npm run test:unit:coverage                      # With coverage report
 npm run lint                                    # ESLint
@@ -88,7 +90,7 @@ Total library target: 76 charts (10 built + 16 roadmap + 50 index).
 ## Key Constraints
 
 - Node.js v20 required for Salesforce CLI compatibility (v25 has issues)
-- D3.js v7 loaded from `staticresources/d3.js`
+- D3.js v7 loaded from the `d3` static resource (the file is named `d3`, with NO `.js` extension — a 285 KB full v7 build). Any plan/command reference to `staticresources/d3.js` is wrong; the real file is `staticresources/d3`.
 - Salesforce API version: 65.0
 
 ## Two-Project Sync Strategy
@@ -112,10 +114,41 @@ After making changes here, sync to `~/code/agentforce-dev/`:
 2. **Service JS** (dataService, chartUtils, themeService, d3Lib) — full replace
 3. **Chart component JS** — full replace
 4. **Test files** — ALL tiers: unit (.test.js), integration (.integration.test.js), e2e (.e2e.test.js)
-5. **Mock files** (`__mocks__/`) — full replace
+5. **Mock files** (`__mocks__/`) — **additive copy** (the sync uses `rsync` WITHOUT `--delete`: agentforce-dev's `__mocks__/` is shared and holds non-d3 mocks that must be preserved)
 6. **jest.config.js** — merge moduleNameMapper (don't replace — agentforce-dev has other config)
 7. **meta.xml** — MERGE, don't replace. agentforce-dev has `lightningCommunity__Page` targets to preserve.
 
 ### Automation
 
 Run `scripts/sync-to-agentforce.sh` to automate steps 1-5. Steps 6-7 require manual review.
+
+## Repo Tooling Gotchas
+
+- `npm test -- --testPathPattern=X` does NOT narrow here — it runs the full suite regardless. No per-component flag exists; run the full `npm test` (the ~2,561-test suite is fast). lint-staged runs the relevant tests on commit.
+- `npm run prettier` reformats the ENTIRE repo (it ignores path args). To format only your files: `npx prettier --write <file>...`. Never stage a whole-repo reformat alongside your change.
+- `npm run lint` fails on a stale `aura/**` glob in the eslint config (no `aura/` dir exists). Rely on the per-file lint-staged hook (which works) or `npx eslint <path>` over the dirs you touched, not the repo-wide `npm run lint`.
+- Apex has NO local compile/test. TDD is **deploy-then-test** against a live org (`sf project deploy start --source-dir force-app/main/default/classes -o <org>`, then `sf apex run test --tests <Class> -o <org>`). A deploy that fails to compile (referencing a not-yet-written method) IS the RED state. `.cls` commits are slow because lint-staged spins up a JVM `prettier-plugin-apex` parser — be patient, it's not hung. Confirm an authenticated org first (`sf org list`); the historical default `portfolio` may be deauthenticated — `AGENT` is the orgfarm dev edition.
+
+## Chart-Clone Hygiene Checklist (run BEFORE reporting a cloned chart DONE)
+
+When a component/test is cloned from a donor (Pie←Donut, Lollipop←Bar, Sunburst←Treemap, etc.), the donor's identity leaks. Before reporting DONE you MUST scan-and-fix:
+
+1. **Stale donor strings.** Grep the new bundle for the DONOR's chart name and event name (e.g. Bar→Lollipop: `grep -rn 'bar\|barclick' <new dir>`). Every `it()`/`describe()` description, code comment, event-name assertion, and file-path string must name the NEW chart. Intentional negative assertions ("does not render a bar rect") are the only allowed survivors — flag them explicitly in your report.
+2. **Stale config keys.** Grep the new tests for the donor's `advancedConfig` keys (`showTotal`, `innerRadiusRatio`, `showGrid`, etc.). A key the new `renderChart` never reads is a silent false-positive (renderChart ignores unknown keys, so the test passes meaninglessly). Replace with a key the new component actually consumes, or delete the assertion.
+3. **Advertised-but-unimplemented surfaces.** For EVERY `@api` property and EVERY `<property>` in the `.js-meta.xml`, confirm the component's logic actually reads it (a getter, `renderChart`, `loadData`, or a wired event). A declared-but-unused property (a "Swimlane Field" `groupByField` that nothing references, a `showLabels` gating a no-op block) is dead surface — either implement it or remove the `@api` + meta entry + any JSDoc/ABOUTME claim. Do NOT ship a property the UI exposes but the code ignores.
+4. **Test-name ↔ behavior match.** Each `it()` description must describe what the assertion actually checks (a donor-copied "clamps at 100%" name on a test that no longer clamps is a lie).
+
+Report all 4 scan results in your DONE message with the grep commands you ran.
+
+## Plan-prescribed test assertions are written against an _idealized_ service — verify against the real one
+
+When executing a detailed plan that hard-codes EXPECTED values in integration/e2e tests, treat any expected value that depends on a real service's internal logic as a HYPOTHESIS. Verify it by invoking the real service (or tracing its code) at RED time before trusting the plan. High-risk classes (all produced wrong plan values in the Phase-3 run):
+
+- **Color-palette index order** — which category lands at `palette[0]` depends on the real aggregation/sort, not the order the plan lists.
+- **WCAG contrast / luminance** — `getContrastColor`'s black-vs-white choice is a real luminance computation (`#1589EE` → 0.242 > 0.179 → black). Never hand-guess.
+- **Aggregation insertion order** — `aggregateData` returns categories in the real grouping order, not alphabetical or the plan's listed order.
+- **SOQL field-set semantics** — duplicate field names (e.g. `x == size`) must be de-duplicated (escapeSingleQuotes-preserving `Set`) or the query is malformed.
+- **Cross-tier contracts** — an LWC that sends `field || null` requires the Apex endpoint to treat that field as OPTIONAL. Verify both sides.
+- **CSV / line-ending exactness** — `csv.DictWriter` emits CRLF; SFDMU + exact-header assertions must expect `\r\n`.
+
+If the plan's value differs from the real one, fix the **test** (not the service) and report the empirical evidence. This is correct behavior, not a deviation.
