@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Salesforce LWC library providing 10 D3.js chart components for use in Lightning App Builder, Flows, and Experience Builder. Each chart accepts data via `recordCollection` (from Flow/parent) or `soqlQuery` (Apex-backed SOQL).
+Salesforce LWC library providing 30 D3.js chart components for use in Lightning App Builder, Flows, and Experience Builder. Each chart accepts data via `recordCollection` (from Flow/parent) or `soqlQuery` (Apex-backed SOQL).
 
 ## Commands
 
@@ -85,7 +85,7 @@ Every chart component follows this structure:
 - **ROADMAP.md** — Next 16 charts (Weeks 1–16), detailed specs with Salesforce use cases
 - **CHART-INDEX.md** — Next 50 charts beyond the roadmap, ordered by complexity (1 = simplest → 50 = most complex). When deciding what to build next, consult this index and build in order. Each entry includes: D3 gallery reference, proposed component name, Salesforce use case, and new D3 concepts required.
 
-Total library target: 76 charts (10 built + 16 roadmap + 50 index).
+Total library target: 76 charts (30 built + 46 more in CHART-INDEX).
 
 ## Key Constraints
 
