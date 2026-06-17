@@ -108,7 +108,6 @@ const SAMPLE_DATA = [
 // HELPERS
 // ═══════════════════════════════════════════════════════════════
 
-// eslint-disable-next-line @lwc/lwc/no-async-operation
 const flushPromises = () => new Promise(process.nextTick);
 
 async function createChart(props = {}) {
