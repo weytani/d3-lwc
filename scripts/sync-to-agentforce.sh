@@ -123,13 +123,16 @@ for comp in "${CHART_COMPONENTS[@]}"; do
 done
 
 # ---------------------------------------------------------------------------
-# 4. __mocks__/ directory (full replace)
+# 4. __mocks__/ directory (additive — NO --delete: agentforce-dev owns non-d3 mocks)
 # ---------------------------------------------------------------------------
 echo ""
-echo "=== Copying __mocks__/ ==="
-rsync -a --delete "$SRC_MOCKS/" "$DST_MOCKS/"
+echo "=== Copying __mocks__/ (additive — NO --delete: agentforce-dev owns non-d3 mocks) ==="
+# NB: agentforce-dev's __mocks__/ is SHARED with the consuming monorepo and holds
+# non-d3 mocks (e.g. PortfolioSoundCloudController). --delete here would wipe them.
+# Copy d3-owned mocks additively; never blow away the whole directory.
+rsync -a "$SRC_MOCKS/" "$DST_MOCKS/"
 copied_mocks=1
-echo "  __mocks__/ (full replace)"
+echo "  __mocks__/ (additive copy — destination-only mocks preserved)"
 
 # ---------------------------------------------------------------------------
 # Summary
