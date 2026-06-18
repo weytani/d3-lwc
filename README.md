@@ -68,6 +68,10 @@ A complete suite of 30 Lightning Web Components (LWC) that wrap D3.js charts for
 | `c-d3-chord-diagram`        | Relationship matrix  | Circular arcs, ribbons, bidirectional flow           |
 | `c-d3-gantt-chart`          | Project timeline     | Time axis, date-range bars, today marker, drill-down |
 
+![Phase 3 charts rendered in Salesforce](docs/screenshots/phase3/d3-lwc-phase3-charts.png)
+
+_All 10 Phase 3 charts rendered live in Salesforce (Lightning App Page) against demo Opportunity data._
+
 ## 🏗️ Architecture
 
 ```
