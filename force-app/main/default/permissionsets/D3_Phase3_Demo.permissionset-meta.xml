@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <PermissionSet xmlns="http://soap.sforce.com/2006/04/metadata">
     <description
-  >Grants read access to the three Opportunity custom fields used by the Phase 3 D3 chart showcase (Gantt and Bubble charts). Required so stripInaccessible(READABLE) in D3ChartController returns these fields even for a System Administrator.</description>
+  >Grants read access to the Opportunity custom fields used by the Phase 3 D3 chart showcase (Gantt, Bubble, and Diverging Bar charts). Required so stripInaccessible(READABLE) in D3ChartController returns these fields even for a System Administrator.</description>
     <hasActivationRequired>false</hasActivationRequired>
     <label>D3 Phase 3 Demo</label>
     <fieldPermissions>
@@ -16,6 +16,11 @@
     </fieldPermissions>
     <fieldPermissions>
         <field>Opportunity.Forecast_Units__c</field>
+        <editable>false</editable>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <field>Opportunity.Quota_Variance__c</field>
         <editable>false</editable>
         <readable>true</readable>
     </fieldPermissions>
