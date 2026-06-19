@@ -25,6 +25,10 @@
         <readable>true</readable>
     </fieldPermissions>
     <tabSettings>
+        <tab>d3_lwc_phase2</tab>
+        <visibility>Visible</visibility>
+    </tabSettings>
+    <tabSettings>
         <tab>d3_lwc_phase3</tab>
         <visibility>Visible</visibility>
     </tabSettings>

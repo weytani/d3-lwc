@@ -256,7 +256,7 @@
                 <componentInstanceProperties>
                     <name>soqlQuery</name>
                     <value
-          >SELECT Type, Amount, Probability FROM Opportunity WHERE Type != null AND Amount != null</value>
+          >SELECT Type, Amount, Probability, ExpectedRevenue FROM Opportunity WHERE Type != null AND Amount != null</value>
                 </componentInstanceProperties>
                 <componentInstanceProperties>
                     <name>groupByField</name>
@@ -280,7 +280,8 @@
                 </componentInstanceProperties>
                 <componentInstanceProperties>
                     <name>advancedConfig</name>
-                    <value>{"axes": ["Amount", "Probability"]}</value>
+                    <value
+          >{"axes":[{"label":"Amount","field":"Amount"},{"label":"Win %","field":"Probability"},{"label":"Exp. Revenue","field":"ExpectedRevenue"}]}</value>
                 </componentInstanceProperties>
                 <componentName>d3RadarChart</componentName>
                 <identifier>c_d3RadarChart</identifier>

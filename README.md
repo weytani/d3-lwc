@@ -2,13 +2,29 @@
 
 A complete suite of 30 Lightning Web Components (LWC) that wrap D3.js charts for use in Salesforce App Builder, Experience Builder, and Screen Flows. Components are drag-and-drop ready, capable of ingesting raw Salesforce record collections, and intelligently handle aggregation via server-side SOQL GROUP BY (preferred) or client-side JavaScript (fallback).
 
-## Screenshots
+## 🖼️ Gallery
 
-![D3 LWC Charts in Salesforce](d3-lwc-smoke-test.png)
+All charts below are rendered **live in Salesforce** (Lightning App Pages) against demo Opportunity data — not static mockups of the D3 output.
 
-![App Builder Configuration Panel](docs/d3-bar-chart-config.png)
+### Phase 3 — radial, ranking & timeline charts
 
-## Features
+![Phase 3 charts rendered in Salesforce](docs/screenshots/phase3/d3-lwc-phase3-charts.png)
+
+_Pie, Horizontal Bar, Lollipop, Progress Bar, Diverging Bar, Waffle, Sunburst, Bubble, Chord Diagram, and Gantt._
+
+### Phase 2 — distributions, flows & time series
+
+![Phase 2 charts rendered in Salesforce](docs/screenshots/phase2/d3-lwc-phase2-charts.png)
+
+_Funnel, Bullet, Stacked Bar, Area, Waterfall, Heatmap, Box Plot, Radar, Calendar Heatmap, and Sparkline Grid._
+
+### Phase 1 — core analytics charts
+
+![D3 LWC charts in Salesforce](d3-lwc-smoke-test.png)
+
+_Gauge, Bar, Donut, Line, Scatter, Histogram, Treemap, Sankey, Force Graph, and Choropleth._
+
+## ✨ Features
 
 - **30 Chart Types**: Bar, Line, Donut, Gauge, Scatter, Histogram, Treemap, Sankey, Force Graph, Choropleth, Area, Stacked Bar, Funnel, Radar, Heatmap, Box Plot, Waterfall, Bullet, Calendar Heatmap, Sparkline Grid, Pie, Horizontal Bar, Lollipop, Progress Bar, Diverging Bar, Waffle, Sunburst, Bubble, Chord Diagram, Gantt
 - **Drag-and-Drop Ready**: Fully configurable in Lightning App Builder
@@ -68,54 +84,6 @@ A complete suite of 30 Lightning Web Components (LWC) that wrap D3.js charts for
 | `c-d3-chord-diagram`        | Relationship matrix  | Circular arcs, ribbons, bidirectional flow           |
 | `c-d3-gantt-chart`          | Project timeline     | Time axis, date-range bars, today marker, drill-down |
 
-![Phase 3 charts rendered in Salesforce](docs/screenshots/phase3/d3-lwc-phase3-charts.png)
-
-_All 10 Phase 3 charts rendered live in Salesforce (Lightning App Page) against demo Opportunity data._
-
-## 🏗️ Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        SALESFORCE ORG                           │
-├─────────────────────────────────────────────────────────────────┤
-│  ┌──────────────────┐    ┌──────────────────────────────────┐  │
-│  │  Static Resource │    │         Apex Controller          │  │
-│  │   (D3.js v7)     │    │   D3ChartController.cls          │  │
-│  └────────┬─────────┘    │   - executeQuery(soql)           │  │
-│           │              │   - getAggregatedData(GROUP BY)  │  │
-│           │              │   - getStatistics(stats)         │  │
-│           │              │   - getCorrelation(Pearson r)    │  │
-│           │              │   - with sharing (security)      │  │
-│           │              └──────────────┬───────────────────┘  │
-│           │                             │                       │
-│  ┌────────▼─────────────────────────────▼───────────────────┐  │
-│  │                    SHARED LWC MODULES                     │  │
-│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────┐   │  │
-│  │  │ dataService │  │themeService │  │  chartUtils     │   │  │
-│  │  │ -aggregate  │  │ -palettes   │  │  -resize        │   │  │
-│  │  │ -validate   │  │ -getColors  │  │  -tooltip       │   │  │
-│  │  │ -truncate   │  │             │  │  -formatters    │   │  │
-│  │  └─────────────┘  └─────────────┘  └─────────────────┘   │  │
-│  └──────────────────────────┬───────────────────────────────┘  │
-│                             │                                   │
-│  ┌──────────────────────────▼───────────────────────────────┐  │
-│  │                    CHART COMPONENTS                       │  │
-│  │  ┌───────┐ ┌─────┐ ┌───────┐ ┌──────┐ ┌─────────┐       │  │
-│  │  │ Gauge │ │ Bar │ │ Donut │ │ Line │ │ Scatter │       │  │
-│  │  └───────┘ └─────┘ └───────┘ └──────┘ └─────────┘       │  │
-│  │  ┌───────────┐ ┌─────────┐ ┌────────┐ ┌───────┐ ┌─────┐ │  │
-│  │  │ Histogram │ │ Treemap │ │ Sankey │ │ Force │ │ Map │ │  │
-│  │  └───────────┘ └─────────┘ └────────┘ └───────┘ └─────┘ │  │
-│  │  ┌──────┐ ┌─────────┐ ┌────────┐ ┌───────┐ ┌─────────┐  │  │
-│  │  │ Area │ │ Stacked │ │ Funnel │ │ Radar │ │ Heatmap │  │  │
-│  │  └──────┘ └─────────┘ └────────┘ └───────┘ └─────────┘  │  │
-│  │  ┌─────────┐ ┌───────────┐ ┌────────┐ ┌──────────┐       │  │
-│  │  │ BoxPlot │ │ Waterfall │ │ Bullet │ │ Calendar │       │  │
-│  │  └─────────┘ └───────────┘ └────────┘ └──────────┘       │  │
-│  └──────────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────┘
-```
-
 ## 🚀 Quick Start
 
 ### Prerequisites
@@ -154,7 +122,7 @@ export PATH="/opt/homebrew/opt/node@20/bin:$PATH"
 sf lightning dev app -o <your-org-alias>
 ```
 
-## 📊 Component Usage
+## 📊 Usage
 
 ### Common Properties (All Charts)
 
@@ -235,7 +203,13 @@ sf lightning dev app -o <your-org-alias>
 </c-d3-choropleth>
 ```
 
-## Record Limits
+![App Builder configuration panel](docs/d3-bar-chart-config.png)
+
+_Every chart is fully configurable in Lightning App Builder — point it at an object, pick fields, and choose a theme without writing code._
+
+## ⚙️ Configuration
+
+### Record Limits
 
 Each chart has a default record limit tuned to its visual capacity. Set `recordLimit` in App Builder to override.
 
@@ -252,7 +226,7 @@ Each chart has a default record limit tuned to its visual capacity. Set `recordL
 | Waterfall, Choropleth                                                         | 500           | Sequential/geographic readability                                      |
 | Gauge, Bullet                                                                 | 1             | Single value (no `recordLimit` exposed)                                |
 
-## 🎨 Themes
+### Themes
 
 Four built-in color palettes:
 
@@ -271,9 +245,57 @@ Custom colors via `advancedConfig`:
 }
 ```
 
-## 🛠️ Shared Modules
+## 🏗️ Under the Hood
 
-### dataService
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        SALESFORCE ORG                           │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌──────────────────┐    ┌──────────────────────────────────┐  │
+│  │  Static Resource │    │         Apex Controller          │  │
+│  │   (D3.js v7)     │    │   D3ChartController.cls          │  │
+│  └────────┬─────────┘    │   - executeQuery(soql)           │  │
+│           │              │   - getAggregatedData(GROUP BY)  │  │
+│           │              │   - getStatistics(stats)         │  │
+│           │              │   - getCorrelation(Pearson r)    │  │
+│           │              │   - with sharing (security)      │  │
+│           │              └──────────────┬───────────────────┘  │
+│           │                             │                       │
+│  ┌────────▼─────────────────────────────▼───────────────────┐  │
+│  │                    SHARED LWC MODULES                     │  │
+│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────┐   │  │
+│  │  │ dataService │  │themeService │  │  chartUtils     │   │  │
+│  │  │ -aggregate  │  │ -palettes   │  │  -resize        │   │  │
+│  │  │ -validate   │  │ -getColors  │  │  -tooltip       │   │  │
+│  │  │ -truncate   │  │             │  │  -formatters    │   │  │
+│  │  └─────────────┘  └─────────────┘  └─────────────────┘   │  │
+│  └──────────────────────────┬───────────────────────────────┘  │
+│                             │                                   │
+│  ┌──────────────────────────▼───────────────────────────────┐  │
+│  │              30 CHART COMPONENTS (Phase 1–3)              │  │
+│  │  ┌───────┐ ┌─────┐ ┌───────┐ ┌──────┐ ┌─────────┐        │  │
+│  │  │ Gauge │ │ Bar │ │ Donut │ │ Line │ │ Scatter │  ···   │  │
+│  │  └───────┘ └─────┘ └───────┘ └──────┘ └─────────┘        │  │
+│  │  ┌──────┐ ┌─────────┐ ┌────────┐ ┌────────┐ ┌─────────┐  │  │
+│  │  │ Area │ │ Funnel  │ │ Radar  │ │ BoxPlt │ │ Heatmap │  ···
+│  │  └──────┘ └─────────┘ └────────┘ └────────┘ └─────────┘  │  │
+│  │  ┌─────┐ ┌──────────┐ ┌────────┐ ┌───────┐ ┌───────┐     │  │
+│  │  │ Pie │ │ Sunburst │ │ Bubble │ │ Chord │ │ Gantt │  ···│  │
+│  │  └─────┘ └──────────┘ └────────┘ └───────┘ └───────┘     │  │
+│  └──────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Data flow:**
+
+1. **Server-preferred path** (when `objectApiName` + field config available) — aggregation, statistics, and correlation are computed in Apex; only pre-bucketed results cross the wire.
+2. **Client-side path** (`recordCollection` or `soqlQuery`-only) — raw records flow through `dataService.validateData()` → `truncateData()` → `aggregateData()`, then D3 renders into an empty `<div>`.
+
+### Shared Modules
+
+#### dataService
 
 ```javascript
 import {
@@ -291,7 +313,7 @@ const { data, valid, error } = prepareData(records, {
 const chartData = aggregateData(records, "StageName", "Amount", OPERATIONS.SUM);
 ```
 
-### themeService
+#### themeService
 
 ```javascript
 import { getColors, createColorScale, THEMES } from "c/themeService";
@@ -300,7 +322,7 @@ const colors = getColors("Warm", 5);
 const colorScale = createColorScale("Salesforce Standard", categories);
 ```
 
-### chartUtils
+#### chartUtils
 
 ```javascript
 import {
@@ -314,7 +336,7 @@ formatNumber(1500000); // "1.5M"
 formatCurrency(50000); // "$50,000"
 ```
 
-## 📁 Project Structure
+### Project Structure
 
 ```
 d3-lwc/
@@ -346,10 +368,21 @@ d3-lwc/
 │   │   ├── d3WaterfallChart/
 │   │   ├── d3BulletChart/
 │   │   ├── d3CalendarHeatmap/
-│   │   └── d3SparklineGrid/
+│   │   ├── d3SparklineGrid/
+│   │   ├── d3PieChart/         # Phase 3
+│   │   ├── d3HorizontalBarChart/
+│   │   ├── d3LollipopChart/
+│   │   ├── d3ProgressBar/
+│   │   ├── d3DivergingBarChart/
+│   │   ├── d3WaffleChart/
+│   │   ├── d3SunburstChart/
+│   │   ├── d3BubbleChart/
+│   │   ├── d3ChordDiagram/
+│   │   └── d3GanttChart/
 │   └── staticresources/
-│       ├── d3.js               # D3.js v7
-│       └── usStates.js         # US states GeoJSON
+│       ├── d3                  # D3.js v7 (full build, no file extension)
+│       ├── d3Sankey.js         # Sankey layout plugin
+│       └── usStates            # US states GeoJSON
 ├── jest.config.js
 ├── package.json
 ├── PROJECT-SPEC.md
@@ -363,14 +396,13 @@ d3-lwc/
 # Run all tests
 npm test
 
-# Run specific component tests
-npm test -- --testPathPattern=d3BarChart
-
 # Run with coverage
 npm test -- --coverage
 ```
 
-**Test Coverage:** 2,561 tests across 61 suites (includes server-side aggregation path tests)
+**Test Coverage:** 2,561 tests across 61 suites (includes server-side aggregation path tests).
+
+> Note: this Jest config runs the full suite — there is no per-component `--testPathPattern` narrowing flag. The pre-commit hook (husky + lint-staged) runs the relevant tests on staged files automatically.
 
 ## 📚 References
 
