@@ -67,6 +67,13 @@
         datasource="Salesforce Standard,Warm,Cool,Vibrant"
         description="Color palette for the chart"
       />
+            <property
+        name="showLegend"
+        type="Boolean"
+        label="Show Legend"
+        default="true"
+        description="Display legend next to chart"
+      />
 
             <!-- Drill-Down -->
             <property

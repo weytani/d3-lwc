@@ -282,7 +282,7 @@ export default class D3DivergingBarChart extends NavigationMixin(
       top: 20,
       right: 20,
       bottom: 40,
-      left: 100
+      left: 150
     };
 
     const width = containerWidth - margin.left - margin.right;
@@ -339,7 +339,7 @@ export default class D3DivergingBarChart extends NavigationMixin(
       .append("g")
       .attr("class", "y-axis")
       .attr("transform", `translate(${zero},0)`)
-      .call(d3.axisLeft(yScale).tickFormat((d) => truncateLabel(d, 14)));
+      .call(d3.axisLeft(yScale).tickFormat((d) => truncateLabel(d, 22)));
 
     // Diverging bars: extend left for negative, right for positive
     const bars = this.svg

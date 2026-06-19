@@ -311,7 +311,10 @@ export default class D3ChordDiagram extends NavigationMixin(LightningElement) {
 
     if (width <= 0 || height <= 0) return;
 
-    const outerRadius = Math.min(width, height) / 2;
+    // Reserve a margin for the radial group labels that sit outside the ring,
+    // so they don't clip against the SVG edges.
+    const labelMargin = 60;
+    const outerRadius = Math.max(20, Math.min(width, height) / 2 - labelMargin);
     const innerRadius = outerRadius - Math.max(12, outerRadius * 0.08);
 
     this.svg = d3
@@ -369,13 +372,38 @@ export default class D3ChordDiagram extends NavigationMixin(LightningElement) {
         this.handleArcClick(d.index);
       });
 
-    // Group labels.
-    groups
+    // Group labels — placed radially just outside each arc, rotated to follow
+    // the arc's midpoint angle, and flipped on the left half so they stay
+    // upright and readable instead of piling up in the center. Tiny arcs (whose
+    // angular span is below MIN_LABEL_ANGLE) are skipped so their labels don't
+    // crowd/overlap where many small slivers cluster at the top of the ring —
+    // their data still lives in the ribbons and the hover tooltip. Labels bind
+    // to a pre-filtered copy of the groups (an Array.filter) so only the major
+    // categories get a label.
+    const MIN_LABEL_ANGLE = 0.08; // radians (~4.6°)
+    const labelRadius = outerRadius + 6;
+    const labeledGroups = chordLayout.groups.filter(
+      (d) => d.endAngle - d.startAngle >= MIN_LABEL_ANGLE
+    );
+    this.svg
+      .append("g")
+      .attr("class", "chord-labels")
+      .selectAll(".chord-label")
+      .data(labeledGroups)
+      .enter()
       .append("text")
       .attr("class", "chord-label")
       .attr("dy", "0.35em")
-      .attr("text-anchor", "middle")
-      .style("font-size", "11px")
+      .attr("transform", (d) => {
+        const angle = (d.startAngle + d.endAngle) / 2;
+        const rotate = (angle * 180) / Math.PI - 90;
+        const flip = angle > Math.PI ? "rotate(180)" : "";
+        return `rotate(${rotate}) translate(${labelRadius},0) ${flip}`;
+      })
+      .attr("text-anchor", (d) => {
+        return (d.startAngle + d.endAngle) / 2 > Math.PI ? "end" : "start";
+      })
+      .style("font-size", "10px")
       .style("fill", "#16325c")
       .text((d) => truncateLabel(this._labels[d.index]));
 

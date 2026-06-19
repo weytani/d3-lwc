@@ -286,7 +286,7 @@ export default class D3LollipopChart extends NavigationMixin(LightningElement) {
     const margin = {
       top: 20,
       right: 20,
-      bottom: this.config.showGrid !== false ? 60 : 40,
+      bottom: this.config.showGrid !== false ? 110 : 95,
       left: 60
     };
 
@@ -343,7 +343,7 @@ export default class D3LollipopChart extends NavigationMixin(LightningElement) {
       .append("g")
       .attr("class", "x-axis")
       .attr("transform", `translate(0,${height})`)
-      .call(d3.axisBottom(xScale).tickFormat((d) => truncateLabel(d, 12)));
+      .call(d3.axisBottom(xScale).tickFormat((d) => truncateLabel(d, 22)));
 
     // Rotate labels if many categories
     if (this.chartData.length > 6) {

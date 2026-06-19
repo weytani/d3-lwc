@@ -357,19 +357,27 @@ describe("c-d3-bubble-chart integration", () => {
   // ═══════════════════════════════════════════════════════════════
 
   describe("theme pipeline integration", () => {
+    // Returns the last "fill" accessor passed to a bubble circle. The bubble
+    // chart binds fill as a function on the circle data-join (so it can color
+    // by category); resolve it by invoking with a datum.
+    const resolvedFill = () => {
+      const fillCalls = mockD3.attr.mock.calls.filter((c) => c[0] === "fill");
+      expect(fillCalls.length).toBeGreaterThan(0);
+      return fillCalls[fillCalls.length - 1][1];
+    };
+
     it("applies the first Salesforce Standard palette color to bubble fill", async () => {
       await createChart({
         theme: "Salesforce Standard",
         recordCollection: SAMPLE_DATA
       });
 
-      const attrCalls = mockD3.attr.mock.calls;
-      const fillCalls = attrCalls.filter((call) => call[0] === "fill");
-      expect(fillCalls.length).toBeGreaterThan(0);
-
-      // Bubble fill is a single hex (one-color palette slice), not a function
-      const fillValues = fillCalls.map((c) => c[1]);
-      expect(fillValues).toContain("#1589EE");
+      // Bubble fill is a data-join accessor function; resolve it to the color.
+      // With no labelField set every datum is uncategorized, so the accessor
+      // returns the theme's first palette color for any input.
+      const fillFn = resolvedFill();
+      expect(typeof fillFn).toBe("function");
+      expect(fillFn(SAMPLE_DATA[0])).toBe("#1589EE");
     });
 
     it("applies the first Warm palette color to bubble fill", async () => {
@@ -378,10 +386,8 @@ describe("c-d3-bubble-chart integration", () => {
         recordCollection: SAMPLE_DATA
       });
 
-      const attrCalls = mockD3.attr.mock.calls;
-      const fillCalls = attrCalls.filter((call) => call[0] === "fill");
-      const fillValues = fillCalls.map((c) => c[1]);
-      expect(fillValues).toContain("#FF6B6B");
+      const fillFn = resolvedFill();
+      expect(fillFn(SAMPLE_DATA[0])).toBe("#FF6B6B");
     });
 
     it("uses custom colors from advancedConfig over the theme", async () => {
@@ -391,10 +397,8 @@ describe("c-d3-bubble-chart integration", () => {
         recordCollection: SAMPLE_DATA
       });
 
-      const attrCalls = mockD3.attr.mock.calls;
-      const fillCalls = attrCalls.filter((call) => call[0] === "fill");
-      const fillValues = fillCalls.map((c) => c[1]);
-      expect(fillValues).toContain("#AA0000");
+      const fillFn = resolvedFill();
+      expect(fillFn(SAMPLE_DATA[0])).toBe("#AA0000");
     });
   });
 

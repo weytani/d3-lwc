@@ -36,6 +36,26 @@
           lwc:dom="manual"
           style={containerStyle}
         ></div>
+
+        <!-- Legend -->
+        <template lwc:if={effectiveShowLegend}>
+          <div class="legend-container">
+            <template for:each={legendItems} for:item="item">
+              <div
+                key={item.label}
+                class="legend-item"
+                data-label={item.label}
+                onclick={handleLegendClick}
+              >
+                <span class="legend-color" style={item.colorStyle}></span>
+                <span class="legend-label" title={item.label}
+                  >{item.label}</span
+                >
+                <span class="legend-value">{item.percent}</span>
+              </div>
+            </template>
+          </div>
+        </template>
       </div>
     </template>
 

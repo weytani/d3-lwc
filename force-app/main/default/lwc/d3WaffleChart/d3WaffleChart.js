@@ -50,6 +50,9 @@ export default class D3WaffleChart extends NavigationMixin(LightningElement) {
   /** Color theme */
   @api theme = DEFAULT_THEME;
 
+  /** Show legend (defaults to true via getter) */
+  @api showLegend;
+
   /** Advanced configuration JSON */
   @api advancedConfig = "{}";
 
@@ -117,6 +120,26 @@ export default class D3WaffleChart extends NavigationMixin(LightningElement) {
       this._configParsed = true;
     }
     return this._config;
+  }
+
+  get effectiveShowLegend() {
+    return this.showLegend !== false;
+  }
+
+  get legendItems() {
+    if (!this.chartData || !this.effectiveShowLegend) return [];
+    const colorScale = createColorScale(
+      this.theme,
+      this.chartData.map((d) => d.label),
+      this.config.customColors
+    );
+    return this.chartData.map((d) => ({
+      label: d.label,
+      value: d.value,
+      percent:
+        this.totalValue > 0 ? formatPercent(d.value / this.totalValue) : "0%",
+      colorStyle: `background-color: ${colorScale(d.label)};`
+    }));
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -374,6 +397,11 @@ export default class D3WaffleChart extends NavigationMixin(LightningElement) {
     const gap = side * 0.02;
     const cellSize = (side - gap * (GRID_SIZE - 1)) / GRID_SIZE;
 
+    // Center the square grid within the (typically wider) drawing area so it
+    // doesn't hug the left edge leaving empty space on the right.
+    const offsetX = margin.left + Math.max(0, (width - side) / 2);
+    const offsetY = margin.top + Math.max(0, (height - side) / 2);
+
     this.svg = d3
       .select(container)
       .append("svg")
@@ -381,7 +409,7 @@ export default class D3WaffleChart extends NavigationMixin(LightningElement) {
       .attr("height", this.height)
       .attr("class", "waffle-chart-svg")
       .append("g")
-      .attr("transform", `translate(${margin.left},${margin.top})`);
+      .attr("transform", `translate(${offsetX},${offsetY})`);
 
     const allocations = this._allocateCells();
     const cells = this._buildCells(allocations);
@@ -487,6 +515,18 @@ export default class D3WaffleChart extends NavigationMixin(LightningElement) {
         composed: true
       })
     );
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // LEGEND CLICK
+  // ═══════════════════════════════════════════════════════════════
+
+  handleLegendClick(event) {
+    const label = event.currentTarget.dataset.label;
+    const item = this.chartData.find((d) => d.label === label);
+    if (item) {
+      this.handleCellClick({ label: item.label, value: item.value });
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════

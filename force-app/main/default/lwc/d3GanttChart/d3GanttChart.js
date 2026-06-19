@@ -274,7 +274,7 @@ export default class D3GanttChart extends NavigationMixin(LightningElement) {
     // Clear existing SVG (idempotent across init + resize)
     d3.select(container).select("svg").remove();
 
-    const margin = { top: 20, right: 20, bottom: 40, left: 100 };
+    const margin = { top: 20, right: 20, bottom: 40, left: 180 };
     const width = containerWidth - margin.left - margin.right;
     const height = this.height - margin.top - margin.bottom;
 
@@ -317,7 +317,7 @@ export default class D3GanttChart extends NavigationMixin(LightningElement) {
     this.svg
       .append("g")
       .attr("class", "y-axis")
-      .call(d3.axisLeft(yScale).tickFormat((d) => truncateLabel(d, 14)));
+      .call(d3.axisLeft(yScale).tickFormat((d) => truncateLabel(d, 22)));
 
     // Task bars
     const bars = this.svg

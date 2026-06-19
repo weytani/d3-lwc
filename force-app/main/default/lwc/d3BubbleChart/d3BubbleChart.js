@@ -8,7 +8,7 @@ import {
   SVG_ELEMENT_CAP,
   CHART_LIMITS
 } from "c/dataService";
-import { getColors, DEFAULT_THEME } from "c/themeService";
+import { getColors, createColorScale, DEFAULT_THEME } from "c/themeService";
 import {
   formatNumber,
   createTooltip,
@@ -370,8 +370,23 @@ export default class D3BubbleChart extends NavigationMixin(LightningElement) {
       .domain([0, sizeExtent[1] || 1])
       .range([4, 40]);
 
-    const colors = getColors(this.theme, 1, this.config.customColors);
-    const bubbleColor = colors[0];
+    // Color bubbles by category when a label/category field yields more than
+    // one distinct value (gives overlapping points visual variety). Otherwise
+    // fall back to the theme's base color. In both cases fill-opacity + a
+    // stroke (below) keep overlapping bubbles legible as separate marks.
+    const distinctLabels = [
+      ...new Set(
+        this.chartData.map((d) => d.label).filter((l) => l !== "" && l != null)
+      )
+    ];
+    const colorByCategory = distinctLabels.length > 1;
+    const categoryScale = colorByCategory
+      ? createColorScale(this.theme, distinctLabels, this.config.customColors)
+      : null;
+    const baseColor = getColors(this.theme, 1, this.config.customColors)[0];
+    const fillFor = (d) => {
+      return colorByCategory ? categoryScale(d.label) : baseColor;
+    };
 
     if (this.config.showGrid !== false) {
       this.svg
@@ -427,6 +442,9 @@ export default class D3BubbleChart extends NavigationMixin(LightningElement) {
       .style("fill", "#706e6b")
       .text(this.effectiveYLabel);
 
+    // Translucent fill + a solid same-color stroke so heavily overlapping
+    // bubbles read as separate marks rather than one flat blob.
+    const fillOpacity = 0.55;
     const bubbles = this.svg
       .selectAll(".bubble")
       .data(this.chartData)
@@ -436,11 +454,12 @@ export default class D3BubbleChart extends NavigationMixin(LightningElement) {
       .attr("cx", (d) => xScale(d.x))
       .attr("cy", (d) => yScale(d.y))
       .attr("r", 0)
-      .attr("fill", bubbleColor)
-      .attr("stroke", "white")
-      .attr("stroke-width", 1.5)
-      .attr("cursor", this.objectApiName ? "pointer" : "default")
-      .attr("opacity", 0.7);
+      .attr("fill", (d) => fillFor(d))
+      .attr("fill-opacity", fillOpacity)
+      .attr("stroke", (d) => fillFor(d))
+      .attr("stroke-width", 1.25)
+      .attr("stroke-opacity", 0.9)
+      .attr("cursor", this.objectApiName ? "pointer" : "default");
 
     bubbles
       .transition()
@@ -454,14 +473,14 @@ export default class D3BubbleChart extends NavigationMixin(LightningElement) {
         d3.select(event.currentTarget)
           .transition()
           .duration(100)
-          .attr("opacity", 1);
+          .attr("fill-opacity", 0.85);
       })
       .on("mouseleave", (event) => {
         this.hideTooltip();
         d3.select(event.currentTarget)
           .transition()
           .duration(100)
-          .attr("opacity", 0.7);
+          .attr("fill-opacity", fillOpacity);
       })
       .on("click", (event, d) => {
         this.handleBubbleClick(d);

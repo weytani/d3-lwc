@@ -395,19 +395,42 @@ export default class D3PieChart extends NavigationMixin(LightningElement) {
         };
       });
 
-    // Per-slice labels (label text centered on each slice via arc.centroid)
+    // In-wedge labels: category names are NOT drawn (they pile up over the
+    // center on many-slice pies and are redundant with the right-side legend
+    // + tooltip). We optionally draw ONLY a short percentage, and only for
+    // wedges wide enough that it clearly fits without overlapping a neighbor.
+    // The threshold is an arc angle (radians); the default ~0.5 rad ≈ an 8%
+    // slice. Set advancedConfig.showLabels === false to suppress entirely.
     if (this.config.showLabels !== false) {
+      const minLabelAngle =
+        typeof this.config.minLabelAngle === "number"
+          ? this.config.minLabelAngle
+          : 0.5;
+      const pieData = pie(this.chartData);
+      const labeled = pieData.filter(
+        (d) => d.endAngle - d.startAngle >= minLabelAngle
+      );
+
       this.svg
         .selectAll(".slice-label")
-        .data(pie(this.chartData))
+        .data(labeled)
         .enter()
         .append("text")
         .attr("class", "slice-label")
         .attr("text-anchor", "middle")
+        .attr("dy", "0.35em")
         .attr("transform", (d) => `translate(${arc.centroid(d)})`)
         .style("font-size", "12px")
-        .style("fill", "#16325c")
-        .text((d) => d.data.label);
+        .style("font-weight", "600")
+        .style("fill", "#ffffff")
+        .style("paint-order", "stroke")
+        .style("stroke", "rgba(0,0,0,0.35)")
+        .style("stroke-width", "2px")
+        .text((d) => {
+          return this.totalValue > 0
+            ? formatPercent(d.data.value / this.totalValue)
+            : "";
+        });
     }
   }
 

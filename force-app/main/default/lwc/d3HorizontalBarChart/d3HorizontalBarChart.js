@@ -291,7 +291,7 @@ export default class D3HorizontalBarChart extends NavigationMixin(
       top: 20,
       right: 30,
       bottom: this.config.showGrid !== false ? 50 : 40,
-      left: 120
+      left: 160
     };
 
     const width = containerWidth - margin.left - margin.right;
@@ -355,7 +355,7 @@ export default class D3HorizontalBarChart extends NavigationMixin(
     this.svg
       .append("g")
       .attr("class", "y-axis")
-      .call(d3.axisLeft(yScale).tickFormat((d) => truncateLabel(d, 16)));
+      .call(d3.axisLeft(yScale).tickFormat((d) => truncateLabel(d, 24)));
 
     // Bars — grow horizontally from x=0
     const bars = this.svg
