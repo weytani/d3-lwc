@@ -59,7 +59,7 @@
                 </componentInstanceProperties>
                 <componentInstanceProperties>
                     <name>height</name>
-                    <value>300</value>
+                    <value>500</value>
                 </componentInstanceProperties>
                 <componentInstanceProperties>
                     <name>theme</name>
@@ -127,7 +127,7 @@
                 </componentInstanceProperties>
                 <componentInstanceProperties>
                     <name>height</name>
-                    <value>200</value>
+                    <value>320</value>
                 </componentInstanceProperties>
                 <componentInstanceProperties>
                     <name>theme</name>
