@@ -6,6 +6,14 @@
         <visible>true</visible>
     </applicationVisibilities>
     <tabVisibilities>
+        <tab>d3_lwc</tab>
+        <visibility>DefaultOn</visibility>
+    </tabVisibilities>
+    <tabVisibilities>
+        <tab>d3_lwc_phase2</tab>
+        <visibility>DefaultOn</visibility>
+    </tabVisibilities>
+    <tabVisibilities>
         <tab>d3_lwc_phase3</tab>
         <visibility>DefaultOn</visibility>
     </tabVisibilities>
