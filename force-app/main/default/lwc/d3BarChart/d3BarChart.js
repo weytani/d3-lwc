@@ -2,7 +2,7 @@
  * ABOUTME: D3 Bar Chart Lightning Web Component.
  * ABOUTME: Displays aggregated data as vertical bars with drill-down support.
  */
-import { LightningElement, api, track } from "lwc";
+import { LightningElement, api, track, wire } from "lwc";
 import { loadD3 } from "c/d3Lib";
 import {
   prepareData,
@@ -22,6 +22,8 @@ import {
 import { NavigationMixin } from "lightning/navigation";
 import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
 import getAggregatedData from "@salesforce/apex/D3ChartController.getAggregatedData";
+import { gql, graphql } from "lightning/graphql";
+import { buildAggregateQuery, normalizeAggregate } from "c/graphqlService";
 
 export default class D3BarChart extends NavigationMixin(LightningElement) {
   // ═══════════════════════════════════════════════════════════════
@@ -63,6 +65,12 @@ export default class D3BarChart extends NavigationMixin(LightningElement) {
 
   /** Optional WHERE clause fragment for server-side aggregation */
   @api filterClause = "";
+
+  /** Fetch-mode selector: "auto" (default, existing priority order), "apex", or "graphql". */
+  @api fetchMode = "auto";
+
+  /** Structured filter for the GraphQL path: { field, operator, value }. */
+  @api graphqlFilter;
 
   // ═══════════════════════════════════════════════════════════════
   // TRACKED STATE
@@ -117,6 +125,77 @@ export default class D3BarChart extends NavigationMixin(LightningElement) {
   }
 
   // ═══════════════════════════════════════════════════════════════
+  // GRAPHQL SELF-FETCH PATH (Approach A — additive)
+  // ═══════════════════════════════════════════════════════════════
+
+  /**
+   * Reactive GraphQL query for the self-fetch path. Returns undefined (so the wire
+   * is skipped) unless fetchMode is "graphql" and all required config is present.
+   */
+  get gqlQuery() {
+    if (this.fetchMode !== "graphql") return undefined;
+    if (
+      !this.objectApiName ||
+      !this.groupByField ||
+      !this.valueField ||
+      !this.operation
+    ) {
+      return undefined;
+    }
+    let queryString;
+    try {
+      queryString = buildAggregateQuery({
+        objectApiName: this.objectApiName,
+        groupByField: this.groupByField,
+        valueField: this.valueField,
+        operation: this.operation,
+        filter: this.graphqlFilter,
+        first: this.recordLimit || 2000
+      });
+    } catch {
+      // Unsupported operation/config: leave the wire un-provisioned; error surfaces below.
+      return undefined;
+    }
+    return gql`
+      ${queryString}
+    `;
+  }
+
+  @wire(graphql, { query: "$gqlQuery" })
+  wiredAggregate({ data, errors }) {
+    if (this.fetchMode !== "graphql") return;
+    if (errors) {
+      this.error = this._formatGqlErrors(errors);
+      this.isLoading = false;
+      return;
+    }
+    if (!data) return; // initial undefined emission
+    try {
+      const normalized = normalizeAggregate(data, {
+        objectApiName: this.objectApiName,
+        groupByField: this.groupByField,
+        valueField: this.valueField,
+        operation: this.operation
+      });
+      if (!normalized.length) {
+        this.error = "No data after aggregation";
+      } else {
+        this.chartData = normalized;
+        this.error = null;
+        this.chartRendered = false; // force renderedCallback to re-initialize the SVG
+      }
+    } catch (e) {
+      this.error = e.message;
+    }
+    this.isLoading = false;
+  }
+
+  _formatGqlErrors(errors) {
+    const list = Array.isArray(errors) ? errors : [errors];
+    return list.map((e) => e?.message || e).join("; ") || "GraphQL error";
+  }
+
+  // ═══════════════════════════════════════════════════════════════
   // LIFECYCLE HOOKS
   // ═══════════════════════════════════════════════════════════════
 
@@ -167,6 +246,11 @@ export default class D3BarChart extends NavigationMixin(LightningElement) {
   // ═══════════════════════════════════════════════════════════════
 
   async loadData() {
+    // GraphQL path is handled reactively by the @wire(graphql) — nothing to do here.
+    if (this.fetchMode === "graphql") {
+      return;
+    }
+
     // Priority 1: Use recordCollection if provided (client-side aggregation)
     if (this.recordCollection && this.recordCollection.length > 0) {
       this.chartData = this._aggregateRawData([...this.recordCollection]);
