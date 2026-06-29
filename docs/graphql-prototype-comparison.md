@@ -25,13 +25,14 @@
 
 ### Deviation discovered during Approach B build
 
-Approach B left `@api filterClause` orphaned on the gantt: the old SOQL-fragment
-filter prop still appears in App Builder metadata but is no longer read anywhere —
-`graphqlFilter` replaced its role. This is a real replace-cost: replacing a data
-path leaves orphaned configuration properties that need explicit migration or
-follow-up cleanup before consumers can safely upgrade. This prop was not removed
-during the prototype to keep the scope bounded, but it must be addressed before
-any production rollout of Approach B.
+Approach B found `@api filterClause` orphaned on the gantt: the old SOQL-fragment
+filter prop still appeared in App Builder metadata but was no longer read anywhere —
+`graphqlFilter` replaced its role. The prototype REMOVED both the `@api filterClause`
+field and its `<property>` block from the meta XML. The lasting lesson: replacing a
+data path requires auditing and removing orphaned config props per chart before
+exposing the component to admins — an admin-visible field that the component silently
+ignores is a real UX defect, and the cleanup cost must be counted in the replace-cost
+column. This cost point therefore stands even though the specific prop is now clean.
 
 ## Aggregate-shape verification result
 

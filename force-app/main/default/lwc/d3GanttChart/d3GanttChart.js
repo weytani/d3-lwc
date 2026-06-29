@@ -53,9 +53,6 @@ export default class D3GanttChart extends NavigationMixin(LightningElement) {
   /** Filter field for drill-down */
   @api filterField = "";
 
-  /** Optional WHERE clause fragment for server-side fetch */
-  @api filterClause = "";
-
   /** Structured filter for the GraphQL path: { field, operator, value }. */
   @api graphqlFilter;
 

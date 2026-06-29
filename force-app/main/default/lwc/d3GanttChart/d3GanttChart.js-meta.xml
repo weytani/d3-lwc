@@ -74,13 +74,6 @@
         description="Field to filter by on drill-down (defaults to Label Field)"
       />
             <property
-        name="filterClause"
-        type="String"
-        label="Filter Clause"
-        description="Optional WHERE clause fragment for the server-side fetch"
-      />
-
-            <property
         name="recordLimit"
         type="Integer"
         label="Record Limit"

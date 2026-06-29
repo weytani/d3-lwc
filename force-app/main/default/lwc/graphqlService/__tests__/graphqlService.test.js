@@ -26,6 +26,12 @@ describe("buildWhere", () => {
     );
   });
 
+  it("supports the like operator with wildcard string values", () => {
+    expect(
+      buildWhere({ field: "Name", operator: "like", value: "%Acme%" })
+    ).toBe('where: { Name: { like: "%Acme%" } }');
+  });
+
   it("throws on an unsupported operator", () => {
     expect(() =>
       buildWhere({ field: "X", operator: "between", value: 1 })
