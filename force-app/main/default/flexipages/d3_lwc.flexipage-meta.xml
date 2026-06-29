@@ -319,7 +319,7 @@
                 <componentInstanceProperties>
                     <name>soqlQuery</name>
                     <value
-          >SELECT Id, Name, ParentId FROM Account WHERE ParentId != null</value>
+          >SELECT Id, Name, ParentId FROM Account WHERE ParentId != null OR Name = 'Pinnacle Global'</value>
                 </componentInstanceProperties>
                 <componentInstanceProperties>
                     <name>nodeIdField</name>

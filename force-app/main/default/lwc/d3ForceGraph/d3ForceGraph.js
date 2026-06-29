@@ -267,7 +267,9 @@ export default class D3ForceGraph extends NavigationMixin(LightningElement) {
       throw new Error("sourceField and targetField are required for flat data");
     }
 
-    const requiredFields = [this.sourceField, this.targetField];
+    // Only the source (node) field is required per record. The target may be
+    // absent on root nodes of a hierarchy (they have no parent edge).
+    const requiredFields = [this.sourceField];
 
     const prepared = prepareData(rawData, {
       requiredFields,
@@ -304,15 +306,20 @@ export default class D3ForceGraph extends NavigationMixin(LightningElement) {
     const links = data.links && Array.isArray(data.links) ? data.links : [];
 
     // Normalize nodes to ensure they have id and label
-    const nodes = data.nodes.slice(0, this.recordLimit || MAX_NODES).map((node, index) => ({
-      id: node.id || node[this.nodeIdField] || `node-${index}`,
-      label:
-        node.label || node[this.nodeLabelField] || node.name || `Node ${index}`,
-      size: node.size || node[this.nodeSizeField],
-      type: node.type || node[this.nodeTypeField],
-      recordId: node.recordId || node.Id || node.id,
-      ...node
-    }));
+    const nodes = data.nodes
+      .slice(0, this.recordLimit || MAX_NODES)
+      .map((node, index) => ({
+        id: node.id || node[this.nodeIdField] || `node-${index}`,
+        label:
+          node.label ||
+          node[this.nodeLabelField] ||
+          node.name ||
+          `Node ${index}`,
+        size: node.size || node[this.nodeSizeField],
+        type: node.type || node[this.nodeTypeField],
+        recordId: node.recordId || node.Id || node.id,
+        ...node
+      }));
 
     // Create node ID set for validation
     const nodeIds = new Set(nodes.map((n) => n.id));
@@ -353,27 +360,32 @@ export default class D3ForceGraph extends NavigationMixin(LightningElement) {
     const nodeMap = new Map();
     const links = [];
 
-    // Process each relationship record
+    // Pass 1: every record describes a node (its source). Build each node
+    // from its own record up front so a node that is also referenced as
+    // another record's target (e.g. a hierarchy parent) keeps its real label
+    // instead of a placeholder id.
+    data.forEach((record) => {
+      const sourceId = String(record[this.sourceField] ?? "");
+      if (!sourceId || nodeMap.has(sourceId)) return;
+
+      nodeMap.set(sourceId, {
+        id: sourceId,
+        label: record[this.nodeLabelField] || sourceId,
+        size: this.nodeSizeField ? Number(record[this.nodeSizeField]) || 1 : 1,
+        type: this.nodeTypeField ? record[this.nodeTypeField] : null,
+        recordId: record[this.nodeIdField] || record.Id
+      });
+    });
+
+    // Pass 2: build links. A record with no target is a root node (no edge).
+    // A target with no record of its own is added as a fallback node labeled
+    // by its id.
     data.forEach((record) => {
       const sourceId = String(record[this.sourceField] ?? "");
       const targetId = String(record[this.targetField] ?? "");
 
       if (!sourceId || !targetId) return;
 
-      // Add source node if not exists
-      if (!nodeMap.has(sourceId)) {
-        nodeMap.set(sourceId, {
-          id: sourceId,
-          label: record[this.nodeLabelField] || sourceId,
-          size: this.nodeSizeField
-            ? Number(record[this.nodeSizeField]) || 1
-            : 1,
-          type: this.nodeTypeField ? record[this.nodeTypeField] : null,
-          recordId: record[this.nodeIdField] || record.Id
-        });
-      }
-
-      // Add target node if not exists
       if (!nodeMap.has(targetId)) {
         nodeMap.set(targetId, {
           id: targetId,
@@ -384,7 +396,6 @@ export default class D3ForceGraph extends NavigationMixin(LightningElement) {
         });
       }
 
-      // Add link
       links.push({
         source: sourceId,
         target: targetId,
@@ -395,7 +406,10 @@ export default class D3ForceGraph extends NavigationMixin(LightningElement) {
     });
 
     // Enforce node limit
-    const nodes = Array.from(nodeMap.values()).slice(0, this.recordLimit || MAX_NODES);
+    const nodes = Array.from(nodeMap.values()).slice(
+      0,
+      this.recordLimit || MAX_NODES
+    );
     const nodeIds = new Set(nodes.map((n) => n.id));
 
     // Filter links to only include valid node references

@@ -547,6 +547,57 @@ describe("c-d3-force-graph", () => {
       );
       expect(errorElement).toBeFalsy();
     });
+
+    it("includes a root node (null target) labeled by its nodeLabelField", async () => {
+      // A hierarchy root has no parent (null targetField). It must still
+      // render as a node labeled by Name, not its raw Id, and must not
+      // error out the whole graph. Child is listed first so the root is
+      // first seen as a link target before its own labeled record.
+      const hierarchyData = [
+        { Id: "child", SourceId: "child", TargetId: "root", Name: "Acme Corp" },
+        {
+          Id: "root",
+          SourceId: "root",
+          TargetId: null,
+          Name: "Pinnacle Global"
+        }
+      ];
+
+      await createChart({ recordCollection: hierarchyData });
+      await flushPromises();
+
+      const errorEl = element.shadowRoot.querySelector(
+        ".slds-text-color_error"
+      );
+      expect(errorEl).toBeFalsy();
+
+      const boundNodes = mockD3.data.mock.calls
+        .map((call) => call[0])
+        .find(
+          (arg) => Array.isArray(arg) && arg.some((n) => n && n.id === "root")
+        );
+      expect(boundNodes).toBeDefined();
+      const rootNode = boundNodes.find((n) => n.id === "root");
+      expect(rootNode.label).toBe("Pinnacle Global");
+    });
+
+    it("does not require targetField on every record (roots have none)", async () => {
+      // Mirrors the org: the root record has no target key at all. The
+      // graph must still render rather than erroring "Missing required
+      // fields: TargetId".
+      const data = [
+        { Id: "root", SourceId: "root", Name: "Root Co" },
+        { Id: "child", SourceId: "child", TargetId: "root", Name: "Child Co" }
+      ];
+
+      await createChart({ recordCollection: data });
+      await flushPromises();
+
+      const errorEl = element.shadowRoot.querySelector(
+        ".slds-text-color_error"
+      );
+      expect(errorEl).toBeFalsy();
+    });
   });
 
   // ═══════════════════════════════════════════════════════════════
