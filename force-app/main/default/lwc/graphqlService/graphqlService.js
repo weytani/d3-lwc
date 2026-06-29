@@ -70,3 +70,59 @@ export function normalizeRecords(
     end: e.node[endField]?.value ?? null
   }));
 }
+
+/** Chart aggregate operation -> GraphQL aggregate function. Count is intentionally
+ * excluded in the prototype (see buildAggregateQuery). */
+export const AGG_FN = { Sum: "sum", Average: "avg", Min: "min", Max: "max" };
+
+/**
+ * Builds a grouped-aggregate GraphQL query string.
+ * @param {{objectApiName:string, groupByField:string, valueField:string,
+ *          operation:string, filter?:object, first?:number}} config
+ * @returns {string}
+ */
+export function buildAggregateQuery({
+  objectApiName,
+  groupByField,
+  valueField,
+  operation,
+  filter,
+  first = 2000
+}) {
+  if (!objectApiName || !groupByField || !valueField || !operation) {
+    throw new Error(
+      "objectApiName, groupByField, valueField, and operation are required"
+    );
+  }
+  const fn = AGG_FN[operation];
+  if (!fn) {
+    throw new Error(
+      `Aggregate operation not supported on the GraphQL path in this prototype: ${operation} (use dataSource="apex")`
+    );
+  }
+
+  const args = [`groupBy: { ${groupByField}: {} }`];
+  const where = buildWhere(filter);
+  if (where) args.push(where);
+  if (first) args.push(`first: ${first}`);
+
+  return `query { uiapi { query { ${objectApiName}(${args.join(", ")}) { edges { node { ${groupByField} { value } aggregate { ${valueField} { ${fn} { value } } } } } } } } }`;
+}
+
+/**
+ * Normalizes a grouped-aggregate wire result into [{label,value}] for the bar chart.
+ * @param {object} data wire `data`
+ * @param {{objectApiName:string, groupByField:string, valueField:string, operation:string}} cfg
+ * @returns {Array<{label:*, value:*}>}
+ */
+export function normalizeAggregate(
+  data,
+  { objectApiName, groupByField, valueField, operation }
+) {
+  const fn = AGG_FN[operation];
+  const edges = data?.uiapi?.query?.[objectApiName]?.edges ?? [];
+  return edges.map((e) => ({
+    label: e.node[groupByField]?.value ?? null,
+    value: e.node.aggregate?.[valueField]?.[fn]?.value ?? null
+  }));
+}

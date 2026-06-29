@@ -2,7 +2,10 @@
 import {
   buildWhere,
   buildRecordQuery,
-  normalizeRecords
+  normalizeRecords,
+  buildAggregateQuery,
+  normalizeAggregate,
+  AGG_FN
 } from "c/graphqlService";
 
 describe("buildWhere", () => {
@@ -107,5 +110,94 @@ describe("normalizeRecords", () => {
         }
       )
     ).toEqual([]);
+  });
+});
+
+describe("buildAggregateQuery", () => {
+  it("builds a groupBy + sum query", () => {
+    const q = buildAggregateQuery({
+      objectApiName: "Opportunity",
+      groupByField: "StageName",
+      valueField: "Amount",
+      operation: "Sum",
+      first: 2000
+    });
+    expect(q).toContain("Opportunity(");
+    expect(q).toContain("groupBy: { StageName: {} }");
+    expect(q).toContain("first: 2000");
+    expect(q).toContain("StageName { value }");
+    expect(q).toContain("aggregate { Amount { sum { value } } }");
+  });
+
+  it("includes a where filter when provided", () => {
+    const q = buildAggregateQuery({
+      objectApiName: "Opportunity",
+      groupByField: "StageName",
+      valueField: "Amount",
+      operation: "Average",
+      filter: { field: "IsClosed", operator: "eq", value: true }
+    });
+    expect(q).toContain("avg { value }");
+    expect(q).toContain("where: { IsClosed: { eq: true } }");
+  });
+
+  it("throws for an unsupported operation (e.g. Count)", () => {
+    expect(() =>
+      buildAggregateQuery({
+        objectApiName: "Opportunity",
+        groupByField: "StageName",
+        valueField: "Amount",
+        operation: "Count"
+      })
+    ).toThrow(/Count/);
+  });
+});
+
+describe("normalizeAggregate", () => {
+  it("maps grouped aggregate edges to [{label,value}]", () => {
+    const data = {
+      uiapi: {
+        query: {
+          Opportunity: {
+            edges: [
+              {
+                node: {
+                  StageName: { value: "Prospecting" },
+                  aggregate: { Amount: { sum: { value: 1000 } } }
+                }
+              },
+              {
+                node: {
+                  StageName: { value: "Closed Won" },
+                  aggregate: { Amount: { sum: { value: 5000 } } }
+                }
+              }
+            ]
+          }
+        }
+      }
+    };
+    expect(
+      normalizeAggregate(data, {
+        objectApiName: "Opportunity",
+        groupByField: "StageName",
+        valueField: "Amount",
+        operation: "Sum"
+      })
+    ).toEqual([
+      { label: "Prospecting", value: 1000 },
+      { label: "Closed Won", value: 5000 }
+    ]);
+  });
+});
+
+describe("AGG_FN", () => {
+  it("maps chart operations to GraphQL aggregate functions", () => {
+    expect(AGG_FN).toEqual({
+      Sum: "sum",
+      Average: "avg",
+      Min: "min",
+      Max: "max"
+    });
   });
 });
