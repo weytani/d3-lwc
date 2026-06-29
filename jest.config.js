@@ -10,6 +10,7 @@ module.exports = {
     "^lightning/navigation$": "<rootDir>/__mocks__/lightning/navigation.js",
     "^lightning/platformResourceLoader$":
       "<rootDir>/__mocks__/lightning/platformResourceLoader.js",
+    "^lightning/graphql$": "<rootDir>/__mocks__/lightning/graphql.js",
     "^@salesforce/apex/D3ChartController.executeQuery$":
       "<rootDir>/__mocks__/@salesforce/apex/D3ChartController.executeQuery.js",
     "^@salesforce/apex/D3ChartController.getAggregatedData$":
