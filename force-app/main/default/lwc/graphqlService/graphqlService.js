@@ -106,7 +106,7 @@ export function buildAggregateQuery({
   if (where) args.push(where);
   if (first) args.push(`first: ${first}`);
 
-  return `query { uiapi { query { ${objectApiName}(${args.join(", ")}) { edges { node { ${groupByField} { value } aggregate { ${valueField} { ${fn} { value } } } } } } } } }`;
+  return `query { uiapi { aggregate { ${objectApiName}(${args.join(", ")}) { edges { node { aggregate { ${groupByField} { value } ${valueField} { ${fn} { value } } } } } } } } }`;
 }
 
 /**
@@ -120,9 +120,9 @@ export function normalizeAggregate(
   { objectApiName, groupByField, valueField, operation }
 ) {
   const fn = AGG_FN[operation];
-  const edges = data?.uiapi?.query?.[objectApiName]?.edges ?? [];
+  const edges = data?.uiapi?.aggregate?.[objectApiName]?.edges ?? [];
   return edges.map((e) => ({
-    label: e.node[groupByField]?.value ?? null,
+    label: e.node.aggregate?.[groupByField]?.value ?? null,
     value: e.node.aggregate?.[valueField]?.[fn]?.value ?? null
   }));
 }

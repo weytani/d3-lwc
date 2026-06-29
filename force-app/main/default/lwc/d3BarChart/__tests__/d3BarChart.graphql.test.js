@@ -18,19 +18,23 @@ function makeD3Stub() {
 
 const AGG_RESPONSE = {
   uiapi: {
-    query: {
+    aggregate: {
       Opportunity: {
         edges: [
           {
             node: {
-              StageName: { value: "Prospecting" },
-              aggregate: { Amount: { sum: { value: 1000 } } }
+              aggregate: {
+                StageName: { value: "Prospecting" },
+                Amount: { sum: { value: 1000 } }
+              }
             }
           },
           {
             node: {
-              StageName: { value: "Closed Won" },
-              aggregate: { Amount: { sum: { value: 5000 } } }
+              aggregate: {
+                StageName: { value: "Closed Won" },
+                Amount: { sum: { value: 5000 } }
+              }
             }
           }
         ]

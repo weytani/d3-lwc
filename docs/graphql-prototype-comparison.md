@@ -36,19 +36,38 @@ column. This cost point therefore stands even though the specific prop is now cl
 
 ## Aggregate-shape verification result
 
-**PENDING — NOT YET VERIFIED.**
+**VERIFIED against a live org** (AGENT, orgfarm dev-ed, UI API GraphQL endpoint
+`/services/data/v65.0/graphql`). The gate caught a real divergence: the encoded
+best-known shape was **wrong in two ways**, now corrected and confirmed.
 
-The GraphQL aggregate response envelope (`node.aggregate.<field>.<fn>.value`)
-used by the bar chart's `normalizeAggregate` is the best-known shape based on
-Salesforce documentation, but was **not** confirmed against a live scratch org —
-no authorized org was available during the build. The query string is structurally
-well-formed (brace-balanced, verified locally), and the normalizer correctly
-extracts `node.aggregate[valueField][operation].value`.
+The encoded query placed the aggregate under `uiapi.query.<Object>(groupBy: …)` with
+the group key at `node.<groupByField>`. The live org rejected this
+(`Unknown field argument 'groupBy'` on `uiapi/query`; `Field 'aggregate' … is
+undefined`). Schema introspection revealed the real structure: aggregates live under
+a separate `uiapi.aggregate` root, and the node carries an extra `aggregate { }`
+wrapper holding both the grouping key and the measures:
 
-Live scratch-org verification remains a **required gate before any production
-rollout**. If the actual response envelope differs, the pre-authorized fallback is
-a raw-row GraphQL fetch combined with the bar chart's existing client-side
-`_aggregateRawData` method — no new logic needed.
+```
+uiapi { aggregate { Opportunity(groupBy: { StageName: {} }, first: 2000) {
+  edges { node { aggregate {
+    StageName { value }          // grouping key — node.aggregate.<groupByField>.value
+    Amount { sum { value } }     // measure    — node.aggregate.<valueField>.<fn>.value
+  } } } } } }
+```
+
+The corrected query returned **10 real StageName groups with grouped Amount sums**
+(e.g. Proposal/Price Quote $2,343,664). Two functions were fixed accordingly:
+`buildAggregateQuery` (root `query`→`aggregate`, node `aggregate { }` wrapper) and
+`normalizeAggregate` (`uiapi.aggregate` path, group key under `node.aggregate`); their
+unit tests and the bar chart's GraphQL test mock were updated to the verified
+envelope. The measure path (`node.aggregate.<valueField>.<fn>.value`) was already
+correct.
+
+The **record-query** envelope (Approach B / gantt —
+`data.uiapi.query.<Object>.edges[].node.<field>.value`) was also confirmed live (an
+Account record query returned exactly that shape); no change was needed. The
+pre-authorized raw-row fallback was **not** required — the aggregate API works, it
+simply lives at a different path than first encoded.
 
 ## Recommendation for the remaining 28 charts
 

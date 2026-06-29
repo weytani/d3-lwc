@@ -128,11 +128,12 @@ describe("buildAggregateQuery", () => {
       operation: "Sum",
       first: 2000
     });
-    expect(q).toContain("Opportunity(");
+    expect(q).toContain("uiapi { aggregate { Opportunity(");
     expect(q).toContain("groupBy: { StageName: {} }");
     expect(q).toContain("first: 2000");
-    expect(q).toContain("StageName { value }");
-    expect(q).toContain("aggregate { Amount { sum { value } } }");
+    expect(q).toContain(
+      "aggregate { StageName { value } Amount { sum { value } } }"
+    );
   });
 
   it("includes a where filter when provided", () => {
@@ -163,19 +164,23 @@ describe("normalizeAggregate", () => {
   it("maps grouped aggregate edges to [{label,value}]", () => {
     const data = {
       uiapi: {
-        query: {
+        aggregate: {
           Opportunity: {
             edges: [
               {
                 node: {
-                  StageName: { value: "Prospecting" },
-                  aggregate: { Amount: { sum: { value: 1000 } } }
+                  aggregate: {
+                    StageName: { value: "Prospecting" },
+                    Amount: { sum: { value: 1000 } }
+                  }
                 }
               },
               {
                 node: {
-                  StageName: { value: "Closed Won" },
-                  aggregate: { Amount: { sum: { value: 5000 } } }
+                  aggregate: {
+                    StageName: { value: "Closed Won" },
+                    Amount: { sum: { value: 5000 } }
+                  }
                 }
               }
             ]
