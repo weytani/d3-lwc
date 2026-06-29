@@ -14,15 +14,6 @@
         <targetConfig
       targets="lightning__AppPage,lightning__RecordPage,lightning__HomePage"
     >
-            <!-- Data Source -->
-            <property
-        name="soqlQuery"
-        type="String"
-        label="SOQL Query"
-        description="SOQL query to fetch tasks (used when no Drill-Down Object is set)"
-        placeholder="SELECT Name, Project_Start__c, Project_End__c FROM Opportunity"
-      />
-
             <!-- Field Mapping -->
             <property
         name="labelField"
