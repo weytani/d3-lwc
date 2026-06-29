@@ -69,6 +69,30 @@ Account record query returned exactly that shape); no change was needed. The
 pre-authorized raw-row fallback was **not** required — the aggregate API works, it
 simply lives at a different path than first encoded.
 
+## Live-org deploy + render verification
+
+**Approach A (bar) — fully verified end-to-end.** `graphqlService` + `d3BarChart`
+were deployed to a live org, and the bar chart was placed on a Lightning page with
+`fetchMode=graphql`, `objectApiName=Opportunity`, `groupByField=StageName`,
+`valueField=Amount`, `operation=Sum`. The component **rendered 10 bars from live
+Opportunity data** (one per stage, Amount-sum y-axis to ~$6M, "Closed Won" tallest)
+with **zero console errors**. This confirms the two layers the API check could not:
+the `lightning/graphql` `gql` tag accepts a fully-interpolated query string
+(`gql\`${queryString}\``, not just fragment interpolation), and the full
+wire→normalize→D3 pipeline works on the real adapter. The `fetchMode` property was
+selectable in App Builder, confirming the meta exposure.
+
+**Approach B (gantt) — replace-cost confirmed on deploy.** Deploying the gantt
+changes **failed**: Salesforce refused to remove the `soqlQuery` and `filterClause`
+property tags because an existing Lightning page (`d3_lwc_phase3`) references them
+(`You can't remove the property tag … The component is in use on one or more
+Lightning pages`). Because deploys are transactional, the whole gantt deploy rolled
+back. This is the orphaned-config / migration burden predicted above, now empirical:
+**Approach B cannot be deployed to a chart already in use without first removing it
+from every referencing page** — a migration step Approach A never incurs. This
+strengthens the "risk to existing consumers" and "reversibility" rows of the cost
+table with a concrete failure mode.
+
 ## Recommendation for the remaining 28 charts
 
 **Default to Approach A (additive).**
