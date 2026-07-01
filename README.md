@@ -24,6 +24,22 @@ _Funnel, Bullet, Stacked Bar, Area, Waterfall, Heatmap, Box Plot, Radar, Calenda
 
 _Gauge, Bar, Donut, Line, Scatter, Histogram, Treemap, Sankey, Force Graph, and Choropleth._
 
+### D3 Gantt Chart (GraphQL Self-Fetch — unmerged prototype)
+
+This branch (`gantt-graphql-replace`) replaces the Gantt chart's Apex/`soqlQuery`
+data path with a self-fetching `lightning/graphql` wire (Approach B from
+`docs/graphql-prototype-comparison.md`) — no `D3ChartController` involved. It
+renders correctly (verified live below) but is **not part of a release**: it's a
+breaking change that fails to deploy to any org where the chart is already placed
+on a Lightning page, because Salesforce won't let a bundle drop a `@api` property
+tag (`soqlQuery`, `filterClause`) while a page still references it. Shipping this
+would require first detaching every Gantt instance from its page, deploying the
+new bundle, then re-adding it with `objectApiName`/`labelField`/`startDateField`/
+`endDateField` instead. See the comparison doc for the full cost/benefit tradeoff
+against the additive approach that shipped for the bar chart in v1.1.0.
+
+![D3 Gantt Chart rendering live data via GraphQL self-fetch](docs/screenshots/d3-gantt-chart-graphql-self-fetch-prototype.png)
+
 ## ✨ Features
 
 - **30 Chart Types**: Bar, Line, Donut, Gauge, Scatter, Histogram, Treemap, Sankey, Force Graph, Choropleth, Area, Stacked Bar, Funnel, Radar, Heatmap, Box Plot, Waterfall, Bullet, Calendar Heatmap, Sparkline Grid, Pie, Horizontal Bar, Lollipop, Progress Bar, Diverging Bar, Waffle, Sunburst, Bubble, Chord Diagram, Gantt
