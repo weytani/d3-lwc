@@ -138,6 +138,9 @@ sf lightning dev app -o <your-org-alias>
 | `theme`            | String   | Color theme (Salesforce Standard, Warm, Cool, Vibrant)                           |
 | `advancedConfig`   | String   | JSON for advanced options                                                        |
 
+`soqlQuery`/`filterClause` are common to every chart **except the gantt chart**,
+which fetches exclusively via `objectApiName` + GraphQL as of 2.0 (see below).
+
 ### D3 Bar Chart (Server Aggregation)
 
 ```html
@@ -194,6 +197,37 @@ GraphQL (verified against a live org):
 Apex priority), `apex` (force the Apex path), or `graphql` (self-fetch). The GraphQL
 path covers UI API-queryable objects with structured filters; for non-UI-API objects
 or arbitrary SOQL, use `auto`/`apex` — the Apex escape hatch remains.
+
+### D3 Gantt Chart (GraphQL Self-Fetch — New in 2.0, BREAKING)
+
+Unlike the bar chart's additive `fetch-mode`, the gantt chart's data path is
+**GraphQL-only** as of 2.0 — the Apex `soqlQuery`/`filterClause` properties have
+been removed entirely. Set `object-api-name` plus `label-field`/`start-date-field`/
+`end-date-field` and the chart fetches its own tasks through Salesforce's
+`lightning/graphql` wire adapter, with no `D3ChartController` involved. The chart
+below is rendering 12 live Opportunity project timelines fetched entirely via
+GraphQL (verified against a live org):
+
+![D3 Gantt Chart rendering live data via GraphQL self-fetch](docs/screenshots/d3-gantt-chart-graphql-self-fetch.png)
+
+```html
+<!-- GraphQL self-fetch: no Apex, no soqlQuery/filterClause -->
+<c-d3-gantt-chart
+  object-api-name="Opportunity"
+  label-field="Name"
+  start-date-field="Project_Start__c"
+  end-date-field="Project_End__c"
+  height="400"
+>
+</c-d3-gantt-chart>
+```
+
+**Migrating an existing gantt instance:** Salesforce refuses to deploy a bundle
+that drops an `@api` property still referenced by a Lightning page, so an
+in-use instance must be detached from its page, redeployed, then re-attached
+with `object-api-name`/`label-field`/`start-date-field`/`end-date-field` in
+place of `soql-query`/`filter-clause`. See `docs/graphql-prototype-comparison.md`
+for the full cost comparison against the bar chart's additive approach.
 
 ### D3 Line Chart
 

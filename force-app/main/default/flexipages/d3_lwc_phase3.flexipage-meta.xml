@@ -342,12 +342,11 @@
             </componentInstance>
         </itemInstances>
         <itemInstances>
-            <!-- Gantt Chart: Project Timelines -->
+            <!-- Gantt Chart: Project Timelines (GraphQL self-fetch) -->
             <componentInstance>
                 <componentInstanceProperties>
-                    <name>soqlQuery</name>
-                    <value
-          >SELECT Name, Project_Start__c, Project_End__c FROM Opportunity WHERE Project_Start__c != null AND Project_End__c != null ORDER BY Project_Start__c LIMIT 12</value>
+                    <name>objectApiName</name>
+                    <value>Opportunity</value>
                 </componentInstanceProperties>
                 <componentInstanceProperties>
                     <name>labelField</name>

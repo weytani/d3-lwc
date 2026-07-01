@@ -5,6 +5,46 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-07-01
+
+### Changed
+
+- **BREAKING: GraphQL self-fetch replaces the Apex path on the gantt chart**
+  (`d3GanttChart`). The chart now fetches its own data declaratively through
+  Salesforce's v2 `lightning/graphql` wire adapter via `graphqlService`, with
+  no `D3ChartController` Apex class required. Field- and record-level security
+  are enforced by the platform. Verified end-to-end against a live org (12 demo
+  projects rendering through the wire adapter).
+
+### Removed
+
+- **`soqlQuery` and `filterClause`** properties on `d3GanttChart`. These no
+  longer exist on the component. Salesforce refuses to deploy a bundle that
+  drops an `@api` property still referenced by a Lightning page, so upgrading
+  an in-use gantt instance requires detaching it from the page first.
+
+### Migration
+
+- Detach any existing `d3GanttChart` instance from its Lightning page before
+  deploying this version (Salesforce blocks the deploy otherwise).
+- Replace `soqlQuery` / `filterClause` configuration with `objectApiName`
+  plus `labelField` / `startDateField` / `endDateField`.
+- Re-add the chart to the page. No Apex controller is involved in the gantt
+  chart's data path any longer.
+
+### Notes
+
+- This ships Approach B from `docs/graphql-prototype-comparison.md` (previously
+  an unmerged prototype on the `gantt-graphql-replace` branch), contrasted there
+  against the bar chart's additive Approach A shipped in v1.1.0.
+- The property-removal deploy block was hit and worked around live (detach →
+  deploy → re-attach); all 12 demo projects rendered correctly afterward via
+  the GraphQL wire adapter.
+- `agentforce-dev`'s synced copy of `d3GanttChart` still declares `soqlQuery`/
+  `filterClause` and has no page placing an instance yet — re-sync it and
+  hand-merge the meta.xml (matching prior sync practice) before this ships
+  there too.
+
 ## [1.1.0] - 2026-06-29
 
 ### Added

@@ -2,7 +2,7 @@
  * ABOUTME: D3 Gantt Chart Lightning Web Component.
  * ABOUTME: Renders date-range tasks as horizontal bars on a time axis with an optional today marker.
  */
-import { LightningElement, api, track } from "lwc";
+import { LightningElement, api, track, wire } from "lwc";
 import { loadD3 } from "c/d3Lib";
 import { getColors, DEFAULT_THEME } from "c/themeService";
 import {
@@ -15,8 +15,8 @@ import {
   computeDateExtent
 } from "c/chartUtils";
 import { NavigationMixin } from "lightning/navigation";
-import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
-import getDateRangeData from "@salesforce/apex/D3ChartController.getDateRangeData";
+import { gql, graphql } from "lightning/graphql";
+import { buildRecordQuery, normalizeRecords } from "c/graphqlService";
 
 export default class D3GanttChart extends NavigationMixin(LightningElement) {
   // ═══════════════════════════════════════════════════════════════
@@ -25,10 +25,6 @@ export default class D3GanttChart extends NavigationMixin(LightningElement) {
 
   /** Data collection from Flow or parent component */
   @api recordCollection = [];
-
-  /** SOQL query string (used if recordCollection is empty and no object set) */
-  @api soqlQuery =
-    "SELECT Name, Project_Start__c, Project_End__c FROM Opportunity";
 
   /** Field holding the task label (category / row) */
   @api labelField = "Name";
@@ -57,8 +53,8 @@ export default class D3GanttChart extends NavigationMixin(LightningElement) {
   /** Filter field for drill-down */
   @api filterField = "";
 
-  /** Optional WHERE clause fragment for server-side fetch */
-  @api filterClause = "";
+  /** Structured filter for the GraphQL path: { field, operator, value }. */
+  @api graphqlFilter;
 
   // ═══════════════════════════════════════════════════════════════
   // TRACKED STATE
@@ -165,59 +161,71 @@ export default class D3GanttChart extends NavigationMixin(LightningElement) {
       if (this.chartData.length === 0) {
         throw new Error("No tasks with valid start and end dates");
       }
-      return;
     }
+    // Otherwise the GraphQL @wire fetches reactively (see wiredTasks). Nothing to do.
+  }
 
-    // Priority 2: server date-range fetch
+  get gqlQuery() {
+    if (this.recordCollection && this.recordCollection.length > 0)
+      return undefined;
     if (
-      this.objectApiName &&
-      this.labelField &&
-      this.startDateField &&
-      this.endDateField
+      !this.objectApiName ||
+      !this.labelField ||
+      !this.startDateField ||
+      !this.endDateField
     ) {
-      let result = [];
-      try {
-        result = await getDateRangeData({
-          objectName: this.objectApiName,
-          labelField: this.labelField,
-          startField: this.startDateField,
-          endField: this.endDateField,
-          filterClause: this.filterClause || null
-        });
-      } catch (e) {
-        throw new Error(`Date Range Error: ${e.body?.message || e.message}`);
-      }
-      // Server returns [{label, start, end}] with ISO date strings
-      this.chartData = this._prepareDateRows(result);
-      if (this.chartData.length === 0) {
-        throw new Error("No tasks with valid start and end dates");
-      }
+      return undefined;
+    }
+    let queryString;
+    try {
+      queryString = buildRecordQuery({
+        objectApiName: this.objectApiName,
+        fields: [this.labelField, this.startDateField, this.endDateField],
+        filter: this.graphqlFilter,
+        orderBy: this.startDateField,
+        first: this.recordLimit || 2000
+      });
+    } catch {
+      return undefined;
+    }
+    return gql`
+      ${queryString}
+    `;
+  }
+
+  @wire(graphql, { query: "$gqlQuery" })
+  wiredTasks({ data, errors }) {
+    if (this.recordCollection && this.recordCollection.length > 0) return;
+    if (errors) {
+      this.error = this._formatGqlErrors(errors);
+      this.isLoading = false;
       return;
     }
-
-    // Priority 3: SOQL fallback with client-side date parsing
-    if (this.soqlQuery) {
-      let rawData = [];
-      try {
-        rawData = await executeQuery({ queryString: this.soqlQuery });
-      } catch (e) {
-        throw new Error(`SOQL Error: ${e.body?.message || e.message}`);
+    if (!data) return;
+    try {
+      const rows = normalizeRecords(data, {
+        objectApiName: this.objectApiName,
+        labelField: this.labelField,
+        startField: this.startDateField,
+        endField: this.endDateField
+      });
+      const prepared = this._prepareDateRows(rows);
+      if (!prepared.length) {
+        this.error = "No tasks with valid start and end dates";
+      } else {
+        this.chartData = prepared;
+        this.error = null;
+        this.chartRendered = false;
       }
-      const mapped = rawData.map((row) => ({
-        label: row[this.labelField],
-        start: row[this.startDateField],
-        end: row[this.endDateField]
-      }));
-      this.chartData = this._prepareDateRows(mapped);
-      if (this.chartData.length === 0) {
-        throw new Error("No tasks with valid start and end dates");
-      }
-      return;
+    } catch (e) {
+      this.error = e.message;
     }
+    this.isLoading = false;
+  }
 
-    throw new Error(
-      "No data source provided. Set recordCollection or soqlQuery."
-    );
+  _formatGqlErrors(errors) {
+    const list = Array.isArray(errors) ? errors : [errors];
+    return list.map((e) => e?.message || e).join("; ") || "GraphQL error";
   }
 
   /**
