@@ -80,7 +80,8 @@ const createMockD3 = () => {
       return axis;
     }),
     max: jest.fn(() => 500),
-    min: jest.fn(() => 0)
+    min: jest.fn(() => 0),
+    insert: jest.fn(() => mockD3)
   };
   return mockD3;
 };
@@ -784,6 +785,120 @@ describe("c-d3-box-plot", () => {
       const attrCalls = mockD3.attr.mock.calls;
       const fillCalls = attrCalls.filter((c) => c[0] === "fill");
       expect(fillCalls.length).toBeGreaterThan(0);
+    });
+
+    it("wires the theme's color palette into box fill colors", async () => {
+      await createChart({ theme: "Warm" });
+      await flushPromises();
+
+      const attrCalls = mockD3.attr.mock.calls;
+      const fillValues = attrCalls
+        .filter((c) => c[0] === "fill")
+        .map((c) => c[1]);
+      expect(fillValues).toContain("#FF6B6B");
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════
+  // ACCESSIBILITY TESTS
+  // ═══════════════════════════════════════════════════════════════
+
+  describe("accessibility", () => {
+    it("applies role=img and a title to the chart SVG", async () => {
+      await createChart();
+      await flushPromises();
+
+      const attrCalls = mockD3.attr.mock.calls;
+      expect(attrCalls.some((c) => c[0] === "role" && c[1] === "img")).toBe(
+        true
+      );
+      expect(mockD3.insert).toHaveBeenCalledWith("title", ":first-child");
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════
+  // DRILL-DOWN CLICK TESTS
+  // ═══════════════════════════════════════════════════════════════
+
+  describe("drill-down click", () => {
+    it("registers click handler on box groups", async () => {
+      await createChart();
+      await flushPromises();
+
+      const onCalls = mockD3.on.mock.calls;
+      const clickCalls = onCalls.filter((c) => c[0] === "click");
+      expect(clickCalls.length).toBeGreaterThan(0);
+    });
+
+    it("dispatches boxclick event when objectApiName is set", async () => {
+      await createChart({ objectApiName: "Opportunity" });
+      await flushPromises();
+
+      const handler = jest.fn();
+      element.addEventListener("boxclick", handler);
+
+      const clickCalls = mockD3.on.mock.calls.filter((c) => c[0] === "click");
+      expect(clickCalls.length).toBeGreaterThan(0);
+      const clickFn = clickCalls[0][1];
+      clickFn({ offsetX: 10, offsetY: 10, currentTarget: {} });
+
+      expect(handler).toHaveBeenCalledTimes(1);
+      expect(handler.mock.calls[0][0].detail.filterField).toBe("StageName");
+    });
+
+    it("does not dispatch boxclick when objectApiName is empty", async () => {
+      await createChart({ objectApiName: "" });
+      await flushPromises();
+
+      const handler = jest.fn();
+      element.addEventListener("boxclick", handler);
+
+      const clickCalls = mockD3.on.mock.calls.filter((c) => c[0] === "click");
+      const clickFn = clickCalls[0][1];
+      clickFn({ offsetX: 10, offsetY: 10, currentTarget: {} });
+
+      expect(handler).not.toHaveBeenCalled();
+    });
+
+    it("uses filterField for event detail when provided", async () => {
+      await createChart({
+        objectApiName: "Opportunity",
+        filterField: "CustomField__c"
+      });
+      await flushPromises();
+
+      const handler = jest.fn();
+      element.addEventListener("boxclick", handler);
+
+      const clickCalls = mockD3.on.mock.calls.filter((c) => c[0] === "click");
+      const clickFn = clickCalls[0][1];
+      clickFn({ offsetX: 10, offsetY: 10, currentTarget: {} });
+
+      expect(handler.mock.calls[0][0].detail.filterField).toBe(
+        "CustomField__c"
+      );
+    });
+
+    it("sets pointer cursor on boxes when objectApiName is set", async () => {
+      await createChart({ objectApiName: "Opportunity" });
+      await flushPromises();
+
+      const attrCalls = mockD3.attr.mock.calls;
+      const cursorCalls = attrCalls.filter(
+        (c) => c[0] === "cursor" && c[1] === "pointer"
+      );
+      expect(cursorCalls.length).toBeGreaterThan(0);
+    });
+
+    it("sets default cursor on boxes without objectApiName", async () => {
+      await createChart({ objectApiName: "" });
+      await flushPromises();
+
+      const attrCalls = mockD3.attr.mock.calls;
+      const cursorCalls = attrCalls.filter(
+        (c) => c[0] === "cursor" && c[1] === "default"
+      );
+      expect(cursorCalls.length).toBeGreaterThan(0);
     });
   });
 

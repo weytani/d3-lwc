@@ -1,6 +1,6 @@
 // ABOUTME: D3 Box Plot Lightning Web Component.
 // ABOUTME: Displays side-by-side box-and-whisker plots grouped by category with quartile visualization and outlier detection.
-import { LightningElement, api, track } from "lwc";
+import { LightningElement, api, track, wire } from "lwc";
 import { loadD3 } from "c/d3Lib";
 import { prepareData, computeQuartiles, CHART_LIMITS } from "c/dataService";
 import { getColors, DEFAULT_THEME } from "c/themeService";
@@ -9,10 +9,13 @@ import {
   truncateLabel,
   createTooltip,
   createResizeHandler,
-  createLayoutRetry
+  createLayoutRetry,
+  applySvgA11y
 } from "c/chartUtils";
 import { NavigationMixin } from "lightning/navigation";
 import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
+import { gql, graphql } from "lightning/graphql";
+import { buildRecordQuery, normalizeRecordsGeneric } from "c/graphqlService";
 
 export default class D3BoxPlot extends NavigationMixin(LightningElement) {
   // ═══════════════════════════════════════════════════════════════
@@ -51,6 +54,12 @@ export default class D3BoxPlot extends NavigationMixin(LightningElement) {
 
   /** Optional WHERE clause fragment for server-side queries */
   @api filterClause = "";
+
+  /** Fetch-mode selector: "auto" (default, existing priority order), "apex", or "graphql". */
+  @api fetchMode = "auto";
+
+  /** Structured filter for the GraphQL path: { field, operator, value }. */
+  @api graphqlFilter;
 
   // ═══════════════════════════════════════════════════════════════
   // TRACKED STATE
@@ -109,6 +118,69 @@ export default class D3BoxPlot extends NavigationMixin(LightningElement) {
   }
 
   // ═══════════════════════════════════════════════════════════════
+  // GRAPHQL SELF-FETCH PATH (Approach A — additive, CT-REC)
+  // ═══════════════════════════════════════════════════════════════
+
+  /**
+   * Reactive GraphQL query for the self-fetch path. Returns undefined (so the wire
+   * is skipped) unless fetchMode is "graphql" and objectApiName/groupByField/valueField
+   * are set. Box plots need RAW grouped values (not aggregated) to compute quartiles
+   * client-side, so this always fetches raw groupByField + valueField records and
+   * feeds the existing _processRawData path (same as recordCollection/soqlQuery).
+   */
+  get gqlQuery() {
+    if (this.fetchMode !== "graphql") return undefined;
+    if (!this.objectApiName || !this.groupByField || !this.valueField) {
+      return undefined;
+    }
+    const fields = [...new Set([this.groupByField, this.valueField])];
+    let queryString;
+    try {
+      queryString = buildRecordQuery({
+        objectApiName: this.objectApiName,
+        fields,
+        filter: this.graphqlFilter,
+        first: this.recordLimit || 2000
+      });
+    } catch {
+      // Unsupported config: leave the wire un-provisioned; error surfaces below.
+      return undefined;
+    }
+    return gql`
+      ${queryString}
+    `;
+  }
+
+  @wire(graphql, { query: "$gqlQuery" })
+  wiredRecords({ data, errors }) {
+    if (this.fetchMode !== "graphql") return;
+    if (errors) {
+      this.error = this._formatGqlErrors(errors);
+      this.isLoading = false;
+      return;
+    }
+    if (!data) return; // initial undefined emission
+    try {
+      const fields = [...new Set([this.groupByField, this.valueField])];
+      const records = normalizeRecordsGeneric(data, {
+        objectApiName: this.objectApiName,
+        fields
+      });
+      this.chartData = this._processRawData(records);
+      this.error = null;
+      this.chartRendered = false; // force renderedCallback to re-initialize the SVG
+    } catch (e) {
+      this.error = e.message;
+    }
+    this.isLoading = false;
+  }
+
+  _formatGqlErrors(errors) {
+    const list = Array.isArray(errors) ? errors : [errors];
+    return list.map((e) => e?.message || e).join("; ") || "GraphQL error";
+  }
+
+  // ═══════════════════════════════════════════════════════════════
   // LIFECYCLE HOOKS
   // ═══════════════════════════════════════════════════════════════
 
@@ -159,6 +231,11 @@ export default class D3BoxPlot extends NavigationMixin(LightningElement) {
   // ═══════════════════════════════════════════════════════════════
 
   async loadData() {
+    // GraphQL path is handled reactively by the @wire(graphql) — nothing to do here.
+    if (this.fetchMode === "graphql") {
+      return;
+    }
+
     // Priority 1: Use recordCollection if provided (raw data for distribution)
     if (this.recordCollection && this.recordCollection.length > 0) {
       this.chartData = this._processRawData([...this.recordCollection]);
@@ -282,12 +359,19 @@ export default class D3BoxPlot extends NavigationMixin(LightningElement) {
     if (width <= 0 || height <= 0) return;
 
     // Create SVG
-    this.svg = d3
+    const svgRoot = d3
       .select(container)
       .append("svg")
       .attr("width", containerWidth)
       .attr("height", this.height)
-      .attr("class", "box-plot-svg")
+      .attr("class", "box-plot-svg");
+
+    applySvgA11y(svgRoot, {
+      title: `Box plot: distribution of ${this.valueField} by ${this.groupByField}`,
+      desc: `${this.chartData.length} groups`
+    });
+
+    this.svg = svgRoot
       .append("g")
       .attr("transform", `translate(${margin.left},${margin.top})`);
 
@@ -513,6 +597,7 @@ export default class D3BoxPlot extends NavigationMixin(LightningElement) {
         .attr("fill-opacity", 0.7)
         .attr("stroke", color)
         .attr("stroke-width", 1.5)
+        .attr("cursor", this.objectApiName ? "pointer" : "default")
         .transition()
         .duration(750)
         .delay(0)
@@ -604,6 +689,7 @@ export default class D3BoxPlot extends NavigationMixin(LightningElement) {
         .attr("fill-opacity", 0.7)
         .attr("stroke", color)
         .attr("stroke-width", 1.5)
+        .attr("cursor", this.objectApiName ? "pointer" : "default")
         .transition()
         .duration(750)
         .delay(0)
@@ -638,7 +724,7 @@ export default class D3BoxPlot extends NavigationMixin(LightningElement) {
       }
     }
 
-    // Tooltip interactions on the box group
+    // Tooltip and drill-down interactions on the box group
     group
       .on("mouseenter", (event) => {
         this.showTooltip(event, d);
@@ -648,6 +734,9 @@ export default class D3BoxPlot extends NavigationMixin(LightningElement) {
       })
       .on("mouseleave", () => {
         this.hideTooltip();
+      })
+      .on("click", () => {
+        this.handleBoxClick(d);
       });
   }
 
@@ -675,6 +764,42 @@ export default class D3BoxPlot extends NavigationMixin(LightningElement) {
   hideTooltip() {
     if (!this.tooltip) return;
     this.tooltip.hide();
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // CLICK HANDLER - DRILL DOWN
+  // ═══════════════════════════════════════════════════════════════
+
+  handleBoxClick(d) {
+    if (!this.objectApiName) return;
+
+    const filterFieldName = this.filterField || this.groupByField;
+
+    // Navigate to list view with filter
+    this[NavigationMixin.Navigate]({
+      type: "standard__objectPage",
+      attributes: {
+        objectApiName: this.objectApiName,
+        actionName: "list"
+      },
+      state: {
+        filterName: "Recent"
+      }
+    });
+
+    // Dispatch custom event for parent components to handle filtering
+    this.dispatchEvent(
+      new CustomEvent("boxclick", {
+        detail: {
+          label: d.label,
+          stats: d.stats,
+          count: d.count,
+          filterField: filterFieldName
+        },
+        bubbles: true,
+        composed: true
+      })
+    );
   }
 
   // ═══════════════════════════════════════════════════════════════
