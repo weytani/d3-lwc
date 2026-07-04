@@ -69,6 +69,7 @@ const createMockD3 = () => {
     remove: jest.fn(() => mockD3),
     html: jest.fn(() => mockD3),
     text: jest.fn(() => mockD3),
+    insert: jest.fn(() => mockD3),
     scaleBand: jest.fn(() => {
       const scale = jest.fn(() => 50);
       scale.domain = jest.fn(() => scale);
@@ -575,14 +576,51 @@ describe("c-d3-waterfall-chart", () => {
   // ═══════════════════════════════════════════════════════════════
 
   describe("themes", () => {
-    it("accepts Salesforce Standard theme", async () => {
+    it("wires the default theme's real semantic positive/negative colors to the bar fills", async () => {
       await createChart({ theme: "Salesforce Standard" });
 
       await flushPromises();
-      const errorElement = element.shadowRoot.querySelector(
-        ".slds-text-color_error"
+      const fillCalls = mockD3.attr.mock.calls.filter(
+        (c) => c[0] === "fill" && typeof c[1] === "function"
       );
-      expect(errorElement).toBeFalsy();
+      expect(fillCalls.length).toBeGreaterThan(0);
+      const fillFn = fillCalls[fillCalls.length - 1][1];
+      expect(fillFn({ isPositive: true, value: 100 }, 0)).toBe("#4BCA81");
+      expect(fillFn({ isPositive: false, value: -100 }, 0)).toBe("#FF5D5D");
+    });
+
+    it("wires the Warm theme's real semantic positive/negative colors to the bar fills", async () => {
+      await createChart({ theme: "Warm" });
+
+      await flushPromises();
+      const fillCalls = mockD3.attr.mock.calls.filter(
+        (c) => c[0] === "fill" && typeof c[1] === "function"
+      );
+      expect(fillCalls.length).toBeGreaterThan(0);
+      const fillFn = fillCalls[fillCalls.length - 1][1];
+      expect(fillFn({ isPositive: true, value: 100 }, 0)).toBe("#FFD93D");
+      expect(fillFn({ isPositive: false, value: -100 }, 0)).toBe("#F94144");
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════
+  // ACCESSIBILITY WIRING
+  // ═══════════════════════════════════════════════════════════════
+
+  describe("accessibility wiring", () => {
+    it("applies role=img and a title to the rendered svg", async () => {
+      await createChart();
+      await flushPromises();
+
+      const attrCalls = mockD3.attr.mock.calls;
+      const roleCall = attrCalls.find((call) => call[0] === "role");
+      expect(roleCall).toBeTruthy();
+      expect(roleCall[1]).toBe("img");
+
+      const insertCalls = mockD3.insert.mock.calls;
+      const titleInsert = insertCalls.find((call) => call[0] === "title");
+      expect(titleInsert).toBeTruthy();
+      expect(titleInsert[1]).toBe(":first-child");
     });
   });
 

@@ -62,36 +62,3 @@
 .grid path {
   stroke-width: 0;
 }
-
-/* Tooltip Styles */
-.chart-tooltip {
-  position: absolute;
-  background: #16325c;
-  color: white;
-  padding: 8px 12px;
-  border-radius: 4px;
-  font-size: 12px;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.2s ease;
-  z-index: 1000;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  max-width: 200px;
-}
-
-.chart-tooltip::after {
-  content: "";
-  position: absolute;
-  top: 100%;
-  left: 50%;
-  margin-left: -5px;
-  border-width: 5px;
-  border-style: solid;
-  border-color: #16325c transparent transparent transparent;
-}
-
-/* Warning Banner */
-.slds-alert_warning {
-  font-size: 12px;
-  padding: 0.5rem 1rem;
-}

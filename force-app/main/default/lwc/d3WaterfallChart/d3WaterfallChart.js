@@ -1,6 +1,6 @@
 // ABOUTME: D3 Waterfall Chart Lightning Web Component.
 // ABOUTME: Displays aggregated data as a bridge/variance chart showing sequential value changes with running totals.
-import { LightningElement, api, track } from "lwc";
+import { LightningElement, api, track, wire } from "lwc";
 import { loadD3 } from "c/d3Lib";
 import {
   prepareData,
@@ -9,17 +9,29 @@ import {
   OPERATIONS,
   MAX_RECORDS
 } from "c/dataService";
-import { SEMANTIC_COLORS, DEFAULT_THEME } from "c/themeService";
+import {
+  SEMANTIC_COLORS,
+  DEFAULT_THEME,
+  getSemanticVariantForTheme
+} from "c/themeService";
 import {
   formatNumber,
   truncateLabel,
   createTooltip,
   createResizeHandler,
-  createLayoutRetry
+  createLayoutRetry,
+  applySvgA11y
 } from "c/chartUtils";
 import { NavigationMixin } from "lightning/navigation";
 import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
 import getAggregatedData from "@salesforce/apex/D3ChartController.getAggregatedData";
+import { gql, graphql } from "lightning/graphql";
+import {
+  buildAggregateQuery,
+  normalizeAggregate,
+  buildRecordQuery,
+  normalizeRecords
+} from "c/graphqlService";
 
 export default class D3WaterfallChart extends NavigationMixin(
   LightningElement
@@ -63,6 +75,12 @@ export default class D3WaterfallChart extends NavigationMixin(
 
   /** Maximum records to process (overrides default limit) */
   @api recordLimit;
+
+  /** Fetch-mode selector: "auto" (default, existing priority order), "apex", or "graphql". */
+  @api fetchMode = "auto";
+
+  /** Structured filter for the GraphQL path: { field, operator, value }. */
+  @api graphqlFilter;
 
   // ═══════════════════════════════════════════════════════════════
   // TRACKED STATE
@@ -117,6 +135,103 @@ export default class D3WaterfallChart extends NavigationMixin(
     return this._config;
   }
 
+  /** Resolves the increase/decrease bar colors from the theme's semantic variant. */
+  get semanticColors() {
+    return getSemanticVariantForTheme(this.theme);
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // GRAPHQL SELF-FETCH PATH (Approach A — additive)
+  // ═══════════════════════════════════════════════════════════════
+
+  /**
+   * Reactive GraphQL query for the self-fetch path. Returns undefined (so the wire
+   * is skipped) unless fetchMode is "graphql" and all required config is present.
+   */
+  get gqlQuery() {
+    if (this.fetchMode !== "graphql") return undefined;
+    if (!this.objectApiName || !this.groupByField || !this.operation) {
+      return undefined;
+    }
+    // valueField is not required for Count.
+    if (this.operation !== OPERATIONS.COUNT && !this.valueField) {
+      return undefined;
+    }
+    let queryString;
+    try {
+      if (this.operation === OPERATIONS.COUNT) {
+        queryString = buildRecordQuery({
+          objectApiName: this.objectApiName,
+          fields: [this.groupByField],
+          filter: this.graphqlFilter,
+          first: this.recordLimit || 2000
+        });
+      } else {
+        queryString = buildAggregateQuery({
+          objectApiName: this.objectApiName,
+          groupByField: this.groupByField,
+          valueField: this.valueField,
+          operation: this.operation,
+          filter: this.graphqlFilter,
+          first: this.recordLimit || 2000
+        });
+      }
+    } catch {
+      // Unsupported operation/config: leave the wire un-provisioned; error surfaces below.
+      return undefined;
+    }
+    return gql`
+      ${queryString}
+    `;
+  }
+
+  @wire(graphql, { query: "$gqlQuery" })
+  wiredAggregate({ data, errors }) {
+    if (this.fetchMode !== "graphql") return;
+    if (errors) {
+      this.error = this._formatGqlErrors(errors);
+      this.isLoading = false;
+      return;
+    }
+    if (!data) return; // initial undefined emission
+    try {
+      let normalized;
+      if (this.operation === OPERATIONS.COUNT) {
+        const records = normalizeRecords(data, {
+          objectApiName: this.objectApiName,
+          labelField: this.groupByField
+        });
+        normalized = this._aggregateRawData(
+          records.map((r) => ({ [this.groupByField]: r.label }))
+        );
+      } else {
+        normalized = normalizeAggregate(data, {
+          objectApiName: this.objectApiName,
+          groupByField: this.groupByField,
+          valueField: this.valueField,
+          operation: this.operation
+        });
+      }
+      if (!normalized.length) {
+        this.error = "No data after aggregation";
+      } else {
+        this.chartData = normalized;
+        // Transform aggregated data into waterfall format
+        this.waterfallData = computeRunningTotal(this.chartData);
+        this.error = null;
+        this.chartRendered = false; // force renderedCallback to re-initialize the SVG
+      }
+    } catch (e) {
+      this.error = e.message;
+    }
+    this.isLoading = false;
+  }
+
+  _formatGqlErrors(errors) {
+    const list = Array.isArray(errors) ? errors : [errors];
+    return list.map((e) => e?.message || e).join("; ") || "GraphQL error";
+  }
+
   // ═══════════════════════════════════════════════════════════════
   // LIFECYCLE HOOKS
   // ═══════════════════════════════════════════════════════════════
@@ -129,8 +244,11 @@ export default class D3WaterfallChart extends NavigationMixin(
       // Load data
       await this.loadData();
 
-      // Transform aggregated data into waterfall format
-      this.waterfallData = computeRunningTotal(this.chartData);
+      // GraphQL path computes waterfallData reactively in wiredAggregate.
+      if (this.fetchMode !== "graphql") {
+        // Transform aggregated data into waterfall format
+        this.waterfallData = computeRunningTotal(this.chartData);
+      }
     } catch (e) {
       this.error = e.message || "Failed to initialize chart";
       console.error("D3WaterfallChart initialization error:", e);
@@ -169,6 +287,11 @@ export default class D3WaterfallChart extends NavigationMixin(
   // ═══════════════════════════════════════════════════════════════
 
   async loadData() {
+    // GraphQL path is handled reactively by the @wire(graphql) — nothing to do here.
+    if (this.fetchMode === "graphql") {
+      return;
+    }
+
     // Priority 1: Use recordCollection if provided (client-side aggregation)
     if (this.recordCollection && this.recordCollection.length > 0) {
       this.chartData = this._aggregateRawData([...this.recordCollection]);
@@ -311,12 +434,19 @@ export default class D3WaterfallChart extends NavigationMixin(
     if (width <= 0 || height <= 0) return;
 
     // Create SVG
-    this.svg = d3
+    const svgRoot = d3
       .select(container)
       .append("svg")
       .attr("width", containerWidth)
       .attr("height", this.height)
-      .attr("class", "waterfall-chart-svg")
+      .attr("class", "waterfall-chart-svg");
+
+    applySvgA11y(svgRoot, {
+      title: `Waterfall chart: ${this.operation} of ${this.valueField} by ${this.groupByField}`,
+      desc: `${this.waterfallData.length} categories`
+    });
+
+    this.svg = svgRoot
       .append("g")
       .attr("transform", `translate(${margin.left},${margin.top})`);
 
@@ -378,11 +508,12 @@ export default class D3WaterfallChart extends NavigationMixin(
       .call(d3.axisLeft(yScale).tickFormat((d) => formatNumber(d)));
 
     // Fill color function
+    const colors = this.semanticColors;
     const fillColor = (d, i) => {
       if (subtotalIndices.has(i)) {
         return SEMANTIC_COLORS.subtotal;
       }
-      return d.isPositive ? SEMANTIC_COLORS.positive : SEMANTIC_COLORS.negative;
+      return d.isPositive ? colors.positive : colors.negative;
     };
 
     // Bars (floating)
