@@ -357,7 +357,11 @@ export default class D3ProgressBar extends NavigationMixin(LightningElement) {
     container.setAttribute("role", "progressbar");
     container.setAttribute("aria-valuemin", "0");
     container.setAttribute("aria-valuemax", String(target));
-    container.setAttribute("aria-valuenow", String(this.currentValue));
+    // aria-valuenow must stay within [aria-valuemin, aria-valuemax] per the ARIA
+    // spec — clamp it here while leaving the visible percent label (below)
+    // showing the real, unclamped value/target ratio (e.g. 150% over target).
+    const clampedValueNow = Math.min(Math.max(this.currentValue, 0), target);
+    container.setAttribute("aria-valuenow", String(clampedValueNow));
 
     const svgRoot = d3
       .select(container)

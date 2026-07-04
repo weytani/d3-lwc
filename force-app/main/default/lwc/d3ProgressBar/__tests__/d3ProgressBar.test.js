@@ -559,6 +559,27 @@ describe("d3ProgressBar", () => {
       expect(container.getAttribute("aria-valuemax")).toBe("100");
       expect(container.getAttribute("aria-valuenow")).toBe("40");
     });
+
+    it("clamps aria-valuenow to aria-valuemax when value exceeds target, while the visible label still shows the real percent", async () => {
+      const { formatPercent } = require("c/chartUtils");
+      const element = await createComponent({
+        recordCollection: [{ Amount: 150 }],
+        advancedConfig: JSON.stringify({ target: 100 })
+      });
+      await Promise.resolve();
+      await Promise.resolve();
+
+      const container = element.shadowRoot.querySelector(".chart-container");
+      expect(container.getAttribute("aria-valuemax")).toBe("100");
+      expect(container.getAttribute("aria-valuenow")).toBe("100");
+
+      // The visible percent label intentionally stays unclamped (real 150%
+      // over target) even though aria-valuenow above is clamped to 100.
+      const overMaxCalls = formatPercent.mock.calls.filter(
+        (call) => call[0] === 1.5
+      );
+      expect(overMaxCalls.length).toBeGreaterThanOrEqual(1);
+    });
   });
 
   // ── getters ─────────────────────────────────────────────────────
