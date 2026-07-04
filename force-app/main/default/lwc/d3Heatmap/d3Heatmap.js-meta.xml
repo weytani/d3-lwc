@@ -99,12 +99,22 @@
         max="10000"
       />
 
+            <!-- GraphQL Self-Fetch -->
+            <property
+        name="fetchMode"
+        type="String"
+        label="Data Source"
+        default="auto"
+        datasource="auto,apex,graphql"
+        description="How to fetch data: auto (existing priority order), apex (Apex-backed SOQL), or graphql (UI API GraphQL)"
+      />
+
             <!-- Advanced -->
             <property
         name="advancedConfig"
         type="String"
         label="Advanced Config (JSON)"
-        description='{"rampHue": "blue", "showGrid": true}'
+        description='{"rampHue": "blue"} — overridden by a non-default Color Theme, which picks its own ramp'
       />
         </targetConfig>
     </targetConfigs>

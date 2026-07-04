@@ -1,6 +1,6 @@
 // ABOUTME: D3 Heatmap Lightning Web Component.
 // ABOUTME: Displays a 2D categorical grid with color intensity mapping using sequential color ramps.
-import { LightningElement, api, track } from "lwc";
+import { LightningElement, api, track, wire } from "lwc";
 import { loadD3 } from "c/d3Lib";
 import {
   prepareData,
@@ -8,18 +8,30 @@ import {
   OPERATIONS,
   MAX_RECORDS
 } from "c/dataService";
-import { getSequentialRamp, DEFAULT_THEME } from "c/themeService";
+import {
+  getSequentialRamp,
+  getRampHueForTheme,
+  DEFAULT_THEME
+} from "c/themeService";
 import {
   formatNumber,
   truncateLabel,
   createTooltip,
   createResizeHandler,
   createLayoutRetry,
-  getContrastColor
+  getContrastColor,
+  applySvgA11y
 } from "c/chartUtils";
 import { NavigationMixin } from "lightning/navigation";
 import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
 import getMultiGroupData from "@salesforce/apex/D3ChartController.getMultiGroupData";
+import { gql, graphql } from "lightning/graphql";
+import {
+  buildRecordQuery,
+  normalizeRecordsGeneric,
+  buildMultiGroupQuery,
+  normalizeMultiGroup
+} from "c/graphqlService";
 
 const COLOR_STEPS = 9;
 
@@ -66,6 +78,12 @@ export default class D3Heatmap extends NavigationMixin(LightningElement) {
 
   /** Optional WHERE clause fragment for server-side aggregation */
   @api filterClause = "";
+
+  /** Fetch-mode selector: "auto" (default, existing priority order), "apex", or "graphql". */
+  @api fetchMode = "auto";
+
+  /** Structured filter for the GraphQL path: { field, operator, value }. */
+  @api graphqlFilter;
 
   // ═══════════════════════════════════════════════════════════════
   // TRACKED STATE
@@ -119,6 +137,102 @@ export default class D3Heatmap extends NavigationMixin(LightningElement) {
   }
 
   // ═══════════════════════════════════════════════════════════════
+  // GRAPHQL SELF-FETCH PATH (Approach A — additive, CT-MG)
+  // ═══════════════════════════════════════════════════════════════
+
+  /**
+   * Reactive GraphQL query for the self-fetch path. Returns undefined (so the wire
+   * is skipped) unless fetchMode is "graphql" and objectApiName/xField/yField/operation
+   * are set. Count branch: server aggregate has no Count, so it fetches bounded raw
+   * xField+yField records instead (fed through the existing _aggregateRawData path,
+   * which already handles Count client-side). Sum/Average/Min/Max: two-field
+   * grouped aggregate via buildMultiGroupQuery.
+   */
+  get gqlQuery() {
+    if (this.fetchMode !== "graphql") return undefined;
+    if (
+      !this.objectApiName ||
+      !this.xField ||
+      !this.yField ||
+      !this.operation
+    ) {
+      return undefined;
+    }
+    let queryString;
+    try {
+      if (this.operation === OPERATIONS.COUNT) {
+        queryString = buildRecordQuery({
+          objectApiName: this.objectApiName,
+          fields: [...new Set([this.xField, this.yField])],
+          filter: this.graphqlFilter,
+          first: this.recordLimit || 2000
+        });
+      } else {
+        if (!this.valueField) return undefined;
+        queryString = buildMultiGroupQuery({
+          objectApiName: this.objectApiName,
+          groupByField: this.xField,
+          seriesField: this.yField,
+          valueField: this.valueField,
+          operation: this.operation,
+          filter: this.graphqlFilter,
+          first: this.recordLimit || 2000
+        });
+      }
+    } catch {
+      // Unsupported operation/config: leave the wire un-provisioned; error surfaces below.
+      return undefined;
+    }
+    return gql`
+      ${queryString}
+    `;
+  }
+
+  @wire(graphql, { query: "$gqlQuery" })
+  wiredMultiGroup({ data, errors }) {
+    if (this.fetchMode !== "graphql") return;
+    if (errors) {
+      this.error = this._formatGqlErrors(errors);
+      this.isLoading = false;
+      return;
+    }
+    if (!data) return; // initial undefined emission
+    try {
+      let normalized;
+      if (this.operation === OPERATIONS.COUNT) {
+        const records = normalizeRecordsGeneric(data, {
+          objectApiName: this.objectApiName,
+          fields: [...new Set([this.xField, this.yField])]
+        });
+        normalized = this._aggregateRawData(records);
+      } else {
+        normalized = normalizeMultiGroup(data, {
+          objectApiName: this.objectApiName,
+          groupByField: this.xField,
+          seriesField: this.yField,
+          valueField: this.valueField,
+          operation: this.operation
+        });
+      }
+      if (!normalized.length) {
+        this.error = "No data after aggregation";
+      } else {
+        this.chartData = normalized;
+        this.error = null;
+        this.chartRendered = false; // force renderedCallback to re-initialize the SVG
+      }
+    } catch (e) {
+      this.error = e.message;
+    }
+    this.isLoading = false;
+  }
+
+  _formatGqlErrors(errors) {
+    const list = Array.isArray(errors) ? errors : [errors];
+    return list.map((e) => e?.message || e).join("; ") || "GraphQL error";
+  }
+
+  // ═══════════════════════════════════════════════════════════════
   // LIFECYCLE HOOKS
   // ═══════════════════════════════════════════════════════════════
 
@@ -167,6 +281,11 @@ export default class D3Heatmap extends NavigationMixin(LightningElement) {
   // ═══════════════════════════════════════════════════════════════
 
   async loadData() {
+    // GraphQL path is handled reactively by the @wire(graphql) — nothing to do here.
+    if (this.fetchMode === "graphql") {
+      return;
+    }
+
     // Priority 1: Use recordCollection if provided (client-side aggregation)
     if (this.recordCollection && this.recordCollection.length > 0) {
       this.chartData = this._aggregateRawData([...this.recordCollection]);
@@ -316,12 +435,19 @@ export default class D3Heatmap extends NavigationMixin(LightningElement) {
     if (width <= 0 || height <= 0) return;
 
     // Create SVG
-    this.svg = d3
+    const svgRoot = d3
       .select(container)
       .append("svg")
       .attr("width", containerWidth)
       .attr("height", this.height)
-      .attr("class", "heatmap-svg")
+      .attr("class", "heatmap-svg");
+
+    applySvgA11y(svgRoot, {
+      title: `Heatmap: ${this.operation} of ${this.valueField} by ${this.xField} and ${this.yField}`,
+      desc: `${xLabels.length} columns by ${yLabels.length} rows`
+    });
+
+    this.svg = svgRoot
       .append("g")
       .attr("transform", `translate(${margin.left},${margin.top})`);
 
@@ -338,8 +464,13 @@ export default class D3Heatmap extends NavigationMixin(LightningElement) {
       .range([0, height])
       .padding(0.05);
 
-    // Color ramp
-    const rampHue = this.config.rampHue || "blue";
+    // Color ramp. The default theme preserves the historical hardcoded "blue"
+    // ramp (non-breaking for existing pages); a non-default theme picks its
+    // own ramp via getRampHueForTheme, taking precedence over config.rampHue.
+    const rampHue =
+      this.theme && this.theme !== DEFAULT_THEME
+        ? getRampHueForTheme(this.theme)
+        : this.config.rampHue || "blue";
     const rampColors = getSequentialRamp(rampHue, COLOR_STEPS);
 
     // Build a lookup map for cell values, filling gaps with 0

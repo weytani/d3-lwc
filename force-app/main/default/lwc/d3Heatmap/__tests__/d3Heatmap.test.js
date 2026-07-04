@@ -4,6 +4,7 @@
 import { createElement } from "lwc";
 import D3Heatmap from "c/d3Heatmap";
 import { loadD3 } from "c/d3Lib";
+import { getSequentialRamp } from "c/themeService";
 import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
 import getMultiGroupData from "@salesforce/apex/D3ChartController.getMultiGroupData";
 
@@ -11,6 +12,17 @@ import getMultiGroupData from "@salesforce/apex/D3ChartController.getMultiGroupD
 jest.mock("c/d3Lib", () => ({
   loadD3: jest.fn()
 }));
+
+// Spy on getSequentialRamp while keeping the real palette/hue logic — lets
+// theme-wiring tests assert which hue was requested without hand-computing
+// the resulting hex ramp.
+jest.mock("c/themeService", () => {
+  const actual = jest.requireActual("c/themeService");
+  return {
+    ...actual,
+    getSequentialRamp: jest.fn(actual.getSequentialRamp)
+  };
+});
 
 // Mock Apex
 jest.mock(
@@ -88,7 +100,8 @@ const createMockD3 = () => {
     }),
     min: jest.fn(() => 0),
     max: jest.fn(() => 500),
-    extent: jest.fn(() => [0, 500])
+    extent: jest.fn(() => [0, 500]),
+    insert: jest.fn(() => mockD3)
   };
   return mockD3;
 };
@@ -150,6 +163,7 @@ describe("c-d3-heatmap", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    getSequentialRamp.mockClear();
     mockD3 = createMockD3();
     loadD3.mockResolvedValue(mockD3);
     executeQuery.mockResolvedValue(HEATMAP_RECORDS);
@@ -715,6 +729,72 @@ describe("c-d3-heatmap", () => {
       await flushPromises();
 
       expect(mockD3.extent).toHaveBeenCalled();
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════
+  // THEME WIRING (theme -> rampHue)
+  // ═══════════════════════════════════════════════════════════════
+
+  describe("theme wiring", () => {
+    it("preserves the historical blue ramp for the default theme", async () => {
+      await createChart({ theme: "Salesforce Standard" });
+      await flushPromises();
+
+      expect(getSequentialRamp).toHaveBeenCalledWith("blue", 9);
+    });
+
+    it("derives the ramp hue from a non-default theme (Warm -> red)", async () => {
+      await createChart({ theme: "Warm" });
+      await flushPromises();
+
+      expect(getSequentialRamp).toHaveBeenCalledWith("red", 9);
+    });
+
+    it("derives the ramp hue from a non-default theme (Vibrant -> green)", async () => {
+      await createChart({ theme: "Vibrant" });
+      await flushPromises();
+
+      expect(getSequentialRamp).toHaveBeenCalledWith("green", 9);
+    });
+
+    it("still respects an explicit config.rampHue for the default theme", async () => {
+      await createChart({
+        theme: "Salesforce Standard",
+        advancedConfig: JSON.stringify({ rampHue: "green" })
+      });
+      await flushPromises();
+
+      expect(getSequentialRamp).toHaveBeenCalledWith("green", 9);
+    });
+
+    it("a non-default theme takes precedence over an explicit config.rampHue", async () => {
+      // Documented trade-off: once a non-default theme is picked, it drives the
+      // ramp — config.rampHue is only consulted for the default theme.
+      await createChart({
+        theme: "Warm",
+        advancedConfig: JSON.stringify({ rampHue: "green" })
+      });
+      await flushPromises();
+
+      expect(getSequentialRamp).toHaveBeenCalledWith("red", 9);
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════
+  // ACCESSIBILITY TESTS
+  // ═══════════════════════════════════════════════════════════════
+
+  describe("accessibility", () => {
+    it("applies role=img and a title to the chart SVG", async () => {
+      await createChart();
+      await flushPromises();
+
+      const attrCalls = mockD3.attr.mock.calls;
+      expect(attrCalls.some((c) => c[0] === "role" && c[1] === "img")).toBe(
+        true
+      );
+      expect(mockD3.insert).toHaveBeenCalledWith("title", ":first-child");
     });
   });
 
