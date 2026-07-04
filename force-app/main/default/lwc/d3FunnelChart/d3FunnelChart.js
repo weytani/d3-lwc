@@ -8,8 +8,7 @@ import {
   prepareData,
   aggregateData,
   OPERATIONS,
-  MAX_RECORDS,
-  CHART_LIMITS
+  MAX_RECORDS
 } from "c/dataService";
 import { getColors, DEFAULT_THEME } from "c/themeService";
 import {
@@ -99,6 +98,7 @@ export default class D3FunnelChart extends NavigationMixin(LightningElement) {
   chartRendered = false;
   _layoutRetry = null;
   _config = {};
+  _configParsed = false;
 
   // ═══════════════════════════════════════════════════════════════
   // GETTERS
@@ -161,7 +161,7 @@ export default class D3FunnelChart extends NavigationMixin(LightningElement) {
           objectApiName: this.objectApiName,
           fields: [this.groupByField],
           filter: this.graphqlFilter,
-          first: CHART_LIMITS.FUNNEL
+          first: this.recordLimit || 2000
         });
       } else {
         queryString = buildAggregateQuery({

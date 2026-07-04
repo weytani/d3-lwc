@@ -2,7 +2,7 @@
 // ABOUTME: Uses the real HTML selectors: .chart-container (chart) and .slds-text-color_error (error).
 import { createElement } from "lwc";
 import D3DonutChart from "c/d3DonutChart";
-import { graphql } from "lightning/graphql";
+import { graphql, gql } from "lightning/graphql";
 import { loadD3 } from "c/d3Lib";
 
 jest.mock("c/d3Lib", () => ({ loadD3: jest.fn() }));
@@ -144,5 +144,19 @@ describe("d3DonutChart GraphQL path (Approach A)", () => {
     expect(
       element.shadowRoot.querySelector(".slds-text-color_error")
     ).toBeNull();
+  });
+
+  it("bounds the Count-path query with the same first: value as the aggregate path", async () => {
+    const element = createElement("c-d3-donut-chart", { is: D3DonutChart });
+    element.fetchMode = "graphql";
+    element.objectApiName = "Opportunity";
+    element.groupByField = "StageName";
+    element.operation = "Count";
+    document.body.appendChild(element);
+
+    await flushPromises();
+
+    const queryStrings = gql.mock.results.map((r) => r.value);
+    expect(queryStrings.some((q) => q.includes("first: 2000"))).toBe(true);
   });
 });

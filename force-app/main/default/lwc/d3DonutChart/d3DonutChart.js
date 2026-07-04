@@ -6,8 +6,7 @@ import {
   prepareData,
   aggregateData,
   OPERATIONS,
-  MAX_RECORDS,
-  CHART_LIMITS
+  MAX_RECORDS
 } from "c/dataService";
 import { getColors, DEFAULT_THEME } from "c/themeService";
 import {
@@ -181,7 +180,7 @@ export default class D3DonutChart extends NavigationMixin(LightningElement) {
           objectApiName: this.objectApiName,
           fields: [this.groupByField],
           filter: this.graphqlFilter,
-          first: CHART_LIMITS.DONUT
+          first: this.recordLimit || 2000
         });
       } else {
         queryString = buildAggregateQuery({
