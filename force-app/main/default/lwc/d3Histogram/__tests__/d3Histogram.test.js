@@ -51,6 +51,7 @@ const createMockD3 = () => {
     attr: jest.fn(() => mockD3),
     style: jest.fn(() => mockD3),
     call: jest.fn(() => mockD3),
+    insert: jest.fn(() => mockD3),
     selectAll: jest.fn(() => mockD3),
     data: jest.fn(() => mockD3),
     enter: jest.fn(() => mockD3),
@@ -451,6 +452,24 @@ describe("c-d3-histogram", () => {
   });
 
   // ═══════════════════════════════════════════════════════════════
+  // ACCESSIBILITY TESTS
+  // ═══════════════════════════════════════════════════════════════
+
+  describe("accessibility", () => {
+    it("applies SVG accessibility attributes (role=img + title)", async () => {
+      await createChart();
+      await Promise.resolve();
+
+      expect(mockD3.attr).toHaveBeenCalledWith("role", "img");
+      expect(mockD3.attr).toHaveBeenCalledWith(
+        "aria-label",
+        expect.stringContaining("Histogram")
+      );
+      expect(mockD3.insert).toHaveBeenCalledWith("title", ":first-child");
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════
   // STATISTICS TESTS
   // ═══════════════════════════════════════════════════════════════
 
@@ -595,6 +614,41 @@ describe("c-d3-histogram", () => {
       });
 
       expect(element.filterField).toBe("Amount");
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════
+  // FILTER FIELD WIRING TESTS
+  // ═══════════════════════════════════════════════════════════════
+
+  describe("filterField wiring", () => {
+    it("includes filterField in the binclick event detail, defaulting to valueField", async () => {
+      await createChart({ valueField: "Amount", filterField: "" });
+      await Promise.resolve();
+
+      const handler = jest.fn();
+      element.addEventListener("binclick", handler);
+
+      const clickCall = mockD3.on.mock.calls.find((c) => c[0] === "click");
+      expect(clickCall).toBeTruthy();
+      clickCall[1]({}, Object.assign([10, 20], { x0: 0, x1: 50 }));
+
+      expect(handler).toHaveBeenCalled();
+      expect(handler.mock.calls[0][0].detail.filterField).toBe("Amount");
+    });
+
+    it("uses the explicit filterField over valueField when set", async () => {
+      await createChart({ valueField: "Amount", filterField: "StageName" });
+      await Promise.resolve();
+
+      const handler = jest.fn();
+      element.addEventListener("binclick", handler);
+
+      const clickCall = mockD3.on.mock.calls.find((c) => c[0] === "click");
+      expect(clickCall).toBeTruthy();
+      clickCall[1]({}, Object.assign([10, 20], { x0: 0, x1: 50 }));
+
+      expect(handler.mock.calls[0][0].detail.filterField).toBe("StageName");
     });
   });
 

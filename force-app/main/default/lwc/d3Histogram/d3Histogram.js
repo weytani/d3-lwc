@@ -1,6 +1,6 @@
 // ABOUTME: D3 Histogram Lightning Web Component with automatic binning.
 // ABOUTME: Displays distribution of numeric values with normal curve overlay and statistics.
-import { LightningElement, api, track } from "lwc";
+import { LightningElement, api, track, wire } from "lwc";
 import { loadD3 } from "c/d3Lib";
 import { prepareData, CHART_LIMITS } from "c/dataService";
 import { getColors, DEFAULT_THEME } from "c/themeService";
@@ -8,11 +8,14 @@ import {
   formatNumber,
   createTooltip,
   createResizeHandler,
-  createLayoutRetry
+  createLayoutRetry,
+  applySvgA11y
 } from "c/chartUtils";
 import { NavigationMixin } from "lightning/navigation";
 import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
 import getStatistics from "@salesforce/apex/D3ChartController.getStatistics";
+import { gql, graphql } from "lightning/graphql";
+import { buildRecordQuery, normalizeRecordsGeneric } from "c/graphqlService";
 
 export default class D3Histogram extends NavigationMixin(LightningElement) {
   // ═══════════════════════════════════════════════════════════════
@@ -57,6 +60,12 @@ export default class D3Histogram extends NavigationMixin(LightningElement) {
 
   /** Advanced configuration JSON */
   @api advancedConfig = "{}";
+
+  /** Fetch-mode selector: "auto" (default, existing priority order), "apex", or "graphql". */
+  @api fetchMode = "auto";
+
+  /** Structured filter for the GraphQL path: { field, operator, value }. */
+  @api graphqlFilter;
 
   // ═══════════════════════════════════════════════════════════════
   // TRACKED STATE
@@ -142,6 +151,76 @@ export default class D3Histogram extends NavigationMixin(LightningElement) {
   }
 
   // ═══════════════════════════════════════════════════════════════
+  // GRAPHQL SELF-FETCH PATH (Approach A — additive, CT-REC)
+  // ═══════════════════════════════════════════════════════════════
+
+  /**
+   * Reactive GraphQL query for the self-fetch path. Returns undefined (so the
+   * wire is skipped) unless fetchMode is "graphql" and objectApiName/valueField
+   * are set. Histogram has no server-side aggregate on the graphql path: it
+   * always fetches raw valueField records and feeds the existing client-side
+   * statistics + binning path (same as recordCollection/soqlQuery).
+   */
+  get gqlQuery() {
+    if (this.fetchMode !== "graphql") return undefined;
+    if (!this.objectApiName || !this.valueField) return undefined;
+    let queryString;
+    try {
+      queryString = buildRecordQuery({
+        objectApiName: this.objectApiName,
+        fields: [this.valueField],
+        filter: this.graphqlFilter,
+        first: this.recordLimit || 2000
+      });
+    } catch {
+      // Unsupported config: leave the wire un-provisioned; error surfaces below.
+      return undefined;
+    }
+    return gql`
+      ${queryString}
+    `;
+  }
+
+  @wire(graphql, { query: "$gqlQuery" })
+  wiredRecords({ data, errors }) {
+    if (this.fetchMode !== "graphql") return;
+    if (errors) {
+      this.error = this._formatGqlErrors(errors);
+      this.isLoading = false;
+      return;
+    }
+    if (!data) return; // initial undefined emission
+    try {
+      const records = normalizeRecordsGeneric(data, {
+        objectApiName: this.objectApiName,
+        fields: [this.valueField]
+      });
+      this.rawValues = records
+        .map((record) => {
+          const val = record[this.valueField];
+          return val !== null && val !== undefined ? Number(val) : NaN;
+        })
+        .filter((val) => !isNaN(val) && isFinite(val));
+
+      if (this.rawValues.length === 0) {
+        this.error = "No valid numeric values found in data";
+      } else {
+        this.error = null;
+        this.calculateStatistics();
+        this.chartRendered = false; // force renderedCallback to re-initialize the SVG
+      }
+    } catch (e) {
+      this.error = e.message;
+    }
+    this.isLoading = false;
+  }
+
+  _formatGqlErrors(errors) {
+    const list = Array.isArray(errors) ? errors : [errors];
+    return list.map((e) => e?.message || e).join("; ") || "GraphQL error";
+  }
+
+  // ═══════════════════════════════════════════════════════════════
   // LIFECYCLE HOOKS
   // ═══════════════════════════════════════════════════════════════
 
@@ -187,6 +266,11 @@ export default class D3Histogram extends NavigationMixin(LightningElement) {
   // ═══════════════════════════════════════════════════════════════
 
   async loadData() {
+    // GraphQL path is handled reactively by the @wire(graphql) — nothing to do here.
+    if (this.fetchMode === "graphql") {
+      return;
+    }
+
     let rawData = [];
 
     if (this.recordCollection && this.recordCollection.length > 0) {
@@ -348,12 +432,19 @@ export default class D3Histogram extends NavigationMixin(LightningElement) {
     if (width <= 0 || height <= 0) return;
 
     // Create SVG
-    this.svg = d3
+    const svgRoot = d3
       .select(container)
       .append("svg")
       .attr("width", containerWidth)
       .attr("height", this.height)
-      .attr("class", "histogram-svg")
+      .attr("class", "histogram-svg");
+
+    applySvgA11y(svgRoot, {
+      title: `Histogram: distribution of ${this.effectiveXLabel}`,
+      desc: `${this.rawValues.length} values`
+    });
+
+    this.svg = svgRoot
       .append("g")
       .attr("transform", `translate(${margin.left},${margin.top})`);
 
@@ -654,6 +745,8 @@ export default class D3Histogram extends NavigationMixin(LightningElement) {
   // ═══════════════════════════════════════════════════════════════
 
   handleBinClick(d) {
+    const filterFieldName = this.filterField || this.valueField;
+
     // Dispatch custom event with bin details
     this.dispatchEvent(
       new CustomEvent("binclick", {
@@ -662,7 +755,8 @@ export default class D3Histogram extends NavigationMixin(LightningElement) {
           rangeEnd: d.x1,
           count: d.length,
           values: [...d],
-          field: this.valueField
+          field: this.valueField,
+          filterField: filterFieldName
         },
         bubbles: true,
         composed: true
