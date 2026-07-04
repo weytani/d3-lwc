@@ -5,6 +5,7 @@ import { createElement } from "lwc";
 import D3CalendarHeatmap from "c/d3CalendarHeatmap";
 import { loadD3 } from "c/d3Lib";
 import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
+import { getSequentialRamp } from "c/themeService";
 
 // Mock d3Lib
 jest.mock("c/d3Lib", () => ({
@@ -855,6 +856,36 @@ describe("c-d3-calendar-heatmap", () => {
       const warmRange = warmScale.range.mock.calls[0][0];
 
       expect(coolRange).not.toEqual(warmRange);
+    });
+
+    it("preserves the historical green ramp for the default theme (unset)", async () => {
+      await createChart({});
+      await flushPromises();
+
+      const scale = mockD3.scaleQuantize.mock.results[0].value;
+      const range = scale.range.mock.calls[0][0];
+
+      expect(range).toEqual(getSequentialRamp("green", 5));
+    });
+
+    it("uses the default theme's own ramp when explicitly set to Salesforce Standard", async () => {
+      await createChart({ theme: "Salesforce Standard" });
+      await flushPromises();
+
+      const scale = mockD3.scaleQuantize.mock.results[0].value;
+      const range = scale.range.mock.calls[0][0];
+
+      expect(range).toEqual(getSequentialRamp("green", 5));
+    });
+
+    it("derives a non-default theme's ramp from getRampHueForTheme", async () => {
+      await createChart({ theme: "Warm" });
+      await flushPromises();
+
+      const scale = mockD3.scaleQuantize.mock.results[0].value;
+      const range = scale.range.mock.calls[0][0];
+
+      expect(range).toEqual(getSequentialRamp("red", 5));
     });
   });
 

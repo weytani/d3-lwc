@@ -2,7 +2,12 @@
 // ABOUTME: Displays daily activity as a GitHub-contribution-style grid with year navigation.
 import { LightningElement, api, track, wire } from "lwc";
 import { loadD3 } from "c/d3Lib";
-import { prepareData, OPERATIONS, CHART_LIMITS } from "c/dataService";
+import {
+  prepareData,
+  OPERATIONS,
+  CHART_LIMITS,
+  applyFilterClause
+} from "c/dataService";
 import {
   getSequentialRamp,
   getRampHueForTheme,
@@ -287,7 +292,7 @@ export default class D3CalendarHeatmap extends NavigationMixin(
       let fetchedData = [];
       try {
         fetchedData = await executeQuery({
-          queryString: this._applyFilterClause(this.soqlQuery)
+          queryString: applyFilterClause(this.soqlQuery, this.filterClause)
         });
       } catch (e) {
         throw new Error(`SOQL Error: ${e.body?.message || e.message}`);
@@ -299,29 +304,6 @@ export default class D3CalendarHeatmap extends NavigationMixin(
     throw new Error(
       "No data source provided. Set recordCollection or soqlQuery."
     );
-  }
-
-  /**
-   * Injects filterClause as a WHERE-clause fragment into a raw SOQL query
-   * string, ahead of any ORDER BY / GROUP BY / LIMIT clause. Appends with
-   * AND if the query already has a WHERE; otherwise adds one. No-op when
-   * filterClause is blank.
-   * @param {String} soqlQuery - The base SOQL query
-   * @returns {String} - The query with filterClause applied
-   */
-  _applyFilterClause(soqlQuery) {
-    if (!this.filterClause) return soqlQuery;
-
-    const fragment = /\bWHERE\b/i.test(soqlQuery)
-      ? ` AND (${this.filterClause})`
-      : ` WHERE (${this.filterClause})`;
-
-    const trailingClause = soqlQuery.match(/\b(ORDER BY|GROUP BY|LIMIT)\b/i);
-    if (trailingClause) {
-      const idx = trailingClause.index;
-      return `${soqlQuery.slice(0, idx).trimEnd()}${fragment} ${soqlQuery.slice(idx)}`;
-    }
-    return `${soqlQuery}${fragment}`;
   }
 
   /**
@@ -498,8 +480,14 @@ export default class D3CalendarHeatmap extends NavigationMixin(
     const dayData = this._aggregateByDay(year);
     const grid = buildCalendarGrid(year);
 
-    // Determine color hue: advancedConfig.cellColor wins, else derive from theme
-    const colorHue = this.config.cellColor || getRampHueForTheme(this.theme);
+    // Determine color hue: advancedConfig.cellColor wins, else a non-default
+    // theme derives its ramp, else fall back to the historical green default
+    // (preserves the pre-theme-wiring look for charts that never set a theme).
+    const colorHue =
+      this.config.cellColor ||
+      (this.theme && this.theme !== DEFAULT_THEME
+        ? getRampHueForTheme(this.theme)
+        : "green");
     const colorRamp = getSequentialRamp(colorHue, COLOR_STEPS);
 
     // Layout calculations
