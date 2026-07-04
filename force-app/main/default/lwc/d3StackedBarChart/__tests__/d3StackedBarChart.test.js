@@ -95,7 +95,8 @@ const createMockD3 = () => {
     max: jest.fn(() => 500),
     stack: jest.fn(() => mockStack),
     stackOffsetNone: "stackOffsetNone",
-    stackOffsetExpand: "stackOffsetExpand"
+    stackOffsetExpand: "stackOffsetExpand",
+    insert: jest.fn(() => mockD3)
   };
   mockD3._mockStack = mockStack;
   return mockD3;
@@ -809,6 +810,43 @@ describe("c-d3-stacked-bar-chart", () => {
         ".slds-text-color_error"
       );
       expect(errorElement).toBeFalsy();
+    });
+
+    it("wires the theme's color palette into the layer fill colors", async () => {
+      await createChart({ theme: "Warm" });
+      await flushPromises();
+
+      const attrCalls = mockD3.attr.mock.calls;
+      const fillCalls = attrCalls
+        .filter((c) => c[0] === "fill" && typeof c[1] === "function")
+        .map((c) => c[1]);
+      // The layer fill accessor is (d, i) => colors[i]; the first series
+      // should resolve to the Warm palette's first color.
+      const firstFill = fillCalls.find((fn) => {
+        try {
+          return fn(null, 0) === "#FF6B6B";
+        } catch {
+          return false;
+        }
+      });
+      expect(firstFill).toBeTruthy();
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════
+  // ACCESSIBILITY TESTS
+  // ═══════════════════════════════════════════════════════════════
+
+  describe("accessibility", () => {
+    it("applies role=img and a title to the chart SVG", async () => {
+      await createChart();
+      await flushPromises();
+
+      const attrCalls = mockD3.attr.mock.calls;
+      expect(attrCalls.some((c) => c[0] === "role" && c[1] === "img")).toBe(
+        true
+      );
+      expect(mockD3.insert).toHaveBeenCalledWith("title", ":first-child");
     });
   });
 

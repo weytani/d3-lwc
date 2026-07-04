@@ -1,6 +1,6 @@
 // ABOUTME: D3 Stacked Bar Chart Lightning Web Component.
 // ABOUTME: Displays multi-dimensional data as stacked, grouped, or normalized bars with series legend and drill-down.
-import { LightningElement, api, track } from "lwc";
+import { LightningElement, api, track, wire } from "lwc";
 import { loadD3 } from "c/d3Lib";
 import {
   prepareData,
@@ -16,12 +16,22 @@ import {
   createTooltip,
   createResizeHandler,
   buildTooltipContent,
-  createLayoutRetry
+  createLayoutRetry,
+  applySvgA11y
 } from "c/chartUtils";
 import { NavigationMixin } from "lightning/navigation";
 import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
 import getAggregatedData from "@salesforce/apex/D3ChartController.getAggregatedData";
 import getMultiGroupData from "@salesforce/apex/D3ChartController.getMultiGroupData";
+import { gql, graphql } from "lightning/graphql";
+import {
+  buildRecordQuery,
+  normalizeRecordsGeneric,
+  buildAggregateQuery,
+  normalizeAggregate,
+  buildMultiGroupQuery,
+  normalizeMultiGroup
+} from "c/graphqlService";
 
 export default class D3StackedBarChart extends NavigationMixin(
   LightningElement
@@ -68,6 +78,12 @@ export default class D3StackedBarChart extends NavigationMixin(
 
   /** Maximum records to process (overrides default limit) */
   @api recordLimit;
+
+  /** Fetch-mode selector: "auto" (default, existing priority order), "apex", or "graphql". */
+  @api fetchMode = "auto";
+
+  /** Structured filter for the GraphQL path: { field, operator, value }. */
+  @api graphqlFilter;
 
   // ═══════════════════════════════════════════════════════════════
   // TRACKED STATE
@@ -121,6 +137,123 @@ export default class D3StackedBarChart extends NavigationMixin(
   }
 
   // ═══════════════════════════════════════════════════════════════
+  // GRAPHQL SELF-FETCH PATH (Approach A — additive)
+  // ═══════════════════════════════════════════════════════════════
+
+  /**
+   * Reactive GraphQL query for the self-fetch path. Returns undefined (so the wire
+   * is skipped) unless fetchMode is "graphql" and objectApiName/groupByField/operation
+   * are set. Mirrors the existing server-side branch: seriesField present -> two-field
+   * grouped aggregate (CT-MG, via buildMultiGroupQuery, same as getMultiGroupData);
+   * seriesField empty -> single-field aggregate (CT-AGG, via buildAggregateQuery, same
+   * as getAggregatedData). Count has no server aggregate on either branch, so it
+   * fetches bounded raw records instead (fed through the existing _aggregateRawData
+   * path, which already handles Count client-side).
+   */
+  get gqlQuery() {
+    if (this.fetchMode !== "graphql") return undefined;
+    if (!this.objectApiName || !this.groupByField || !this.operation) {
+      return undefined;
+    }
+    let queryString;
+    try {
+      if (this.operation === OPERATIONS.COUNT) {
+        const fields = this.seriesField
+          ? [this.groupByField, this.seriesField]
+          : [this.groupByField];
+        queryString = buildRecordQuery({
+          objectApiName: this.objectApiName,
+          fields: [...new Set(fields)],
+          filter: this.graphqlFilter,
+          first: this.recordLimit || 2000
+        });
+      } else {
+        if (!this.valueField) return undefined;
+        if (this.seriesField) {
+          queryString = buildMultiGroupQuery({
+            objectApiName: this.objectApiName,
+            groupByField: this.groupByField,
+            seriesField: this.seriesField,
+            valueField: this.valueField,
+            operation: this.operation,
+            filter: this.graphqlFilter,
+            first: this.recordLimit || 2000
+          });
+        } else {
+          queryString = buildAggregateQuery({
+            objectApiName: this.objectApiName,
+            groupByField: this.groupByField,
+            valueField: this.valueField,
+            operation: this.operation,
+            filter: this.graphqlFilter,
+            first: this.recordLimit || 2000
+          });
+        }
+      }
+    } catch {
+      // Unsupported operation/config: leave the wire un-provisioned; error surfaces below.
+      return undefined;
+    }
+    return gql`
+      ${queryString}
+    `;
+  }
+
+  @wire(graphql, { query: "$gqlQuery" })
+  wiredAggregate({ data, errors }) {
+    if (this.fetchMode !== "graphql") return;
+    if (errors) {
+      this.error = this._formatGqlErrors(errors);
+      this.isLoading = false;
+      return;
+    }
+    if (!data) return; // initial undefined emission
+    try {
+      let normalized;
+      if (this.operation === OPERATIONS.COUNT) {
+        const fields = this.seriesField
+          ? [this.groupByField, this.seriesField]
+          : [this.groupByField];
+        const records = normalizeRecordsGeneric(data, {
+          objectApiName: this.objectApiName,
+          fields: [...new Set(fields)]
+        });
+        normalized = this._aggregateRawData(records);
+      } else if (this.seriesField) {
+        normalized = normalizeMultiGroup(data, {
+          objectApiName: this.objectApiName,
+          groupByField: this.groupByField,
+          seriesField: this.seriesField,
+          valueField: this.valueField,
+          operation: this.operation
+        });
+      } else {
+        normalized = normalizeAggregate(data, {
+          objectApiName: this.objectApiName,
+          groupByField: this.groupByField,
+          valueField: this.valueField,
+          operation: this.operation
+        });
+      }
+      if (!normalized.length) {
+        this.error = "No data after aggregation";
+      } else {
+        this.chartData = normalized;
+        this.error = null;
+        this.chartRendered = false; // force renderedCallback to re-initialize the SVG
+      }
+    } catch (e) {
+      this.error = e.message;
+    }
+    this.isLoading = false;
+  }
+
+  _formatGqlErrors(errors) {
+    const list = Array.isArray(errors) ? errors : [errors];
+    return list.map((e) => e?.message || e).join("; ") || "GraphQL error";
+  }
+
+  // ═══════════════════════════════════════════════════════════════
   // LIFECYCLE HOOKS
   // ═══════════════════════════════════════════════════════════════
 
@@ -171,6 +304,11 @@ export default class D3StackedBarChart extends NavigationMixin(
   // ═══════════════════════════════════════════════════════════════
 
   async loadData() {
+    // GraphQL path is handled reactively by the @wire(graphql) — nothing to do here.
+    if (this.fetchMode === "graphql") {
+      return;
+    }
+
     // Priority 1: Use recordCollection if provided (client-side aggregation)
     if (this.recordCollection && this.recordCollection.length > 0) {
       this.chartData = this._aggregateRawData([...this.recordCollection]);
@@ -353,12 +491,19 @@ export default class D3StackedBarChart extends NavigationMixin(
     if (width <= 0 || height <= 0) return;
 
     // Create SVG
-    this.svg = d3
+    const svgRoot = d3
       .select(container)
       .append("svg")
       .attr("width", containerWidth)
       .attr("height", this.height)
-      .attr("class", "stacked-bar-chart-svg")
+      .attr("class", "stacked-bar-chart-svg");
+
+    applySvgA11y(svgRoot, {
+      title: `Stacked bar chart: ${this.operation} of ${this.valueField} by ${this.groupByField}`,
+      desc: `${labels.length} categories${hasSeries ? `, ${seriesNames.length} series` : ""}`
+    });
+
+    this.svg = svgRoot
       .append("g")
       .attr("transform", `translate(${margin.left},${margin.top})`);
 
