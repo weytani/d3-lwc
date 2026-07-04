@@ -20,6 +20,23 @@ jest.mock(
   { virtual: true }
 );
 
+// Mock NavigationMixin
+const mockNavigate = jest.fn();
+jest.mock(
+  "lightning/navigation",
+  () => {
+    const Navigate = Symbol.for("NavigationMixin.Navigate");
+    const mixin = (Base) => {
+      return class extends Base {
+        [Navigate] = mockNavigate;
+      };
+    };
+    mixin.Navigate = Navigate;
+    return { NavigationMixin: mixin };
+  },
+  { virtual: true }
+);
+
 // ===============================================================
 // MOCK D3 FACTORY
 // ===============================================================
@@ -31,6 +48,7 @@ const createMockD3 = () => {
     attr: jest.fn(() => mockD3),
     style: jest.fn(() => mockD3),
     call: jest.fn(() => mockD3),
+    insert: jest.fn(() => mockD3),
     text: jest.fn(() => mockD3),
     remove: jest.fn(() => mockD3),
     selectAll: jest.fn(() => mockD3),
@@ -605,11 +623,10 @@ describe("c-d3-sparkline-grid", () => {
       await createChart();
       await flushPromises();
 
-      // Mini sparklines should have no axis rendering
-      expect(mockD3.axisBottom).toBeUndefined?.() ||
-        expect(
-          mockD3.axisBottom ? mockD3.axisBottom.mock?.calls?.length || 0 : 0
-        ).toBe(0);
+      // Mini sparklines should have no axis rendering — the mock D3 factory
+      // never defines axisBottom, so calling it would throw before this
+      // assertion runs at all.
+      expect(mockD3.axisBottom).toBeUndefined();
     });
 
     it("sets stroke attribute on sparkline paths", async () => {
@@ -928,6 +945,101 @@ describe("c-d3-sparkline-grid", () => {
 
       const container = element.shadowRoot.querySelector(".chart-container");
       expect(container).toBeTruthy();
+    });
+  });
+
+  // ===============================================================
+  // ACCESSIBILITY
+  // ===============================================================
+
+  describe("accessibility", () => {
+    it("applies SVG accessibility attributes (role=img + title)", async () => {
+      await createChart();
+      await flushPromises();
+
+      expect(mockD3.attr).toHaveBeenCalledWith("role", "img");
+      expect(mockD3.attr).toHaveBeenCalledWith(
+        "aria-label",
+        expect.stringContaining("Sparkline grid")
+      );
+      expect(mockD3.insert).toHaveBeenCalledWith("title", ":first-child");
+    });
+  });
+
+  // ===============================================================
+  // TOOLTIP WIRING
+  // ===============================================================
+
+  describe("tooltip wiring", () => {
+    it("registers mouseenter/mouseleave on sparkline points to show/hide the tooltip", async () => {
+      await createChart();
+      await flushPromises();
+
+      const onCalls = mockD3.on.mock.calls;
+      expect(onCalls.some((c) => c[0] === "mouseenter")).toBe(true);
+      expect(onCalls.some((c) => c[0] === "mouseleave")).toBe(true);
+    });
+
+    it("invokes the registered mouseenter/mouseleave handlers without throwing", async () => {
+      await createChart();
+      await flushPromises();
+
+      const onCalls = mockD3.on.mock.calls;
+      const enterCall = onCalls.find((c) => c[0] === "mouseenter");
+      const leaveCall = onCalls.find((c) => c[0] === "mouseleave");
+      expect(enterCall).toBeTruthy();
+      expect(leaveCall).toBeTruthy();
+
+      expect(() =>
+        enterCall[1](
+          { offsetX: 5, offsetY: 5, currentTarget: {} },
+          { date: new Date(), value: 10 }
+        )
+      ).not.toThrow();
+      expect(() => leaveCall[1]({ currentTarget: {} })).not.toThrow();
+    });
+
+    it("registers mouseenter/mouseleave on bar sparkline points too", async () => {
+      await createChart({
+        advancedConfig: JSON.stringify({ sparkType: "bar" })
+      });
+      await flushPromises();
+
+      const onCalls = mockD3.on.mock.calls;
+      expect(onCalls.some((c) => c[0] === "mouseenter")).toBe(true);
+      expect(onCalls.some((c) => c[0] === "mouseleave")).toBe(true);
+    });
+  });
+
+  // ===============================================================
+  // DRILL-DOWN
+  // ===============================================================
+
+  describe("drill-down", () => {
+    it("does not navigate when objectApiName is not set", async () => {
+      await createChart({ objectApiName: "" });
+      await flushPromises();
+
+      const clickCall = mockD3.on.mock.calls.find((c) => c[0] === "click");
+      expect(clickCall).toBeTruthy();
+      clickCall[1]({}, {});
+
+      expect(mockNavigate).not.toHaveBeenCalled();
+    });
+
+    it("navigates and dispatches rowclick event when objectApiName is set", async () => {
+      await createChart({ objectApiName: "Opportunity" });
+      await flushPromises();
+
+      const handler = jest.fn();
+      element.addEventListener("rowclick", handler);
+
+      const clickCall = mockD3.on.mock.calls.find((c) => c[0] === "click");
+      expect(clickCall).toBeTruthy();
+      clickCall[1]({}, {});
+
+      expect(mockNavigate).toHaveBeenCalled();
+      expect(handler).toHaveBeenCalled();
     });
   });
 

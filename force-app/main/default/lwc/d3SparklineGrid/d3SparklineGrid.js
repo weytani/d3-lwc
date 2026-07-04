@@ -1,23 +1,22 @@
 // ABOUTME: D3 Sparkline Grid Lightning Web Component.
 // ABOUTME: Displays small multiples inline mini-charts for entity comparison with monthly aggregation.
-import { LightningElement, api, track } from "lwc";
+import { LightningElement, api, track, wire } from "lwc";
 import { loadD3 } from "c/d3Lib";
-import {
-  prepareData,
-  aggregateData,
-  OPERATIONS,
-  CHART_LIMITS
-} from "c/dataService";
+import { prepareData, OPERATIONS, CHART_LIMITS } from "c/dataService";
 import { getColors, DEFAULT_THEME } from "c/themeService";
 import {
   formatNumber,
   truncateLabel,
   createTooltip,
   createResizeHandler,
-  createLayoutRetry
+  createLayoutRetry,
+  buildTooltipContent,
+  applySvgA11y
 } from "c/chartUtils";
 import { NavigationMixin } from "lightning/navigation";
 import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
+import { gql, graphql } from "lightning/graphql";
+import { buildRecordQuery, normalizeRecordsGeneric } from "c/graphqlService";
 
 export default class D3SparklineGrid extends NavigationMixin(LightningElement) {
   // ===============================================================
@@ -63,6 +62,12 @@ export default class D3SparklineGrid extends NavigationMixin(LightningElement) {
 
   /** Maximum records to process (overrides default limit) */
   @api recordLimit;
+
+  /** Fetch-mode selector: "auto" (default, existing priority order), "apex", or "graphql". */
+  @api fetchMode = "auto";
+
+  /** Structured filter for the GraphQL path: { field, operator, value }. */
+  @api graphqlFilter;
 
   // ===============================================================
   // TRACKED STATE
@@ -117,6 +122,82 @@ export default class D3SparklineGrid extends NavigationMixin(LightningElement) {
   }
 
   // ===============================================================
+  // GRAPHQL SELF-FETCH PATH (Approach A — additive, CT-REC)
+  // ===============================================================
+
+  /**
+   * Reactive GraphQL query for the self-fetch path. Returns undefined (so the
+   * wire is skipped) unless fetchMode is "graphql" and objectApiName/entityField
+   * /dateField are set. Sparkline grid has no server-side aggregate: it always
+   * fetches raw records for entityField, dateField, and (if set) valueField,
+   * then feeds the existing recordCollection processing path
+   * (processEntityData), same as recordCollection/soqlQuery.
+   */
+  get gqlQuery() {
+    if (this.fetchMode !== "graphql") return undefined;
+    if (!this.objectApiName || !this.entityField || !this.dateField) {
+      return undefined;
+    }
+    const fields = [
+      ...new Set(
+        [this.entityField, this.dateField, this.valueField].filter(Boolean)
+      )
+    ];
+    let queryString;
+    try {
+      queryString = buildRecordQuery({
+        objectApiName: this.objectApiName,
+        fields,
+        filter: this.graphqlFilter,
+        first: this.recordLimit || 2000
+      });
+    } catch {
+      // Unsupported config: leave the wire un-provisioned; error surfaces below.
+      return undefined;
+    }
+    return gql`
+      ${queryString}
+    `;
+  }
+
+  @wire(graphql, { query: "$gqlQuery" })
+  wiredRecords({ data, errors }) {
+    if (this.fetchMode !== "graphql") return;
+    if (errors) {
+      this.error = this._formatGqlErrors(errors);
+      this.isLoading = false;
+      return;
+    }
+    if (!data) return; // initial undefined emission
+    try {
+      const fields = [
+        ...new Set(
+          [this.entityField, this.dateField, this.valueField].filter(Boolean)
+        )
+      ];
+      const records = normalizeRecordsGeneric(data, {
+        objectApiName: this.objectApiName,
+        fields
+      });
+      this.processEntityData(records);
+      if (this.entityData.length === 0) {
+        this.error = "No data after processing";
+      } else {
+        this.error = null;
+        this.chartRendered = false; // force renderedCallback to re-initialize the SVG
+      }
+    } catch (e) {
+      this.error = e.message;
+    }
+    this.isLoading = false;
+  }
+
+  _formatGqlErrors(errors) {
+    const list = Array.isArray(errors) ? errors : [errors];
+    return list.map((e) => e?.message || e).join("; ") || "GraphQL error";
+  }
+
+  // ===============================================================
   // LIFECYCLE HOOKS
   // ===============================================================
 
@@ -162,6 +243,11 @@ export default class D3SparklineGrid extends NavigationMixin(LightningElement) {
   // ===============================================================
 
   async loadData() {
+    // GraphQL path is handled reactively by the @wire(graphql) — nothing to do here.
+    if (this.fetchMode === "graphql") {
+      return;
+    }
+
     let rawData = [];
 
     if (this.recordCollection && this.recordCollection.length > 0) {
@@ -350,6 +436,11 @@ export default class D3SparklineGrid extends NavigationMixin(LightningElement) {
       .attr("height", totalHeight)
       .attr("class", "sparkline-grid-svg");
 
+    applySvgA11y(svg, {
+      title: `Sparkline grid: ${this.entityData.length} entities`,
+      desc: `${this.operation} of ${this.valueField} by ${this.dateField}, grouped by ${this.entityField}`
+    });
+
     this.svg = svg;
 
     // Render each entity row
@@ -357,7 +448,11 @@ export default class D3SparklineGrid extends NavigationMixin(LightningElement) {
       const rowG = svg
         .append("g")
         .attr("class", "entity-row")
-        .attr("transform", `translate(0, ${i * rowHeight + 10})`);
+        .attr("transform", `translate(0, ${i * rowHeight + 10})`)
+        .attr("cursor", this.objectApiName ? "pointer" : "default")
+        .on("click", () => {
+          this.handleRowClick(entityItem);
+        });
 
       const color = colors[i];
 
@@ -382,7 +477,8 @@ export default class D3SparklineGrid extends NavigationMixin(LightningElement) {
         entityItem.sparklineData,
         sparkWidth,
         sparkHeight,
-        color
+        color,
+        entityItem.entity
       );
 
       // Current value (right)
@@ -399,7 +495,7 @@ export default class D3SparklineGrid extends NavigationMixin(LightningElement) {
   /**
    * Renders a single sparkline within a group element.
    */
-  renderSparkline(d3, group, sparklineData, width, height, color) {
+  renderSparkline(d3, group, sparklineData, width, height, color, entityName) {
     if (!sparklineData || sparklineData.length === 0) return;
 
     const sparkType = this.config.sparkType || "line";
@@ -412,7 +508,15 @@ export default class D3SparklineGrid extends NavigationMixin(LightningElement) {
     const yMin = d3.min(sparklineData, (d) => d.value) || 0;
 
     if (sparkType === "bar") {
-      this.renderBarSparkline(d3, group, sparklineData, width, height, color);
+      this.renderBarSparkline(
+        d3,
+        group,
+        sparklineData,
+        width,
+        height,
+        color,
+        entityName
+      );
     } else {
       this.renderLineSparkline(
         d3,
@@ -424,7 +528,8 @@ export default class D3SparklineGrid extends NavigationMixin(LightningElement) {
         xExtent,
         yMax,
         yMin,
-        sparkType
+        sparkType,
+        entityName
       );
     }
 
@@ -463,7 +568,8 @@ export default class D3SparklineGrid extends NavigationMixin(LightningElement) {
     xExtent,
     yMax,
     yMin,
-    sparkType
+    sparkType,
+    entityName
   ) {
     const xScale = d3.scaleTime().domain(xExtent).range([0, width]);
 
@@ -504,12 +610,42 @@ export default class D3SparklineGrid extends NavigationMixin(LightningElement) {
       .attr("fill", "none")
       .attr("stroke", color)
       .attr("stroke-width", 1.5);
+
+    // Hoverable point markers (transparent until hover) — this is what makes
+    // the tooltip allocated in initializeChart actually get shown.
+    group
+      .selectAll(".sparkline-point")
+      .data(sparklineData)
+      .enter()
+      .append("circle")
+      .attr("class", "sparkline-point")
+      .attr("cx", (d) => xScale(d.date))
+      .attr("cy", (d) => yScale(d.value))
+      .attr("r", 3)
+      .attr("fill", color)
+      .attr("opacity", 0)
+      .on("mouseenter", (event, d) => {
+        this._showPointTooltip(event, entityName, d);
+        d3.select(event.currentTarget).attr("opacity", 1);
+      })
+      .on("mouseleave", (event) => {
+        this._hideTooltip();
+        d3.select(event.currentTarget).attr("opacity", 0);
+      });
   }
 
   /**
    * Renders a bar type sparkline using scaleBand.
    */
-  renderBarSparkline(d3, group, sparklineData, width, height, color) {
+  renderBarSparkline(
+    d3,
+    group,
+    sparklineData,
+    width,
+    height,
+    color,
+    entityName
+  ) {
     const xScale = d3
       .scaleBand()
       .domain(sparklineData.map((d) => d.date))
@@ -536,7 +672,71 @@ export default class D3SparklineGrid extends NavigationMixin(LightningElement) {
       .attr("y", (d) => yScale(d.value))
       .attr("height", (d) => height - yScale(d.value))
       .attr("fill", color)
-      .attr("opacity", 0.7);
+      .attr("opacity", 0.7)
+      .on("mouseenter", (event, d) => {
+        this._showPointTooltip(event, entityName, d);
+        d3.select(event.currentTarget).attr("opacity", 1);
+      })
+      .on("mouseleave", (event) => {
+        this._hideTooltip();
+        d3.select(event.currentTarget).attr("opacity", 0.7);
+      });
+  }
+
+  // ===============================================================
+  // TOOLTIP HANDLERS
+  // ===============================================================
+
+  _showPointTooltip(event, entityName, d) {
+    if (!this.tooltip) return;
+
+    const monthLabel = d.date.toLocaleString("default", {
+      month: "short",
+      year: "numeric"
+    });
+    const content = buildTooltipContent(entityName, d.value, {
+      prefix: `${monthLabel}: `
+    });
+
+    this.tooltip.show(content, event.offsetX, event.offsetY);
+  }
+
+  _hideTooltip() {
+    if (!this.tooltip) return;
+    this.tooltip.hide();
+  }
+
+  // ===============================================================
+  // CLICK HANDLER - DRILL DOWN
+  // ===============================================================
+
+  handleRowClick(entityItem) {
+    if (!this.objectApiName) return;
+
+    const filterFieldName = this.filterField || this.entityField;
+
+    this[NavigationMixin.Navigate]({
+      type: "standard__objectPage",
+      attributes: {
+        objectApiName: this.objectApiName,
+        actionName: "list"
+      },
+      state: {
+        filterName: "Recent"
+      }
+    });
+
+    this.dispatchEvent(
+      new CustomEvent("rowclick", {
+        detail: {
+          entity: entityItem.entity,
+          value: entityItem.currentValue,
+          filterField: filterFieldName
+        },
+        bubbles: true,
+        composed: true
+      })
+    );
   }
 
   // ===============================================================
