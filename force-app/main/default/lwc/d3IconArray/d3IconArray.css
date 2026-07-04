@@ -1,0 +1,69 @@
+/* ABOUTME: Styles for the D3 icon array component including layout, legend, and tooltips. */
+/* ABOUTME: Uses flexbox layout with a centered icon grid and a responsive right-side legend. */
+
+.chart-wrapper {
+  display: flex;
+  align-items: center;
+}
+
+.chart-container {
+  position: relative;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* SVG Styles */
+.icon-array-svg {
+  font-family: "Salesforce Sans", Arial, sans-serif;
+}
+
+.icon-glyph {
+  transition: opacity 0.15s ease;
+}
+
+.icon-glyph:hover {
+  opacity: 0.8;
+}
+
+/* Legend Styles */
+.legend-container {
+  width: clamp(120px, 28%, 200px);
+  flex-shrink: 0;
+  padding: 10px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  padding: 4px 0;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.legend-item:hover {
+  background-color: #f3f2f2;
+}
+
+.legend-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+
+.legend-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #3e3e3c;
+}
+
+.legend-value {
+  margin-left: 8px;
+  color: #706e6b;
+  font-size: 11px;
+}
