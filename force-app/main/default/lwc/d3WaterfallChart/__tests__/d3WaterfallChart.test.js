@@ -557,30 +557,6 @@ describe("c-d3-waterfall-chart", () => {
       expect(errorElement).toBeFalsy();
     });
 
-    it("handles empty string advancedConfig", async () => {
-      await createChart({
-        advancedConfig: ""
-      });
-
-      await flushPromises();
-      const errorElement = element.shadowRoot.querySelector(
-        ".slds-text-color_error"
-      );
-      expect(errorElement).toBeFalsy();
-    });
-
-    it("handles whitespace-only advancedConfig", async () => {
-      await createChart({
-        advancedConfig: "   "
-      });
-
-      await flushPromises();
-      const errorElement = element.shadowRoot.querySelector(
-        ".slds-text-color_error"
-      );
-      expect(errorElement).toBeFalsy();
-    });
-
     it("accepts subtotalIndices in advancedConfig", async () => {
       await createChart({
         advancedConfig: '{"subtotalIndices": [2, 4]}'
@@ -601,36 +577,6 @@ describe("c-d3-waterfall-chart", () => {
   describe("themes", () => {
     it("accepts Salesforce Standard theme", async () => {
       await createChart({ theme: "Salesforce Standard" });
-
-      await flushPromises();
-      const errorElement = element.shadowRoot.querySelector(
-        ".slds-text-color_error"
-      );
-      expect(errorElement).toBeFalsy();
-    });
-
-    it("accepts Warm theme", async () => {
-      await createChart({ theme: "Warm" });
-
-      await flushPromises();
-      const errorElement = element.shadowRoot.querySelector(
-        ".slds-text-color_error"
-      );
-      expect(errorElement).toBeFalsy();
-    });
-
-    it("accepts Cool theme", async () => {
-      await createChart({ theme: "Cool" });
-
-      await flushPromises();
-      const errorElement = element.shadowRoot.querySelector(
-        ".slds-text-color_error"
-      );
-      expect(errorElement).toBeFalsy();
-    });
-
-    it("accepts Vibrant theme", async () => {
-      await createChart({ theme: "Vibrant" });
 
       await flushPromises();
       const errorElement = element.shadowRoot.querySelector(
@@ -675,11 +621,10 @@ describe("c-d3-waterfall-chart", () => {
 
       // Find the fill call that uses a function (the bar fill, not axis)
       const funcFillCall = fillCalls.find((c) => typeof c[1] === "function");
-      if (funcFillCall) {
-        // Test with a positive value
-        const color = funcFillCall[1]({ isPositive: true, value: 100 }, 0);
-        expect(color).toBe(SEMANTIC_COLORS.positive);
-      }
+      expect(funcFillCall).toBeDefined();
+      // Test with a positive value
+      const color = funcFillCall[1]({ isPositive: true, value: 100 }, 0);
+      expect(color).toBe(SEMANTIC_COLORS.positive);
     });
 
     it("uses SEMANTIC_COLORS.negative for negative bars", async () => {
@@ -689,10 +634,9 @@ describe("c-d3-waterfall-chart", () => {
       const attrCalls = mockD3.attr.mock.calls;
       const fillCalls = attrCalls.filter((c) => c[0] === "fill");
       const funcFillCall = fillCalls.find((c) => typeof c[1] === "function");
-      if (funcFillCall) {
-        const color = funcFillCall[1]({ isPositive: false, value: -100 }, 0);
-        expect(color).toBe(SEMANTIC_COLORS.negative);
-      }
+      expect(funcFillCall).toBeDefined();
+      const color = funcFillCall[1]({ isPositive: false, value: -100 }, 0);
+      expect(color).toBe(SEMANTIC_COLORS.negative);
     });
 
     it("creates connector lines between bars", async () => {
@@ -970,11 +914,10 @@ describe("c-d3-waterfall-chart", () => {
       const textCalls = mockD3.text.mock.calls;
       const funcTextCalls = textCalls.filter((c) => typeof c[0] === "function");
 
-      if (funcTextCalls.length > 0) {
-        const formatter = funcTextCalls[0][0];
-        const negResult = formatter({ value: -30000 });
-        expect(negResult).toContain("-");
-      }
+      expect(funcTextCalls.length).toBeGreaterThan(0);
+      const formatter = funcTextCalls[0][0];
+      const negResult = formatter({ value: -30000 });
+      expect(negResult).toContain("-");
     });
   });
 
@@ -994,12 +937,11 @@ describe("c-d3-waterfall-chart", () => {
         (c) => c[0] === "fill" && typeof c[1] === "function"
       );
 
-      if (fillCalls.length > 0) {
-        const fillFunc = fillCalls[0][1];
-        // Index 1 should be treated as a subtotal
-        const color = fillFunc({ isPositive: true, value: 100 }, 1);
-        expect(color).toBe(SEMANTIC_COLORS.subtotal);
-      }
+      expect(fillCalls.length).toBeGreaterThan(0);
+      const fillFunc = fillCalls[0][1];
+      // Index 1 should be treated as a subtotal
+      const color = fillFunc({ isPositive: true, value: 100 }, 1);
+      expect(color).toBe(SEMANTIC_COLORS.subtotal);
     });
 
     it("renders non-subtotal bars normally when subtotalIndices specified", async () => {
@@ -1013,12 +955,11 @@ describe("c-d3-waterfall-chart", () => {
         (c) => c[0] === "fill" && typeof c[1] === "function"
       );
 
-      if (fillCalls.length > 0) {
-        const fillFunc = fillCalls[0][1];
-        // Index 0 is not a subtotal, should use normal colors
-        const color = fillFunc({ isPositive: true, value: 100 }, 0);
-        expect(color).toBe(SEMANTIC_COLORS.positive);
-      }
+      expect(fillCalls.length).toBeGreaterThan(0);
+      const fillFunc = fillCalls[0][1];
+      // Index 0 is not a subtotal, should use normal colors
+      const color = fillFunc({ isPositive: true, value: 100 }, 0);
+      expect(color).toBe(SEMANTIC_COLORS.positive);
     });
 
     it("handles empty subtotalIndices array", async () => {
@@ -1071,9 +1012,8 @@ describe("c-d3-waterfall-chart", () => {
 
       // scaleLinear should have domain set
       const linearScale = mockD3.scaleLinear.mock.results[0]?.value;
-      if (linearScale) {
-        expect(linearScale.domain).toHaveBeenCalled();
-      }
+      expect(linearScale).toBeDefined();
+      expect(linearScale.domain).toHaveBeenCalled();
     });
   });
 

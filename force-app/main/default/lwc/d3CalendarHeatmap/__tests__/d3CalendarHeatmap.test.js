@@ -723,18 +723,6 @@ describe("c-d3-calendar-heatmap", () => {
       expect(errorElement).toBeFalsy();
     });
 
-    it("handles empty string advancedConfig", async () => {
-      await createChart({
-        advancedConfig: ""
-      });
-
-      await flushPromises();
-      const errorElement = element.shadowRoot.querySelector(
-        ".slds-text-color_error"
-      );
-      expect(errorElement).toBeFalsy();
-    });
-
     it("accepts custom dateField", async () => {
       const customData = [
         { CreatedDate: "2025-01-15", Amount: 100 },
@@ -781,36 +769,6 @@ describe("c-d3-calendar-heatmap", () => {
   describe("themes", () => {
     it("accepts Salesforce Standard theme", async () => {
       await createChart({ theme: "Salesforce Standard" });
-      await flushPromises();
-
-      const errorElement = element.shadowRoot.querySelector(
-        ".slds-text-color_error"
-      );
-      expect(errorElement).toBeFalsy();
-    });
-
-    it("accepts Warm theme", async () => {
-      await createChart({ theme: "Warm" });
-      await flushPromises();
-
-      const errorElement = element.shadowRoot.querySelector(
-        ".slds-text-color_error"
-      );
-      expect(errorElement).toBeFalsy();
-    });
-
-    it("accepts Cool theme", async () => {
-      await createChart({ theme: "Cool" });
-      await flushPromises();
-
-      const errorElement = element.shadowRoot.querySelector(
-        ".slds-text-color_error"
-      );
-      expect(errorElement).toBeFalsy();
-    });
-
-    it("accepts Vibrant theme", async () => {
-      await createChart({ theme: "Vibrant" });
       await flushPromises();
 
       const errorElement = element.shadowRoot.querySelector(

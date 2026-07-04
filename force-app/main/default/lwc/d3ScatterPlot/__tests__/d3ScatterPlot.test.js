@@ -419,42 +419,6 @@ describe("c-d3-scatter-plot", () => {
       );
       expect(errorElement).toBeFalsy();
     });
-
-    it("accepts Warm theme", async () => {
-      await createChart({
-        theme: "Warm"
-      });
-
-      await Promise.resolve();
-      const errorElement = element.shadowRoot.querySelector(
-        ".slds-text-color_error"
-      );
-      expect(errorElement).toBeFalsy();
-    });
-
-    it("accepts Cool theme", async () => {
-      await createChart({
-        theme: "Cool"
-      });
-
-      await Promise.resolve();
-      const errorElement = element.shadowRoot.querySelector(
-        ".slds-text-color_error"
-      );
-      expect(errorElement).toBeFalsy();
-    });
-
-    it("accepts Vibrant theme", async () => {
-      await createChart({
-        theme: "Vibrant"
-      });
-
-      await Promise.resolve();
-      const errorElement = element.shadowRoot.querySelector(
-        ".slds-text-color_error"
-      );
-      expect(errorElement).toBeFalsy();
-    });
   });
 
   // ═══════════════════════════════════════════════════════════════

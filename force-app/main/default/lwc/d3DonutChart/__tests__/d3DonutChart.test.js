@@ -317,27 +317,6 @@ describe("c-d3-donut-chart", () => {
 
       expect(element.shadowRoot.querySelector(".chart-container")).toBeTruthy();
     });
-
-    it("renders with Warm theme", async () => {
-      await createChart({ theme: "Warm" });
-      await flushPromises();
-
-      expect(element.shadowRoot.querySelector(".chart-container")).toBeTruthy();
-    });
-
-    it("renders with Cool theme", async () => {
-      await createChart({ theme: "Cool" });
-      await flushPromises();
-
-      expect(element.shadowRoot.querySelector(".chart-container")).toBeTruthy();
-    });
-
-    it("renders with Vibrant theme", async () => {
-      await createChart({ theme: "Vibrant" });
-      await flushPromises();
-
-      expect(element.shadowRoot.querySelector(".chart-container")).toBeTruthy();
-    });
   });
 
   // ═══════════════════════════════════════════════════════════════

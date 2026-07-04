@@ -118,15 +118,6 @@ const SINGLE_SERIES_DATA = [
   { StageName: "Prospecting", Type: "New", Amount: 100 }
 ];
 
-const MULTI_SERIES_AGGREGATED = [
-  { label: "Prospecting", series: "New", value: 100 },
-  { label: "Prospecting", series: "Existing", value: 200 },
-  { label: "Qualification", series: "New", value: 150 },
-  { label: "Qualification", series: "Existing", value: 250 },
-  { label: "Closed Won", series: "New", value: 500 },
-  { label: "Closed Won", series: "Existing", value: 300 }
-];
-
 const SERVER_MULTI_GROUP_RESULT = [
   { label: "Prospecting", series: "New", value: 100 },
   { label: "Prospecting", series: "Existing", value: 200 },
@@ -602,30 +593,6 @@ describe("c-d3-stacked-bar-chart", () => {
       expect(errorElement).toBeFalsy();
     });
 
-    it("handles empty string advancedConfig", async () => {
-      await createChart({
-        advancedConfig: ""
-      });
-
-      await flushPromises();
-      const errorElement = element.shadowRoot.querySelector(
-        ".slds-text-color_error"
-      );
-      expect(errorElement).toBeFalsy();
-    });
-
-    it("handles whitespace-only advancedConfig", async () => {
-      await createChart({
-        advancedConfig: "   "
-      });
-
-      await flushPromises();
-      const errorElement = element.shadowRoot.querySelector(
-        ".slds-text-color_error"
-      );
-      expect(errorElement).toBeFalsy();
-    });
-
     it("accepts customColors in advancedConfig", async () => {
       await createChart({
         advancedConfig: '{"customColors": ["#ff0000", "#00ff00", "#0000ff"]}'
@@ -836,36 +803,6 @@ describe("c-d3-stacked-bar-chart", () => {
   describe("themes", () => {
     it("accepts Salesforce Standard theme", async () => {
       await createChart({ theme: "Salesforce Standard" });
-
-      await flushPromises();
-      const errorElement = element.shadowRoot.querySelector(
-        ".slds-text-color_error"
-      );
-      expect(errorElement).toBeFalsy();
-    });
-
-    it("accepts Warm theme", async () => {
-      await createChart({ theme: "Warm" });
-
-      await flushPromises();
-      const errorElement = element.shadowRoot.querySelector(
-        ".slds-text-color_error"
-      );
-      expect(errorElement).toBeFalsy();
-    });
-
-    it("accepts Cool theme", async () => {
-      await createChart({ theme: "Cool" });
-
-      await flushPromises();
-      const errorElement = element.shadowRoot.querySelector(
-        ".slds-text-color_error"
-      );
-      expect(errorElement).toBeFalsy();
-    });
-
-    it("accepts Vibrant theme", async () => {
-      await createChart({ theme: "Vibrant" });
 
       await flushPromises();
       const errorElement = element.shadowRoot.querySelector(

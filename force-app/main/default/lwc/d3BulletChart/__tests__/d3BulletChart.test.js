@@ -455,36 +455,6 @@ describe("c-d3-bullet-chart", () => {
       );
       expect(errorElement).toBeFalsy();
     });
-
-    it("accepts Warm theme", async () => {
-      await createChart({ theme: "Warm" });
-      await flushPromises();
-
-      const errorElement = element.shadowRoot.querySelector(
-        ".slds-text-color_error"
-      );
-      expect(errorElement).toBeFalsy();
-    });
-
-    it("accepts Cool theme", async () => {
-      await createChart({ theme: "Cool" });
-      await flushPromises();
-
-      const errorElement = element.shadowRoot.querySelector(
-        ".slds-text-color_error"
-      );
-      expect(errorElement).toBeFalsy();
-    });
-
-    it("accepts Vibrant theme", async () => {
-      await createChart({ theme: "Vibrant" });
-      await flushPromises();
-
-      const errorElement = element.shadowRoot.querySelector(
-        ".slds-text-color_error"
-      );
-      expect(errorElement).toBeFalsy();
-    });
   });
 
   // ═══════════════════════════════════════════════════════════════

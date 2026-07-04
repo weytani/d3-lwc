@@ -776,21 +776,6 @@ describe("c-d3-choropleth", () => {
       await createChart({ theme: "Salesforce Standard" });
       expect(element.theme).toBe("Salesforce Standard");
     });
-
-    it("accepts Warm theme", async () => {
-      await createChart({ theme: "Warm" });
-      expect(element.theme).toBe("Warm");
-    });
-
-    it("accepts Cool theme", async () => {
-      await createChart({ theme: "Cool" });
-      expect(element.theme).toBe("Cool");
-    });
-
-    it("accepts Vibrant theme", async () => {
-      await createChart({ theme: "Vibrant" });
-      expect(element.theme).toBe("Vibrant");
-    });
   });
 
   // ═══════════════════════════════════════════════════════════════

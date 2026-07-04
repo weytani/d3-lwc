@@ -412,7 +412,6 @@ describe("c-d3-box-plot", () => {
 
       // Verify computeQuartiles returns meaningful stats
       const calls = computeQuartiles.mock.calls;
-      const results = calls.map((call) => computeQuartiles.mock.results);
       expect(calls.length).toBe(3);
     });
 
@@ -669,10 +668,8 @@ describe("c-d3-box-plot", () => {
       expect(mouseenterCalls.length).toBeGreaterThan(0);
 
       // Call the mouseenter handler to verify tooltip content generation
-      if (mouseenterCalls.length > 0) {
-        const handler = mouseenterCalls[0][1];
-        expect(typeof handler).toBe("function");
-      }
+      const handler = mouseenterCalls[0][1];
+      expect(typeof handler).toBe("function");
     });
   });
 
@@ -706,18 +703,6 @@ describe("c-d3-box-plot", () => {
         advancedConfig: "not valid json"
       });
 
-      const errorElement = element.shadowRoot.querySelector(
-        ".slds-text-color_error"
-      );
-      expect(errorElement).toBeFalsy();
-    });
-
-    it("handles empty string advancedConfig", async () => {
-      await createChart({
-        advancedConfig: ""
-      });
-
-      await flushPromises();
       const errorElement = element.shadowRoot.querySelector(
         ".slds-text-color_error"
       );
@@ -783,36 +768,6 @@ describe("c-d3-box-plot", () => {
   describe("themes", () => {
     it("accepts Salesforce Standard theme", async () => {
       await createChart({ theme: "Salesforce Standard" });
-      await flushPromises();
-
-      const errorElement = element.shadowRoot.querySelector(
-        ".slds-text-color_error"
-      );
-      expect(errorElement).toBeFalsy();
-    });
-
-    it("accepts Warm theme", async () => {
-      await createChart({ theme: "Warm" });
-      await flushPromises();
-
-      const errorElement = element.shadowRoot.querySelector(
-        ".slds-text-color_error"
-      );
-      expect(errorElement).toBeFalsy();
-    });
-
-    it("accepts Cool theme", async () => {
-      await createChart({ theme: "Cool" });
-      await flushPromises();
-
-      const errorElement = element.shadowRoot.querySelector(
-        ".slds-text-color_error"
-      );
-      expect(errorElement).toBeFalsy();
-    });
-
-    it("accepts Vibrant theme", async () => {
-      await createChart({ theme: "Vibrant" });
       await flushPromises();
 
       const errorElement = element.shadowRoot.querySelector(

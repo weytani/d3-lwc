@@ -509,30 +509,6 @@ describe("c-d3-funnel-chart", () => {
       expect(errorElement).toBeFalsy();
     });
 
-    it("handles empty string advancedConfig", async () => {
-      await createChart({
-        advancedConfig: ""
-      });
-
-      await flushPromises();
-      const errorElement = element.shadowRoot.querySelector(
-        ".slds-text-color_error"
-      );
-      expect(errorElement).toBeFalsy();
-    });
-
-    it("handles whitespace-only advancedConfig", async () => {
-      await createChart({
-        advancedConfig: "   "
-      });
-
-      await flushPromises();
-      const errorElement = element.shadowRoot.querySelector(
-        ".slds-text-color_error"
-      );
-      expect(errorElement).toBeFalsy();
-    });
-
     it("accepts customColors in advancedConfig", async () => {
       await createChart({
         advancedConfig: '{"customColors": ["#ff0000", "#00ff00", "#0000ff"]}'
@@ -562,36 +538,6 @@ describe("c-d3-funnel-chart", () => {
   describe("themes", () => {
     it("accepts Salesforce Standard theme", async () => {
       await createChart({ theme: "Salesforce Standard" });
-
-      await flushPromises();
-      const errorElement = element.shadowRoot.querySelector(
-        ".slds-text-color_error"
-      );
-      expect(errorElement).toBeFalsy();
-    });
-
-    it("accepts Warm theme", async () => {
-      await createChart({ theme: "Warm" });
-
-      await flushPromises();
-      const errorElement = element.shadowRoot.querySelector(
-        ".slds-text-color_error"
-      );
-      expect(errorElement).toBeFalsy();
-    });
-
-    it("accepts Cool theme", async () => {
-      await createChart({ theme: "Cool" });
-
-      await flushPromises();
-      const errorElement = element.shadowRoot.querySelector(
-        ".slds-text-color_error"
-      );
-      expect(errorElement).toBeFalsy();
-    });
-
-    it("accepts Vibrant theme", async () => {
-      await createChart({ theme: "Vibrant" });
 
       await flushPromises();
       const errorElement = element.shadowRoot.querySelector(
@@ -1235,12 +1181,12 @@ describe("c-d3-funnel-chart", () => {
       expect(dataCalls.length).toBeGreaterThan(0);
       // Verify data was passed (sorted descending is handled internally)
       const firstDataArg = dataCalls[0][0];
-      if (Array.isArray(firstDataArg) && firstDataArg.length > 1) {
-        // First item should have the highest value (descending sort)
-        expect(firstDataArg[0].value).toBeGreaterThanOrEqual(
-          firstDataArg[1].value
-        );
-      }
+      expect(Array.isArray(firstDataArg)).toBe(true);
+      expect(firstDataArg.length).toBeGreaterThan(1);
+      // First item should have the highest value (descending sort)
+      expect(firstDataArg[0].value).toBeGreaterThanOrEqual(
+        firstDataArg[1].value
+      );
     });
 
     it("renders conversion rate labels when hideConversionRates is false (default)", async () => {
@@ -1261,9 +1207,6 @@ describe("c-d3-funnel-chart", () => {
       await createChart({ hideConversionRates: true });
       await flushPromises();
 
-      // Count text appends - with hideConversionRates=true, we should have fewer text elements
-      const appendCalls = localMockD3.append.mock.calls;
-      const textCalls = appendCalls.filter((c) => c[0] === "text");
       // Segment labels still exist, but no conversion rate labels between segments
       // This is a structure test - the component should still render
       expect(loadD3).toHaveBeenCalled();

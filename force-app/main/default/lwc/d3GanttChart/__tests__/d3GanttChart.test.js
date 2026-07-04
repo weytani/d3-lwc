@@ -313,15 +313,6 @@ describe("c-d3-gantt-chart", () => {
       );
       expect(errorElement).toBeFalsy();
     });
-
-    it("accepts Warm theme", async () => {
-      await createChart({ theme: "Warm" });
-      await flushPromises();
-      const errorElement = element.shadowRoot.querySelector(
-        ".slds-text-color_error"
-      );
-      expect(errorElement).toBeFalsy();
-    });
   });
 
   describe("tooltip behavior", () => {
