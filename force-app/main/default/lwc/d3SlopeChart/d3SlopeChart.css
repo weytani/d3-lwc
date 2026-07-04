@@ -1,0 +1,10 @@
+/* ABOUTME: Styles for the D3 Slope Chart Lightning Web Component. */
+/* ABOUTME: Defines svg font and the hover state for the connecting lines and dots. */
+
+.slope-chart-svg {
+  font-family: "Salesforce Sans", Arial, sans-serif;
+}
+
+.slope-entity:hover .slope-line {
+  opacity: 0.8;
+}
