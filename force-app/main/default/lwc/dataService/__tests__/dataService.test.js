@@ -277,7 +277,7 @@ describe("dataService", () => {
   describe("CHART_LIMITS", () => {
     it("defines limits for all chart types", () => {
       expect(CHART_LIMITS).toBeDefined();
-      expect(Object.keys(CHART_LIMITS)).toHaveLength(30);
+      expect(Object.keys(CHART_LIMITS)).toHaveLength(32);
     });
 
     it("has null limits for aggregation charts (server GROUP BY)", () => {
@@ -360,6 +360,15 @@ describe("dataService", () => {
     });
     it("exports LOLLIPOP limit as null (server GROUP BY)", () => {
       expect(CHART_LIMITS.LOLLIPOP).toBeNull();
+    });
+  });
+
+  describe("CHART_LIMITS for New Charts wave 1", () => {
+    it("exports STEP limit as 1000 (time series, matches LINE)", () => {
+      expect(CHART_LIMITS.STEP).toBe(1000);
+    });
+    it("exports SLOPE limit as 500 (per-entity connecting-line readability)", () => {
+      expect(CHART_LIMITS.SLOPE).toBe(500);
     });
   });
 

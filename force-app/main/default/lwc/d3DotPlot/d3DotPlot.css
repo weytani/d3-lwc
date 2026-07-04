@@ -1,0 +1,10 @@
+/* ABOUTME: Styles for the D3 Dot Plot Lightning Web Component. */
+/* ABOUTME: Defines svg font and the hover state for the value dots. */
+
+.dot-plot-svg {
+  font-family: "Salesforce Sans", Arial, sans-serif;
+}
+
+.dot:hover {
+  opacity: 0.9;
+}

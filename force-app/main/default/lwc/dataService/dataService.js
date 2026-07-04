@@ -54,7 +54,10 @@ export const CHART_LIMITS = {
   HORIZONTAL_BAR: null, // Server GROUP BY, no raw record cap
   PIE: null, // Server GROUP BY, no raw record cap
   PROGRESS_BAR: null, // Server GROUP BY (single row), no raw record cap
-  LOLLIPOP: null // Server GROUP BY, no raw record cap
+  LOLLIPOP: null, // Server GROUP BY, no raw record cap
+  // New Charts wave 1
+  STEP: 1000, // Time series, visual comprehension ceiling (matches LINE)
+  SLOPE: 500 // Per-entity connecting-line readability (matches WATERFALL)
 };
 
 /**
