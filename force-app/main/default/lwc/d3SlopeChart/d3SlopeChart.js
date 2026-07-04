@@ -294,16 +294,32 @@ export default class D3SlopeChart extends NavigationMixin(LightningElement) {
   /**
    * Parses raw records into per-entity before/after pairs. Records with a
    * missing label or non-numeric start/end value are dropped (mirrors the
-   * time series charts' filter-out-invalid-rows behavior).
+   * time series charts' filter-out-invalid-rows behavior). Slope does not
+   * dedupe by groupByField — one line is drawn per record, so callers who
+   * want one line per entity must pre-aggregate before passing data in.
    * @param {Array} records - Raw data records
    */
   processSlopeData(records) {
     this.chartData = records
       .map((record) => {
         const label = record[this.groupByField];
-        const startValue = Number(record[this.startValueField]);
-        const endValue = Number(record[this.endValueField]);
-        if (label == null || isNaN(startValue) || isNaN(endValue)) {
+        const rawStart = record[this.startValueField];
+        const rawEnd = record[this.endValueField];
+        // null/undefined/"" coerce to 0 via Number(), which would silently
+        // render a missing value as a real slope to zero — reject them
+        // before coercion instead of after, so they're dropped as documented.
+        if (
+          label == null ||
+          rawStart == null ||
+          rawStart === "" ||
+          rawEnd == null ||
+          rawEnd === ""
+        ) {
+          return null;
+        }
+        const startValue = Number(rawStart);
+        const endValue = Number(rawEnd);
+        if (isNaN(startValue) || isNaN(endValue)) {
           return null;
         }
         return {

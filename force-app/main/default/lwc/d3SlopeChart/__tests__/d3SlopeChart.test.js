@@ -275,6 +275,34 @@ describe("c-d3-slope-chart", () => {
       expect(errorElement).toBeFalsy();
     });
 
+    it("drops (does not coerce to 0) a record with a null start value", async () => {
+      const mixedData = [
+        { Name: "A", Amount: null, ExpectedRevenue: 100 },
+        { Name: "B", Amount: 50, ExpectedRevenue: 100 }
+      ];
+
+      await createChart({ recordCollection: mixedData });
+      await flushPromises();
+
+      const dataCall = mockD3.data.mock.calls.find((c) => Array.isArray(c[0]));
+      expect(dataCall[0]).toHaveLength(1);
+      expect(dataCall[0][0].label).toBe("B");
+    });
+
+    it("drops (does not coerce to 0) a record with an empty-string end value", async () => {
+      const mixedData = [
+        { Name: "A", Amount: 50, ExpectedRevenue: "" },
+        { Name: "B", Amount: 50, ExpectedRevenue: 100 }
+      ];
+
+      await createChart({ recordCollection: mixedData });
+      await flushPromises();
+
+      const dataCall = mockD3.data.mock.calls.find((c) => Array.isArray(c[0]));
+      expect(dataCall[0]).toHaveLength(1);
+      expect(dataCall[0][0].label).toBe("B");
+    });
+
     it("shows an error when every record is invalid", async () => {
       const allInvalid = [{ Name: "A", Amount: "x", ExpectedRevenue: "y" }];
 
