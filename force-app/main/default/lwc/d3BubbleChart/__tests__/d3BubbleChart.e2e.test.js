@@ -100,7 +100,8 @@ function createMockD3() {
       axis.tickSize = jest.fn(() => axis);
       return axis;
     }),
-    max: jest.fn(() => 500)
+    max: jest.fn(() => 500),
+    insert: jest.fn(() => mockD3)
   };
   return mockD3;
 }

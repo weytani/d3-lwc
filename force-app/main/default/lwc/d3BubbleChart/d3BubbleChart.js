@@ -1,6 +1,6 @@
 // ABOUTME: D3 Bubble Chart Lightning Web Component — scatter plot with a third numeric dimension.
 // ABOUTME: Bubble area (via d3.scaleSqrt) encodes the size field; click navigates to the record.
-import { LightningElement, api, track } from "lwc";
+import { LightningElement, api, track, wire } from "lwc";
 import { loadD3 } from "c/d3Lib";
 import {
   prepareData,
@@ -13,11 +13,14 @@ import {
   formatNumber,
   createTooltip,
   createResizeHandler,
-  createLayoutRetry
+  createLayoutRetry,
+  applySvgA11y
 } from "c/chartUtils";
 import { NavigationMixin } from "lightning/navigation";
 import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
 import getXYData from "@salesforce/apex/D3ChartController.getXYData";
+import { gql, graphql } from "lightning/graphql";
+import { buildRecordQuery, normalizeRecordsGeneric } from "c/graphqlService";
 
 export default class D3BubbleChart extends NavigationMixin(LightningElement) {
   // ═══════════════════════════════════════════════════════════════
@@ -71,6 +74,12 @@ export default class D3BubbleChart extends NavigationMixin(LightningElement) {
 
   /** Advanced configuration JSON */
   @api advancedConfig = "{}";
+
+  /** Fetch-mode selector: "auto" (default, existing priority order), "apex", or "graphql". */
+  @api fetchMode = "auto";
+
+  /** Structured filter for the GraphQL path: { field, operator, value }. */
+  @api graphqlFilter;
 
   // ═══════════════════════════════════════════════════════════════
   // TRACKED STATE
@@ -138,6 +147,101 @@ export default class D3BubbleChart extends NavigationMixin(LightningElement) {
   }
 
   // ═══════════════════════════════════════════════════════════════
+  // GRAPHQL SELF-FETCH PATH (Approach A — additive, CT-REC)
+  // ═══════════════════════════════════════════════════════════════
+
+  /**
+   * Reactive GraphQL query for the self-fetch path. Returns undefined (so the wire
+   * is skipped) unless fetchMode is "graphql" and objectApiName/xAxisField/yAxisField/
+   * sizeField are set. Bubble has no server-side aggregate on the graphql path: it
+   * always fetches raw records for x/y/size plus the optional label/recordId fields,
+   * deduped, then feeds the existing processBubbleData path (same as
+   * recordCollection/soqlQuery).
+   */
+  get gqlQuery() {
+    if (this.fetchMode !== "graphql") return undefined;
+    if (
+      !this.objectApiName ||
+      !this.xAxisField ||
+      !this.yAxisField ||
+      !this.sizeField
+    ) {
+      return undefined;
+    }
+    const fields = [
+      ...new Set(
+        [
+          this.xAxisField,
+          this.yAxisField,
+          this.sizeField,
+          this.labelField,
+          this.recordIdField
+        ].filter(Boolean)
+      )
+    ];
+    let queryString;
+    try {
+      queryString = buildRecordQuery({
+        objectApiName: this.objectApiName,
+        fields,
+        filter: this.graphqlFilter,
+        first: this.recordLimit || 2000
+      });
+    } catch {
+      // Unsupported config: leave the wire un-provisioned; error surfaces below.
+      return undefined;
+    }
+    return gql`
+      ${queryString}
+    `;
+  }
+
+  @wire(graphql, { query: "$gqlQuery" })
+  wiredRecords({ data, errors }) {
+    if (this.fetchMode !== "graphql") return;
+    if (errors) {
+      this.error = this._formatGqlErrors(errors);
+      this.isLoading = false;
+      return;
+    }
+    if (!data) return; // initial undefined emission
+    try {
+      const fields = [
+        ...new Set(
+          [
+            this.xAxisField,
+            this.yAxisField,
+            this.sizeField,
+            this.labelField,
+            this.recordIdField
+          ].filter(Boolean)
+        )
+      ];
+      const records = normalizeRecordsGeneric(data, {
+        objectApiName: this.objectApiName,
+        fields
+      });
+      this.processBubbleData(records);
+      this.capData();
+
+      if (this.chartData.length === 0) {
+        this.error = "No valid data points after processing";
+      } else {
+        this.error = null;
+        this.chartRendered = false; // force renderedCallback to re-initialize the SVG
+      }
+    } catch (e) {
+      this.error = e.message;
+    }
+    this.isLoading = false;
+  }
+
+  _formatGqlErrors(errors) {
+    const list = Array.isArray(errors) ? errors : [errors];
+    return list.map((e) => e?.message || e).join("; ") || "GraphQL error";
+  }
+
+  // ═══════════════════════════════════════════════════════════════
   // LIFECYCLE HOOKS
   // ═══════════════════════════════════════════════════════════════
 
@@ -183,6 +287,11 @@ export default class D3BubbleChart extends NavigationMixin(LightningElement) {
   // ═══════════════════════════════════════════════════════════════
 
   async loadData() {
+    // GraphQL path is handled reactively by the @wire(graphql) — nothing to do here.
+    if (this.fetchMode === "graphql") {
+      return;
+    }
+
     // Server path: typed getXYData when object + all field mappings present
     if (
       !this.recordCollection?.length &&
@@ -336,12 +445,19 @@ export default class D3BubbleChart extends NavigationMixin(LightningElement) {
 
     if (width <= 0 || height <= 0) return;
 
-    this.svg = d3
+    const svgRoot = d3
       .select(container)
       .append("svg")
       .attr("width", containerWidth)
       .attr("height", this.height)
-      .attr("class", "bubble-chart-svg")
+      .attr("class", "bubble-chart-svg");
+
+    applySvgA11y(svgRoot, {
+      title: `Bubble chart: ${this.effectiveXLabel} vs ${this.effectiveYLabel}`,
+      desc: `${this.chartData.length} bubbles, size encodes ${this.effectiveSizeLabel}`
+    });
+
+    this.svg = svgRoot
       .append("g")
       .attr("transform", `translate(${margin.left},${margin.top})`);
 

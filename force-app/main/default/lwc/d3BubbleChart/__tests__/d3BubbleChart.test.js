@@ -84,7 +84,8 @@ const createMockD3 = () => {
       return axis;
     }),
     extent: jest.fn(() => [0, 500]),
-    max: jest.fn(() => 500)
+    max: jest.fn(() => 500),
+    insert: jest.fn(() => mockD3)
   };
   return mockD3;
 };
@@ -465,6 +466,23 @@ describe("c-d3-bubble-chart", () => {
         ".slds-text-color_error"
       );
       expect(errorElement).toBeFalsy();
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════
+  // ACCESSIBILITY TESTS
+  // ═══════════════════════════════════════════════════════════════
+
+  describe("accessibility", () => {
+    it("applies role=img and a title to the chart SVG", async () => {
+      await createChart();
+      await flushPromises();
+
+      const attrCalls = mockD3.attr.mock.calls;
+      expect(attrCalls.some((c) => c[0] === "role" && c[1] === "img")).toBe(
+        true
+      );
+      expect(mockD3.insert).toHaveBeenCalledWith("title", ":first-child");
     });
   });
 

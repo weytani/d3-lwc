@@ -1,0 +1,70 @@
+/* ABOUTME: Styles for the D3 Bubble Chart component. */
+/* ABOUTME: Covers container layout, axes, grid, bubbles, and tooltip hint. */
+
+:host {
+  display: block;
+}
+
+.chart-container {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+}
+
+/* SVG Styles */
+.bubble-chart-svg {
+  font-family: "Salesforce Sans", Arial, sans-serif;
+}
+
+/* Axis Styles */
+.x-axis text,
+.y-axis text {
+  font-size: 12px;
+  fill: #706e6b;
+}
+
+.x-axis path,
+.x-axis line,
+.y-axis path,
+.y-axis line {
+  stroke: #dddbda;
+}
+
+/* Axis Labels */
+.axis-label {
+  font-size: 12px;
+  fill: #706e6b;
+  font-weight: 500;
+}
+
+/* Grid Styles */
+.grid line {
+  stroke: #e0e0e0;
+  stroke-opacity: 0.7;
+  shape-rendering: crispEdges;
+}
+
+.grid path {
+  stroke-width: 0;
+}
+
+/* Bubble Styles */
+.bubble {
+  transition:
+    fill-opacity 0.15s ease,
+    stroke-opacity 0.15s ease;
+}
+
+.bubble:hover {
+  filter: brightness(1.1);
+}
+
+/* Tooltip hint */
+.tooltip-hint {
+  margin-top: 8px;
+  font-size: 11px;
+  color: #9faab7;
+  font-style: italic;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  padding-top: 4px;
+}
