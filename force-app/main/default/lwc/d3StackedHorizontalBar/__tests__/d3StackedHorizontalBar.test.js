@@ -1,5 +1,5 @@
 // ABOUTME: Unit tests for the d3StackedHorizontalBar Lightning Web Component.
-// ABOUTME: Tests initialization, data handling, stacked/normalized modes, legend, series toggle, and error recovery.
+// ABOUTME: Tests initialization, data handling, stacked/normalized modes, legend rendering, click events, and error recovery.
 
 import { createElement } from "lwc";
 import D3StackedHorizontalBar from "c/d3StackedHorizontalBar";
