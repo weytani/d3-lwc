@@ -229,7 +229,7 @@
         label="Data Source"
         default="auto"
         datasource="auto,apex,graphql"
-        description="How to fetch data: auto (existing priority order), apex (Apex-backed SOQL), or graphql (UI API GraphQL). graphql uses a server-side aggregate, so region click events fire without a specific record to navigate to."
+        description="How to fetch data: auto (existing priority order), apex (Apex-backed SOQL), or graphql (UI API GraphQL). graphql uses a server-side aggregate, so region click events fire without a specific record to navigate to. GraphQL Count is bounded to the first Record Limit rows (default 2000) — use apex/auto for exact counts on larger objects."
       />
 
             <!-- Advanced -->
