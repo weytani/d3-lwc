@@ -1,12 +1,13 @@
 // ABOUTME: D3 Donut/Pie chart Lightning Web Component with drill-down support.
 // ABOUTME: Renders part-to-whole data using configurable inner-radius, themes, legends, and tooltips.
-import { LightningElement, api, track } from "lwc";
+import { LightningElement, api, track, wire } from "lwc";
 import { loadD3 } from "c/d3Lib";
 import {
   prepareData,
   aggregateData,
   OPERATIONS,
-  MAX_RECORDS
+  MAX_RECORDS,
+  CHART_LIMITS
 } from "c/dataService";
 import { getColors, DEFAULT_THEME } from "c/themeService";
 import {
@@ -14,11 +15,19 @@ import {
   formatPercent,
   createTooltip,
   createResizeHandler,
-  createLayoutRetry
+  createLayoutRetry,
+  applySvgA11y
 } from "c/chartUtils";
 import { NavigationMixin } from "lightning/navigation";
 import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
 import getAggregatedData from "@salesforce/apex/D3ChartController.getAggregatedData";
+import { gql, graphql } from "lightning/graphql";
+import {
+  buildAggregateQuery,
+  normalizeAggregate,
+  buildRecordQuery,
+  normalizeRecords
+} from "c/graphqlService";
 
 export default class D3DonutChart extends NavigationMixin(LightningElement) {
   // ═══════════════════════════════════════════════════════════════
@@ -66,6 +75,12 @@ export default class D3DonutChart extends NavigationMixin(LightningElement) {
 
   /** Optional WHERE clause fragment for server-side aggregation */
   @api filterClause = "";
+
+  /** Fetch-mode selector: "auto" (default, existing priority order), "apex", or "graphql". */
+  @api fetchMode = "auto";
+
+  /** Structured filter for the GraphQL path: { field, operator, value }. */
+  @api graphqlFilter;
 
   // ═══════════════════════════════════════════════════════════════
   // TRACKED STATE
@@ -143,6 +158,97 @@ export default class D3DonutChart extends NavigationMixin(LightningElement) {
   }
 
   // ═══════════════════════════════════════════════════════════════
+  // GRAPHQL SELF-FETCH PATH (Approach A — additive)
+  // ═══════════════════════════════════════════════════════════════
+
+  /**
+   * Reactive GraphQL query for the self-fetch path. Returns undefined (so the wire
+   * is skipped) unless fetchMode is "graphql" and all required config is present.
+   */
+  get gqlQuery() {
+    if (this.fetchMode !== "graphql") return undefined;
+    if (!this.objectApiName || !this.groupByField || !this.operation) {
+      return undefined;
+    }
+    // valueField is not required for Count.
+    if (this.operation !== OPERATIONS.COUNT && !this.valueField) {
+      return undefined;
+    }
+    let queryString;
+    try {
+      if (this.operation === OPERATIONS.COUNT) {
+        queryString = buildRecordQuery({
+          objectApiName: this.objectApiName,
+          fields: [this.groupByField],
+          filter: this.graphqlFilter,
+          first: CHART_LIMITS.DONUT
+        });
+      } else {
+        queryString = buildAggregateQuery({
+          objectApiName: this.objectApiName,
+          groupByField: this.groupByField,
+          valueField: this.valueField,
+          operation: this.operation,
+          filter: this.graphqlFilter,
+          first: this.recordLimit || 2000
+        });
+      }
+    } catch {
+      // Unsupported operation/config: leave the wire un-provisioned; error surfaces below.
+      return undefined;
+    }
+    return gql`
+      ${queryString}
+    `;
+  }
+
+  @wire(graphql, { query: "$gqlQuery" })
+  wiredAggregate({ data, errors }) {
+    if (this.fetchMode !== "graphql") return;
+    if (errors) {
+      this.error = this._formatGqlErrors(errors);
+      this.isLoading = false;
+      return;
+    }
+    if (!data) return; // initial undefined emission
+    try {
+      let normalized;
+      if (this.operation === OPERATIONS.COUNT) {
+        const records = normalizeRecords(data, {
+          objectApiName: this.objectApiName,
+          labelField: this.groupByField
+        });
+        normalized = this._aggregateRawData(
+          records.map((r) => ({ [this.groupByField]: r.label }))
+        );
+      } else {
+        normalized = normalizeAggregate(data, {
+          objectApiName: this.objectApiName,
+          groupByField: this.groupByField,
+          valueField: this.valueField,
+          operation: this.operation
+        });
+      }
+      if (!normalized.length) {
+        this.error = "No data after aggregation";
+      } else {
+        this.chartData = normalized;
+        this.totalValue = normalized.reduce((sum, d) => sum + d.value, 0);
+        this.error = null;
+        this.chartRendered = false; // force renderedCallback to re-initialize the SVG
+      }
+    } catch (e) {
+      this.error = e.message;
+    }
+    this.isLoading = false;
+  }
+
+  _formatGqlErrors(errors) {
+    const list = Array.isArray(errors) ? errors : [errors];
+    return list.map((e) => e?.message || e).join("; ") || "GraphQL error";
+  }
+
+  // ═══════════════════════════════════════════════════════════════
   // LIFECYCLE HOOKS
   // ═══════════════════════════════════════════════════════════════
 
@@ -188,6 +294,11 @@ export default class D3DonutChart extends NavigationMixin(LightningElement) {
   // ═══════════════════════════════════════════════════════════════
 
   async loadData() {
+    // GraphQL path is handled reactively by the @wire(graphql) — nothing to do here.
+    if (this.fetchMode === "graphql") {
+      return;
+    }
+
     // Priority 1: Use recordCollection if provided (client-side aggregation)
     if (this.recordCollection && this.recordCollection.length > 0) {
       this.chartData = this._aggregateRawData([...this.recordCollection]);
@@ -326,12 +437,19 @@ export default class D3DonutChart extends NavigationMixin(LightningElement) {
     const radius = Math.min(width, height) / 2;
     const innerRadius = radius * this.innerRadiusRatio;
 
-    this.svg = d3
+    const svgRoot = d3
       .select(container)
       .append("svg")
       .attr("width", containerWidth)
       .attr("height", this.height)
-      .attr("class", "donut-chart-svg")
+      .attr("class", "donut-chart-svg");
+
+    applySvgA11y(svgRoot, {
+      title: `Donut chart: ${this.operation} of ${this.valueField || this.groupByField} by ${this.groupByField}`,
+      desc: `${this.chartData.length} categories, total ${formatNumber(this.totalValue)}`
+    });
+
+    this.svg = svgRoot
       .append("g")
       .attr(
         "transform",
@@ -487,6 +605,13 @@ export default class D3DonutChart extends NavigationMixin(LightningElement) {
     if (item) {
       this.handleSliceClick(item);
     }
+  }
+
+  /** Activates a legend item via keyboard (Enter/Space), matching the click behavior. */
+  handleLegendKeydown(event) {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    this.handleLegendClick(event);
   }
 
   // ═══════════════════════════════════════════════════════════════
