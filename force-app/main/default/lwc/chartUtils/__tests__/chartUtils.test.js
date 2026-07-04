@@ -12,7 +12,8 @@ import {
   getContrastColor,
   buildCalendarGrid,
   parseDate,
-  computeDateExtent
+  computeDateExtent,
+  applySvgA11y
 } from "c/chartUtils";
 
 describe("chartUtils", () => {
@@ -757,6 +758,73 @@ describe("chartUtils", () => {
       expect(computeDateExtent(null, "start", "end")).toBeNull();
       expect(computeDateExtent(undefined, "start", "end")).toBeNull();
       expect(computeDateExtent({}, "start", "end")).toBeNull();
+    });
+  });
+
+  describe("applySvgA11y", () => {
+    const SVG_NS = "http://www.w3.org/2000/svg";
+
+    // Minimal faithful d3-selection wrapper over a real SVG node — implements
+    // only the subset applySvgA11y uses (attr, insert, text) with real DOM
+    // effects, so the assertions verify actual attributes and child nodes.
+    function selectionFor(node) {
+      return {
+        node: () => node,
+        attr(name, value) {
+          node.setAttribute(name, value);
+          return this;
+        },
+        insert(type, before) {
+          const el = document.createElementNS(SVG_NS, type);
+          const ref = before === ":first-child" ? node.firstChild : null;
+          node.insertBefore(el, ref);
+          return selectionFor(el);
+        },
+        text(value) {
+          node.textContent = value;
+          return this;
+        }
+      };
+    }
+
+    function makeSvg() {
+      const svg = document.createElementNS(SVG_NS, "svg");
+      // Pre-existing child proves title/desc are PREPENDED, not appended.
+      svg.appendChild(document.createElementNS(SVG_NS, "g"));
+      return svg;
+    }
+
+    it("sets role=img and aria-label from the title", () => {
+      const svg = makeSvg();
+      applySvgA11y(selectionFor(svg), {
+        title: "Revenue by Stage",
+        desc: "Summed amount per opportunity stage"
+      });
+      expect(svg.getAttribute("role")).toBe("img");
+      expect(svg.getAttribute("aria-label")).toBe("Revenue by Stage");
+    });
+
+    it("prepends <title> then <desc> as the first two children", () => {
+      const svg = makeSvg();
+      applySvgA11y(selectionFor(svg), {
+        title: "Revenue by Stage",
+        desc: "Summed amount per opportunity stage"
+      });
+      const titleEl = svg.querySelector("title");
+      const descEl = svg.querySelector("desc");
+      expect(titleEl).not.toBeNull();
+      expect(descEl).not.toBeNull();
+      expect(titleEl.textContent).toBe("Revenue by Stage");
+      expect(descEl.textContent).toBe("Summed amount per opportunity stage");
+      expect(svg.firstChild).toBe(titleEl);
+      expect(svg.childNodes[1]).toBe(descEl);
+    });
+
+    it("still sets role=img and does not throw when called with no options", () => {
+      const svg = makeSvg();
+      expect(() => applySvgA11y(selectionFor(svg))).not.toThrow();
+      expect(svg.getAttribute("role")).toBe("img");
+      expect(svg.querySelector("title")).toBeNull();
     });
   });
 });

@@ -6,7 +6,9 @@ import {
   createColorScale,
   getColor,
   SEMANTIC_COLORS,
-  getSequentialRamp
+  getSequentialRamp,
+  getRampHueForTheme,
+  getSemanticVariantForTheme
 } from "c/themeService";
 
 describe("themeService", () => {
@@ -17,16 +19,16 @@ describe("themeService", () => {
     });
 
     it("has Warm palette", () => {
-      expect(PALETTES["Warm"]).toBeDefined();
-      expect(PALETTES["Warm"].length).toBeGreaterThanOrEqual(5);
+      expect(PALETTES.Warm).toBeDefined();
+      expect(PALETTES.Warm.length).toBeGreaterThanOrEqual(5);
     });
 
     it("has Cool palette", () => {
-      expect(PALETTES["Cool"]).toBeDefined();
+      expect(PALETTES.Cool).toBeDefined();
     });
 
     it("has Vibrant palette", () => {
-      expect(PALETTES["Vibrant"]).toBeDefined();
+      expect(PALETTES.Vibrant).toBeDefined();
     });
 
     it("all palettes have valid hex colors", () => {
@@ -66,7 +68,7 @@ describe("themeService", () => {
     it("returns colors from specified theme", () => {
       const colors = getColors("Warm", 3);
       expect(colors).toHaveLength(3);
-      expect(PALETTES["Warm"]).toContain(colors[0]);
+      expect(PALETTES.Warm).toContain(colors[0]);
     });
 
     it("falls back to default theme for unknown theme", () => {
@@ -108,12 +110,12 @@ describe("themeService", () => {
 
     it("ignores empty custom colors array", () => {
       const colors = getColors("Warm", 3, []);
-      expect(PALETTES["Warm"]).toContain(colors[0]);
+      expect(PALETTES.Warm).toContain(colors[0]);
     });
 
     it("ignores non-array custom colors", () => {
       const colors = getColors("Warm", 3, "not an array");
-      expect(PALETTES["Warm"]).toContain(colors[0]);
+      expect(PALETTES.Warm).toContain(colors[0]);
     });
   });
 
@@ -230,6 +232,58 @@ describe("themeService", () => {
 
     it("handles 1-step ramp", () => {
       expect(getSequentialRamp("blue", 1)).toHaveLength(1);
+    });
+  });
+
+  describe("getRampHueForTheme", () => {
+    it("maps each of the 4 palette names to a getSequentialRamp hue", () => {
+      expect(getRampHueForTheme("Salesforce Standard")).toBe("blue");
+      expect(getRampHueForTheme("Warm")).toBe("red");
+      expect(getRampHueForTheme("Cool")).toBe("blue");
+      expect(getRampHueForTheme("Vibrant")).toBe("green");
+    });
+
+    it("returns a hue getSequentialRamp accepts (yields the requested step count)", () => {
+      const hue = getRampHueForTheme("Warm");
+      expect(getSequentialRamp(hue, 4)).toHaveLength(4);
+    });
+
+    it("falls back to the default blue hue for unknown/undefined theme", () => {
+      expect(getRampHueForTheme(undefined)).toBe("blue");
+      expect(getRampHueForTheme("NonExistent")).toBe("blue");
+    });
+  });
+
+  describe("getSemanticVariantForTheme", () => {
+    it("returns the SEMANTIC_COLORS positive/negative pair for the default theme (byte-for-byte)", () => {
+      expect(getSemanticVariantForTheme("Salesforce Standard")).toEqual({
+        positive: SEMANTIC_COLORS.positive,
+        negative: SEMANTIC_COLORS.negative
+      });
+      expect(getSemanticVariantForTheme("Salesforce Standard")).toEqual({
+        positive: "#4BCA81",
+        negative: "#FF5D5D"
+      });
+    });
+
+    it("returns a valid positive/negative hex pair per palette", () => {
+      const hexRegex = /^#[0-9A-Fa-f]{6}$/;
+      ["Warm", "Cool", "Vibrant"].forEach((theme) => {
+        const variant = getSemanticVariantForTheme(theme);
+        expect(variant.positive).toMatch(hexRegex);
+        expect(variant.negative).toMatch(hexRegex);
+        expect(variant.positive).not.toBe(variant.negative);
+      });
+    });
+
+    it("falls back to the default theme pair for unknown/undefined theme", () => {
+      expect(getSemanticVariantForTheme(undefined)).toEqual({
+        positive: SEMANTIC_COLORS.positive,
+        negative: SEMANTIC_COLORS.negative
+      });
+      expect(getSemanticVariantForTheme("NonExistent")).toEqual(
+        getSemanticVariantForTheme("Salesforce Standard")
+      );
     });
   });
 });

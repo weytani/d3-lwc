@@ -5,6 +5,8 @@ import {
   normalizeRecords,
   buildAggregateQuery,
   normalizeAggregate,
+  buildMultiGroupQuery,
+  normalizeMultiGroup,
   AGG_FN
 } from "c/graphqlService";
 
@@ -199,6 +201,123 @@ describe("normalizeAggregate", () => {
       { label: "Prospecting", value: 1000 },
       { label: "Closed Won", value: 5000 }
     ]);
+  });
+});
+
+describe("buildMultiGroupQuery", () => {
+  it("builds a two-group + sum query emitting both group fields and the aggregate fn", () => {
+    const q = buildMultiGroupQuery({
+      objectApiName: "Opportunity",
+      groupByField: "StageName",
+      seriesField: "LeadSource",
+      valueField: "Amount",
+      operation: "Sum",
+      first: 2000
+    });
+    expect(q).toContain("uiapi { aggregate { Opportunity(");
+    expect(q).toContain("groupBy: { StageName: {}, LeadSource: {} }");
+    expect(q).toContain("first: 2000");
+    expect(q).toContain(
+      "aggregate { StageName { value } LeadSource { value } Amount { sum { value } } }"
+    );
+  });
+
+  it("includes a where filter when provided", () => {
+    const q = buildMultiGroupQuery({
+      objectApiName: "Opportunity",
+      groupByField: "StageName",
+      seriesField: "LeadSource",
+      valueField: "Amount",
+      operation: "Average",
+      filter: { field: "IsClosed", operator: "eq", value: true }
+    });
+    expect(q).toContain("avg { value }");
+    expect(q).toContain("where: { IsClosed: { eq: true } }");
+  });
+
+  it("throws for an unsupported operation (e.g. Count)", () => {
+    expect(() =>
+      buildMultiGroupQuery({
+        objectApiName: "Opportunity",
+        groupByField: "StageName",
+        seriesField: "LeadSource",
+        valueField: "Amount",
+        operation: "Count"
+      })
+    ).toThrow(/Count/);
+  });
+
+  it("throws when the seriesField is missing", () => {
+    expect(() =>
+      buildMultiGroupQuery({
+        objectApiName: "Opportunity",
+        groupByField: "StageName",
+        valueField: "Amount",
+        operation: "Sum"
+      })
+    ).toThrow(
+      "objectApiName, groupByField, seriesField, valueField, and operation are required"
+    );
+  });
+});
+
+describe("normalizeMultiGroup", () => {
+  it("maps two-group aggregate edges to [{label,series,value}]", () => {
+    const data = {
+      uiapi: {
+        aggregate: {
+          Opportunity: {
+            edges: [
+              {
+                node: {
+                  aggregate: {
+                    StageName: { value: "Prospecting" },
+                    LeadSource: { value: "Web" },
+                    Amount: { sum: { value: 1000 } }
+                  }
+                }
+              },
+              {
+                node: {
+                  aggregate: {
+                    StageName: { value: "Closed Won" },
+                    LeadSource: { value: "Referral" },
+                    Amount: { sum: { value: 5000 } }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    };
+    expect(
+      normalizeMultiGroup(data, {
+        objectApiName: "Opportunity",
+        groupByField: "StageName",
+        seriesField: "LeadSource",
+        valueField: "Amount",
+        operation: "Sum"
+      })
+    ).toEqual([
+      { label: "Prospecting", series: "Web", value: 1000 },
+      { label: "Closed Won", series: "Referral", value: 5000 }
+    ]);
+  });
+
+  it("returns [] when the object node is absent", () => {
+    expect(
+      normalizeMultiGroup(
+        { uiapi: { aggregate: {} } },
+        {
+          objectApiName: "Opportunity",
+          groupByField: "StageName",
+          seriesField: "LeadSource",
+          valueField: "Amount",
+          operation: "Sum"
+        }
+      )
+    ).toEqual([]);
   });
 });
 

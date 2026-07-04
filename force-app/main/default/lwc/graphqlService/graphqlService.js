@@ -126,3 +126,65 @@ export function normalizeAggregate(
     value: e.node.aggregate?.[valueField]?.[fn]?.value ?? null
   }));
 }
+
+/**
+ * Builds a two-field grouped-aggregate GraphQL query string. Extends
+ * buildAggregateQuery's single groupBy clause to a second (series) field.
+ * @param {{objectApiName:string, groupByField:string, seriesField:string,
+ *          valueField:string, operation:string, filter?:object, first?:number}} config
+ * @returns {string}
+ */
+export function buildMultiGroupQuery({
+  objectApiName,
+  groupByField,
+  seriesField,
+  valueField,
+  operation,
+  filter,
+  first = 2000
+}) {
+  if (
+    !objectApiName ||
+    !groupByField ||
+    !seriesField ||
+    !valueField ||
+    !operation
+  ) {
+    throw new Error(
+      "objectApiName, groupByField, seriesField, valueField, and operation are required"
+    );
+  }
+  const fn = AGG_FN[operation];
+  if (!fn) {
+    throw new Error(
+      `Aggregate operation not supported on the GraphQL path in this prototype: ${operation} (use dataSource="apex")`
+    );
+  }
+
+  const args = [`groupBy: { ${groupByField}: {}, ${seriesField}: {} }`];
+  const where = buildWhere(filter);
+  if (where) args.push(where);
+  if (first) args.push(`first: ${first}`);
+
+  return `query { uiapi { aggregate { ${objectApiName}(${args.join(", ")}) { edges { node { aggregate { ${groupByField} { value } ${seriesField} { value } ${valueField} { ${fn} { value } } } } } } } } }`;
+}
+
+/**
+ * Normalizes a two-field grouped-aggregate wire result into
+ * [{label,series,value}] for stacked/heatmap/matrix charts.
+ * @param {object} data wire `data`
+ * @param {{objectApiName:string, groupByField:string, seriesField:string, valueField:string, operation:string}} cfg
+ * @returns {Array<{label:*, series:*, value:*}>}
+ */
+export function normalizeMultiGroup(
+  data,
+  { objectApiName, groupByField, seriesField, valueField, operation }
+) {
+  const fn = AGG_FN[operation];
+  const edges = data?.uiapi?.aggregate?.[objectApiName]?.edges ?? [];
+  return edges.map((e) => ({
+    label: e.node.aggregate?.[groupByField]?.value ?? null,
+    series: e.node.aggregate?.[seriesField]?.value ?? null,
+    value: e.node.aggregate?.[valueField]?.[fn]?.value ?? null
+  }));
+}

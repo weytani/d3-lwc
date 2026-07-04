@@ -469,3 +469,32 @@ export const computeDateExtent = (rows, startField, endField) => {
 
   return [new Date(minTime), new Date(maxTime)];
 };
+
+// ===== ACCESSIBILITY UTILITIES =====
+
+/**
+ * Applies SVG accessibility attributes and child nodes to a chart's root svg.
+ * Sets role="img" + aria-label, and prepends <title>/<desc> nodes so the final
+ * child order is <title>, <desc>. Dependency-free: operates only on the passed
+ * d3 selection (no chart-specific knowledge).
+ * @param {Object} svgSelection - d3 selection of the root svg
+ * @param {Object} options - { title: String, desc: String }
+ * @returns {void}
+ */
+export const applySvgA11y = (svgSelection, { title, desc } = {}) => {
+  if (!svgSelection) return;
+
+  svgSelection.attr("role", "img");
+  if (title) {
+    svgSelection.attr("aria-label", title);
+  }
+
+  // Insert <desc> first, then <title>, so the final child order is
+  // <title>, <desc> (each insert goes before the current first child).
+  if (desc) {
+    svgSelection.insert("desc", ":first-child").text(desc);
+  }
+  if (title) {
+    svgSelection.insert("title", ":first-child").text(title);
+  }
+};

@@ -174,3 +174,46 @@ export const getSequentialRamp = (hue, steps) => {
   }
   return ramp;
 };
+
+/**
+ * Maps each palette name to a sequential-ramp hue accepted by getSequentialRamp
+ * ('blue', 'green', 'red'). Cool and Salesforce Standard are both blue-dominant.
+ */
+const RAMP_HUES = {
+  "Salesforce Standard": "blue",
+  Warm: "red",
+  Cool: "blue",
+  Vibrant: "green"
+};
+
+/**
+ * Resolves a theme name to a getSequentialRamp hue. Unknown or undefined themes
+ * fall back to 'blue' — the historical default (d3Heatmap's `config.rampHue || "blue"`).
+ * @param {String} theme - Theme name
+ * @returns {String} - 'blue', 'green', or 'red'
+ */
+export const getRampHueForTheme = (theme) => RAMP_HUES[theme] || "blue";
+
+/**
+ * Per-palette positive/negative color pair for directional charts
+ * (diverging bar, waterfall, slope). The default theme returns the
+ * SEMANTIC_COLORS positive/negative values byte-for-byte for backward compat.
+ */
+const SEMANTIC_VARIANTS = {
+  "Salesforce Standard": {
+    positive: SEMANTIC_COLORS.positive,
+    negative: SEMANTIC_COLORS.negative
+  },
+  Warm: { positive: "#FFD93D", negative: "#F94144" },
+  Cool: { positive: "#4CC9F0", negative: "#3A0CA3" },
+  Vibrant: { positive: "#8AC926", negative: "#FF595E" }
+};
+
+/**
+ * Resolves a theme name to its positive/negative semantic color pair.
+ * Unknown or undefined themes fall back to the default theme's pair.
+ * @param {String} theme - Theme name
+ * @returns {{positive:String, negative:String}}
+ */
+export const getSemanticVariantForTheme = (theme) =>
+  SEMANTIC_VARIANTS[theme] || SEMANTIC_VARIANTS[DEFAULT_THEME];
