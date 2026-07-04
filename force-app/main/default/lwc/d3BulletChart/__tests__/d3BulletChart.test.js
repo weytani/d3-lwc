@@ -50,6 +50,7 @@ const createMockD3 = () => {
     remove: jest.fn(() => mockD3),
     html: jest.fn(() => mockD3),
     text: jest.fn(() => mockD3),
+    insert: jest.fn(() => mockD3),
     scaleLinear: jest.fn(() => {
       const scale = jest.fn((val) => {
         // Return proportional value for testing
@@ -345,6 +346,44 @@ describe("c-d3-bullet-chart", () => {
       await flushPromises();
 
       expect(loadD3).toHaveBeenCalled();
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════
+  // NO DATA STATE TESTS
+  // ═══════════════════════════════════════════════════════════════
+
+  describe("no data state", () => {
+    it("shows the no-data message (not an empty chart) when the dataset is empty", async () => {
+      executeQuery.mockResolvedValue([]);
+
+      await createChart({
+        recordCollection: [],
+        soqlQuery: "SELECT AVG(Amount) Amount FROM Opportunity"
+      });
+      await flushPromises();
+
+      const container = element.shadowRoot.querySelector(".chart-container");
+      expect(container).toBeNull();
+      expect(
+        element.shadowRoot.querySelector(".slds-text-color_error")
+      ).toBeNull();
+      expect(element.shadowRoot.querySelector("lightning-icon")).not.toBeNull();
+    });
+
+    it("shows the no-data message when server aggregation returns no rows", async () => {
+      getAggregatedData.mockResolvedValue([]);
+
+      await createChart({
+        recordCollection: [],
+        soqlQuery: "",
+        objectApiName: "Opportunity",
+        valueField: "Amount"
+      });
+      await flushPromises();
+
+      const container = element.shadowRoot.querySelector(".chart-container");
+      expect(container).toBeNull();
     });
   });
 
@@ -1023,6 +1062,27 @@ describe("c-d3-bullet-chart", () => {
         (c) => c[0] === "class" && c[1] === "bullet-chart-svg"
       );
       expect(classCalls.length).toBeGreaterThan(0);
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════
+  // ACCESSIBILITY TESTS
+  // ═══════════════════════════════════════════════════════════════
+
+  describe("accessibility", () => {
+    it("applies role=img and a title to the root svg", async () => {
+      await createChart();
+      await flushPromises();
+
+      const roleCalls = mockD3.attr.mock.calls.filter(
+        (c) => c[0] === "role" && c[1] === "img"
+      );
+      expect(roleCalls.length).toBeGreaterThanOrEqual(1);
+
+      const titleInsertCalls = mockD3.insert.mock.calls.filter(
+        (c) => c[0] === "title"
+      );
+      expect(titleInsertCalls.length).toBeGreaterThanOrEqual(1);
     });
   });
 

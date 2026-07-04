@@ -85,12 +85,22 @@
         description="Field to filter by on drill-down"
       />
 
+            <!-- GraphQL Self-Fetch -->
+            <property
+        name="fetchMode"
+        type="String"
+        label="Data Source"
+        default="auto"
+        datasource="auto,apex,graphql"
+        description="How to fetch data: auto (existing priority order), apex (Apex-backed SOQL), or graphql (UI API GraphQL)"
+      />
+
             <!-- Advanced -->
             <property
         name="advancedConfig"
         type="String"
         label="Advanced Config (JSON)"
-        description='{"target": 250000, "ranges": [100000, 200000, 400000], "valueFormat": "currency"}'
+        description='{"target": 250000, "ranges": [100000, 200000, 400000], "valueFormat": "currency", "label": "Pipeline", "customColors": ["#FF5733"], "minValue": 0, "maxValue": 500000}'
       />
         </targetConfig>
     </targetConfigs>

@@ -1,19 +1,23 @@
 // ABOUTME: D3 Bullet Chart Lightning Web Component.
 // ABOUTME: Displays a single KPI value against a target with qualitative range backgrounds.
-import { LightningElement, api, track } from "lwc";
+import { LightningElement, api, track, wire } from "lwc";
 import { loadD3 } from "c/d3Lib";
 import { getColor } from "c/themeService";
+import { CHART_LIMITS } from "c/dataService";
 import {
   formatNumber,
   formatCurrency,
   createTooltip,
   createResizeHandler,
   buildTooltipContent,
-  createLayoutRetry
+  createLayoutRetry,
+  applySvgA11y
 } from "c/chartUtils";
 import { NavigationMixin } from "lightning/navigation";
 import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
 import getAggregatedData from "@salesforce/apex/D3ChartController.getAggregatedData";
+import { gql, graphql } from "lightning/graphql";
+import { buildRecordQuery, normalizeRecordsGeneric } from "c/graphqlService";
 
 // Default qualitative range gray shades (lightest to darkest)
 const RANGE_COLORS = ["#e0e0e0", "#c0c0c0", "#a0a0a0"];
@@ -56,6 +60,12 @@ export default class D3BulletChart extends NavigationMixin(LightningElement) {
   /** Maximum value for the chart scale */
   @api maxValue = 100;
 
+  /** Fetch-mode selector: "auto" (default, existing priority order), "apex", or "graphql". */
+  @api fetchMode = "auto";
+
+  /** Structured filter for the GraphQL path: { field, operator, value }. */
+  @api graphqlFilter;
+
   // ═══════════════════════════════════════════════════════════════
   // TRACKED STATE
   // ═══════════════════════════════════════════════════════════════
@@ -63,6 +73,9 @@ export default class D3BulletChart extends NavigationMixin(LightningElement) {
   @track isLoading = true;
   @track error = null;
   @track currentValue = 0;
+  /** True once a record has actually been loaded — distinguishes a genuine
+   * zero/missing-field value from no data at all (see hasData). */
+  @track hasReceivedData = false;
   // ═══════════════════════════════════════════════════════════════
   // PRIVATE PROPERTIES
   // ═══════════════════════════════════════════════════════════════
@@ -89,9 +102,7 @@ export default class D3BulletChart extends NavigationMixin(LightningElement) {
   }
 
   get hasData() {
-    // Bullet chart always has data if we got past loading without error
-    // (even a zero value is valid)
-    return !this.error && this.d3 !== null;
+    return this.hasReceivedData;
   }
 
   get showChart() {
@@ -126,6 +137,64 @@ export default class D3BulletChart extends NavigationMixin(LightningElement) {
 
   get effectiveMinValue() {
     return this.config.minValue ?? this.minValue ?? 0;
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // GRAPHQL SELF-FETCH PATH (Approach A — additive, CT-REC)
+  // ═══════════════════════════════════════════════════════════════
+
+  /**
+   * Reactive GraphQL query for the self-fetch path. Returns undefined (so the wire
+   * is skipped) unless fetchMode is "graphql" and objectApiName/valueField are set.
+   * The bullet chart only ever displays the first matching record's value, so the
+   * fetch is bounded to CHART_LIMITS.BULLET (1) rather than a general record limit.
+   */
+  get gqlQuery() {
+    if (this.fetchMode !== "graphql") return undefined;
+    if (!this.objectApiName || !this.valueField) return undefined;
+    let queryString;
+    try {
+      queryString = buildRecordQuery({
+        objectApiName: this.objectApiName,
+        fields: [this.valueField],
+        filter: this.graphqlFilter,
+        first: CHART_LIMITS.BULLET
+      });
+    } catch {
+      // Unsupported config: leave the wire un-provisioned; error surfaces below.
+      return undefined;
+    }
+    return gql`
+      ${queryString}
+    `;
+  }
+
+  @wire(graphql, { query: "$gqlQuery" })
+  wiredRecord({ data, errors }) {
+    if (this.fetchMode !== "graphql") return;
+    if (errors) {
+      this.error = this._formatGqlErrors(errors);
+      this.isLoading = false;
+      return;
+    }
+    if (!data) return; // initial undefined emission
+    try {
+      const records = normalizeRecordsGeneric(data, {
+        objectApiName: this.objectApiName,
+        fields: [this.valueField]
+      });
+      this.processData(records);
+      this.error = null;
+      this.chartRendered = false; // force renderedCallback to re-initialize the SVG
+    } catch (e) {
+      this.error = e.message;
+    }
+    this.isLoading = false;
+  }
+
+  _formatGqlErrors(errors) {
+    const list = Array.isArray(errors) ? errors : [errors];
+    return list.map((e) => e?.message || e).join("; ") || "GraphQL error";
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -177,6 +246,11 @@ export default class D3BulletChart extends NavigationMixin(LightningElement) {
   // ═══════════════════════════════════════════════════════════════
 
   async loadData() {
+    // GraphQL path is handled reactively by the @wire(graphql) — nothing to do here.
+    if (this.fetchMode === "graphql") {
+      return;
+    }
+
     // Priority 1: Use recordCollection if provided (take first record's value)
     if (this.recordCollection && this.recordCollection.length > 0) {
       this.processData(this.recordCollection);
@@ -195,6 +269,10 @@ export default class D3BulletChart extends NavigationMixin(LightningElement) {
         });
         if (result && result.length > 0) {
           this.currentValue = Number(result[0].value) || 0;
+          this.hasReceivedData = true;
+        } else {
+          this.currentValue = 0;
+          this.hasReceivedData = false;
         }
       } catch (e) {
         throw new Error(`Aggregation Error: ${e.body?.message || e.message}`);
@@ -220,17 +298,23 @@ export default class D3BulletChart extends NavigationMixin(LightningElement) {
   }
 
   /**
-   * Extracts the numeric value from the first record.
+   * Extracts the numeric value from the first record. hasReceivedData
+   * reflects whether the dataset itself was non-empty (a record with a
+   * missing/null/undefined valueField still counts as data — it defaults
+   * to a real, displayable zero, matching the apex/auto path's existing
+   * behavior). Only a genuinely empty dataset is "no data".
    */
   processData(records) {
     if (!records || records.length === 0) {
       this.currentValue = 0;
+      this.hasReceivedData = false;
       return;
     }
 
     const record = records[0];
     const rawValue = record[this.valueField];
     this.currentValue = Number(rawValue) || 0;
+    this.hasReceivedData = true;
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -283,12 +367,19 @@ export default class D3BulletChart extends NavigationMixin(LightningElement) {
     if (width <= 0 || height <= 0) return;
 
     // Create SVG
-    this.svg = d3
+    const svgRoot = d3
       .select(container)
       .append("svg")
       .attr("width", containerWidth)
       .attr("height", this.height)
-      .attr("class", "bullet-chart-svg")
+      .attr("class", "bullet-chart-svg");
+
+    applySvgA11y(svgRoot, {
+      title: `Bullet chart: ${this.valueFormatter(this.currentValue)}`,
+      desc: `Range ${formatNumber(this.effectiveMinValue)} to ${formatNumber(this.effectiveMaxValue)}`
+    });
+
+    this.svg = svgRoot
       .append("g")
       .attr("transform", `translate(${margin.left},${margin.top})`);
 
