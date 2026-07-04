@@ -91,7 +91,8 @@ const mockD3 = {
   }),
   extent: jest.fn(() => [0, 100]),
   min: jest.fn(() => 0),
-  max: jest.fn(() => 100)
+  max: jest.fn(() => 100),
+  insert: jest.fn(() => mockD3)
 };
 
 // Sample test data
@@ -418,6 +419,33 @@ describe("c-d3-scatter-plot", () => {
         ".slds-text-color_error"
       );
       expect(errorElement).toBeFalsy();
+    });
+
+    it("wires the theme's color palette into the point color scale", async () => {
+      await createChart({ theme: "Warm" });
+      await Promise.resolve();
+
+      // No groupByField -> a single "default" group -> theme's first color
+      const scaleResults = mockD3.scaleOrdinal.mock.results;
+      const lastScale = scaleResults[scaleResults.length - 1].value;
+      expect(lastScale.range).toHaveBeenCalledWith(["#FF6B6B"]);
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════
+  // ACCESSIBILITY TESTS
+  // ═══════════════════════════════════════════════════════════════
+
+  describe("accessibility", () => {
+    it("applies role=img and a title to the chart SVG", async () => {
+      await createChart();
+      await Promise.resolve();
+
+      const attrCalls = mockD3.attr.mock.calls;
+      expect(attrCalls.some((c) => c[0] === "role" && c[1] === "img")).toBe(
+        true
+      );
+      expect(mockD3.insert).toHaveBeenCalledWith("title", ":first-child");
     });
   });
 

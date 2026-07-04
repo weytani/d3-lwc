@@ -128,12 +128,6 @@
   padding-top: 4px;
 }
 
-/* Warning Banner */
-.slds-alert_warning {
-  font-size: 12px;
-  padding: 0.5rem 1rem;
-}
-
 /* Responsive adjustments */
 @media (max-width: 480px) {
   .correlation-info {
