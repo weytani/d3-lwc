@@ -2,7 +2,7 @@
  * ABOUTME: D3 Sankey Lightning Web Component.
  * ABOUTME: Displays flow/process visualization with nodes and links.
  */
-import { LightningElement, api, track } from "lwc";
+import { LightningElement, api, track, wire } from "lwc";
 import { loadScript } from "lightning/platformResourceLoader";
 import { loadD3 } from "c/d3Lib";
 import { prepareData, CHART_LIMITS } from "c/dataService";
@@ -12,11 +12,20 @@ import {
   formatPercent,
   createTooltip,
   createResizeHandler,
-  truncateLabel
+  truncateLabel,
+  createLayoutRetry,
+  applySvgA11y
 } from "c/chartUtils";
 import { NavigationMixin } from "lightning/navigation";
 import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
 import D3_SANKEY_RESOURCE from "@salesforce/resourceUrl/d3Sankey";
+import { gql, graphql } from "lightning/graphql";
+import {
+  buildMultiGroupQuery,
+  normalizeMultiGroup,
+  buildRecordQuery,
+  normalizeRecordsGeneric
+} from "c/graphqlService";
 
 export default class D3Sankey extends NavigationMixin(LightningElement) {
   // ═══════════════════════════════════════════════════════════════
@@ -89,6 +98,12 @@ export default class D3Sankey extends NavigationMixin(LightningElement) {
   /** Advanced configuration JSON */
   @api advancedConfig = "{}";
 
+  /** Fetch-mode selector: "auto" (default, existing priority order), "apex", or "graphql". */
+  @api fetchMode = "auto";
+
+  /** Structured filter for the GraphQL path: { field, operator, value }. */
+  @api graphqlFilter;
+
   // ═══════════════════════════════════════════════════════════════
   // TRACKED STATE
   // ═══════════════════════════════════════════════════════════════
@@ -108,6 +123,7 @@ export default class D3Sankey extends NavigationMixin(LightningElement) {
   resizeHandler = null;
   chartRendered = false;
   colorScale = null;
+  _layoutRetry = null;
   _config = {};
   _configParsed = false;
 
@@ -158,6 +174,100 @@ export default class D3Sankey extends NavigationMixin(LightningElement) {
   }
 
   // ═══════════════════════════════════════════════════════════════
+  // GRAPHQL SELF-FETCH PATH (Approach A — additive, CT-MG)
+  // ═══════════════════════════════════════════════════════════════
+
+  /**
+   * Reactive GraphQL query for the self-fetch path. Returns undefined (so the wire
+   * is skipped) unless fetchMode is "graphql" and objectApiName/sourceField/targetField
+   * are set. When valueField is configured, uses a two-field aggregate (Sum) to match
+   * the existing client path's summed duplicate-pair semantics. When valueField is not
+   * set, falls back to a bounded raw-record fetch of just the two group fields — feeding
+   * that into buildSankeyData() implicitly counts each row as weight 1, matching the
+   * apex/auto path's "no valueField -> weight 1 per record" behavior exactly.
+   */
+  get gqlQuery() {
+    if (this.fetchMode !== "graphql") return undefined;
+    if (!this.objectApiName || !this.sourceField || !this.targetField) {
+      return undefined;
+    }
+    let queryString;
+    try {
+      queryString = this.valueField
+        ? buildMultiGroupQuery({
+            objectApiName: this.objectApiName,
+            groupByField: this.sourceField,
+            seriesField: this.targetField,
+            valueField: this.valueField,
+            operation: "Sum",
+            filter: this.graphqlFilter,
+            first: this.recordLimit || CHART_LIMITS.SANKEY
+          })
+        : buildRecordQuery({
+            objectApiName: this.objectApiName,
+            fields: [this.sourceField, this.targetField],
+            filter: this.graphqlFilter,
+            first: this.recordLimit || CHART_LIMITS.SANKEY
+          });
+    } catch {
+      // Unsupported operation/config: leave the wire un-provisioned; error surfaces below.
+      return undefined;
+    }
+    return gql`
+      ${queryString}
+    `;
+  }
+
+  @wire(graphql, { query: "$gqlQuery" })
+  wiredMultiGroup({ data, errors }) {
+    if (this.fetchMode !== "graphql") return;
+    if (errors) {
+      this.error = this._formatGqlErrors(errors);
+      this.isLoading = false;
+      return;
+    }
+    if (!data) return; // initial undefined emission
+    try {
+      let flatRecords;
+      if (this.valueField) {
+        const normalized = normalizeMultiGroup(data, {
+          objectApiName: this.objectApiName,
+          groupByField: this.sourceField,
+          seriesField: this.targetField,
+          valueField: this.valueField,
+          operation: "Sum"
+        });
+        flatRecords = normalized.map((n) => ({
+          [this.sourceField]: n.label,
+          [this.targetField]: n.series,
+          [this.valueField]: n.value
+        }));
+      } else {
+        flatRecords = normalizeRecordsGeneric(data, {
+          objectApiName: this.objectApiName,
+          fields: [this.sourceField, this.targetField]
+        });
+      }
+      this.graphData = this.buildSankeyData(flatRecords);
+      this.calculateTotalValue();
+      if (!this.graphData.nodes.length || !this.graphData.links.length) {
+        this.error = "No data after aggregation";
+      } else {
+        this.error = null;
+        this.chartRendered = false; // force renderedCallback to re-initialize the SVG
+      }
+    } catch (e) {
+      this.error = e.message;
+    }
+    this.isLoading = false;
+  }
+
+  _formatGqlErrors(errors) {
+    const list = Array.isArray(errors) ? errors : [errors];
+    return list.map((e) => e?.message || e).join("; ") || "GraphQL error";
+  }
+
+  // ═══════════════════════════════════════════════════════════════
   // LIFECYCLE HOOKS
   // ═══════════════════════════════════════════════════════════════
 
@@ -183,12 +293,26 @@ export default class D3Sankey extends NavigationMixin(LightningElement) {
 
   renderedCallback() {
     if (this.showChart && !this.chartRendered) {
-      this.initializeChart();
-      this.chartRendered = true;
+      this.chartRendered = this.initializeChart();
+      if (!this.chartRendered && !this._layoutRetry) {
+        const container = this.template.querySelector(".chart-container");
+        if (container) {
+          this._layoutRetry = createLayoutRetry(container, () => {
+            this._layoutRetry = null;
+            if (!this.chartRendered) {
+              this.chartRendered = this.initializeChart();
+            }
+          });
+        }
+      }
     }
   }
 
   disconnectedCallback() {
+    if (this._layoutRetry) {
+      this._layoutRetry.cancel();
+      this._layoutRetry = null;
+    }
     this.cleanup();
   }
 
@@ -197,6 +321,11 @@ export default class D3Sankey extends NavigationMixin(LightningElement) {
   // ═══════════════════════════════════════════════════════════════
 
   async loadData() {
+    // GraphQL path is handled reactively by the @wire(graphql) — nothing to do here.
+    if (this.fetchMode === "graphql") {
+      return;
+    }
+
     // Check for pre-built sankey data first
     if (this.sankeyData) {
       this.graphData = this.validateSankeyData(this.sankeyData);
@@ -385,12 +514,16 @@ export default class D3Sankey extends NavigationMixin(LightningElement) {
   // CHART RENDERING
   // ═══════════════════════════════════════════════════════════════
 
+  /**
+   * Initializes the chart SVG, tooltip, and resize observer.
+   * @returns {boolean} true if the chart was successfully initialized
+   */
   initializeChart() {
     const container = this.template.querySelector(".chart-container");
-    if (!container) return;
+    if (!container) return false;
 
     const { width } = container.getBoundingClientRect();
-    if (width === 0) return;
+    if (width === 0) return false;
 
     this.tooltip = createTooltip(container);
     this.renderChart(width);
@@ -404,6 +537,7 @@ export default class D3Sankey extends NavigationMixin(LightningElement) {
       }
     );
     this.resizeHandler.observe();
+    return true;
   }
 
   /**
@@ -470,12 +604,19 @@ export default class D3Sankey extends NavigationMixin(LightningElement) {
     if (width <= 0 || height <= 0) return;
 
     // Create SVG
-    this.svg = d3
+    const svgRoot = d3
       .select(container)
       .append("svg")
       .attr("width", containerWidth)
       .attr("height", this.height)
-      .attr("class", "sankey-svg")
+      .attr("class", "sankey-svg");
+
+    applySvgA11y(svgRoot, {
+      title: `Sankey diagram: ${this.graphData.nodes.length} nodes, ${this.graphData.links.length} flows`,
+      desc: `Total value ${formatNumber(this.totalValue)}`
+    });
+
+    this.svg = svgRoot
       .append("g")
       .attr("transform", `translate(${margin.left},${margin.top})`);
 
@@ -847,6 +988,8 @@ export default class D3Sankey extends NavigationMixin(LightningElement) {
   }
 
   handleNodeClick(d) {
+    const filterFieldName = this.filterField || this.sourceField;
+
     // Dispatch custom event
     this.dispatchEvent(
       new CustomEvent("nodeclick", {
@@ -855,6 +998,7 @@ export default class D3Sankey extends NavigationMixin(LightningElement) {
           value: d.value,
           incomingLinks: d.targetLinks ? d.targetLinks.length : 0,
           outgoingLinks: d.sourceLinks ? d.sourceLinks.length : 0,
+          filterField: filterFieldName,
           data: d
         },
         bubbles: true,

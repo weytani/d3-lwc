@@ -66,6 +66,7 @@ const createMockD3 = () => {
     remove: jest.fn(() => mockD3),
     html: jest.fn(() => mockD3),
     text: jest.fn(() => mockD3),
+    insert: jest.fn(() => mockD3),
     datum: jest.fn(() => mockD3),
     node: jest.fn(() => null),
     each: jest.fn((callback) => {
@@ -749,6 +750,53 @@ describe("c-d3-sankey", () => {
 
       expect(element.filterField).toBe("Status");
     });
+
+    it("threads filterField into the nodeclick event payload", async () => {
+      await createChart({ filterField: "Status" });
+      await Promise.resolve();
+
+      const clickHandler = jest.fn();
+      element.addEventListener("nodeclick", clickHandler);
+
+      // Extract the node click handler D3's .on("click", ...) captured
+      // (D3 is fully mocked, so no real click events reach the DOM). Links
+      // are drawn before nodes in renderChart, so the last "click"
+      // registration is the node handler.
+      const clickCalls = mockD3.on.mock.calls.filter((c) => c[0] === "click");
+      const nodeClickHandler = clickCalls[clickCalls.length - 1][1];
+      nodeClickHandler({}, { name: "Web", value: 100 });
+
+      expect(clickHandler).toHaveBeenCalled();
+      expect(clickHandler.mock.calls[0][0].detail.filterField).toBe("Status");
+    });
+
+    it("falls back to sourceField for filterField when not set", async () => {
+      await createChart({ filterField: "", sourceField: "Source" });
+      await Promise.resolve();
+
+      const clickHandler = jest.fn();
+      element.addEventListener("nodeclick", clickHandler);
+
+      const clickCalls = mockD3.on.mock.calls.filter((c) => c[0] === "click");
+      const nodeClickHandler = clickCalls[clickCalls.length - 1][1];
+      nodeClickHandler({}, { name: "Web", value: 100 });
+
+      expect(clickHandler.mock.calls[0][0].detail.filterField).toBe("Source");
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════
+  // ACCESSIBILITY TESTS
+  // ═══════════════════════════════════════════════════════════════
+
+  describe("accessibility", () => {
+    it("applies role=img and a title to the root svg", async () => {
+      await createChart();
+      await Promise.resolve();
+
+      expect(mockD3.attr).toHaveBeenCalledWith("role", "img");
+      expect(mockD3.insert).toHaveBeenCalledWith("title", ":first-child");
+    });
   });
 
   // ═══════════════════════════════════════════════════════════════
@@ -795,6 +843,75 @@ describe("c-d3-sankey", () => {
 
       await Promise.resolve();
       expect(loadD3).toHaveBeenCalled();
+    });
+
+    it("retries chart init when container starts at zero width", async () => {
+      // Start with zero width (e.g. inactive tab, collapsed accordion)
+      let containerWidth = 0;
+      Element.prototype.getBoundingClientRect = jest.fn(() => ({
+        width: containerWidth,
+        height: 400,
+        top: 0,
+        left: 0,
+        bottom: 400,
+        right: containerWidth
+      }));
+
+      // Track RAF calls
+      const rafCallbacks = [];
+      global.requestAnimationFrame = jest.fn((cb) => {
+        rafCallbacks.push(cb);
+        return rafCallbacks.length;
+      });
+      global.cancelAnimationFrame = jest.fn();
+
+      await createChart();
+      await Promise.resolve();
+
+      // Chart was not rendered (width was 0), but RAF should have been requested
+      expect(global.requestAnimationFrame).toHaveBeenCalled();
+      expect(mockD3.sankey).not.toHaveBeenCalled();
+
+      // Simulate the container gaining width from the layout engine
+      containerWidth = 400;
+      Element.prototype.getBoundingClientRect = jest.fn(() => ({
+        width: 400,
+        height: 400,
+        top: 0,
+        left: 0,
+        bottom: 400,
+        right: 400
+      }));
+
+      // Fire the RAF callback chain
+      while (rafCallbacks.length > 0) {
+        const cb = rafCallbacks.shift();
+        cb();
+      }
+
+      // Chart should now have rendered
+      expect(mockD3.sankey).toHaveBeenCalled();
+    });
+
+    it("cancels layout retry on disconnect", async () => {
+      Element.prototype.getBoundingClientRect = jest.fn(() => ({
+        width: 0,
+        height: 0,
+        top: 0,
+        left: 0,
+        bottom: 0,
+        right: 0
+      }));
+
+      global.requestAnimationFrame = jest.fn(() => 42);
+      global.cancelAnimationFrame = jest.fn();
+
+      await createChart();
+      await Promise.resolve();
+
+      document.body.removeChild(element);
+
+      expect(global.cancelAnimationFrame).toHaveBeenCalled();
     });
   });
 
