@@ -2,13 +2,14 @@
  * ABOUTME: D3 Horizontal Bar Chart Lightning Web Component.
  * ABOUTME: Displays aggregated data as horizontal bars (categories on Y, values on X) with drill-down support.
  */
-import { LightningElement, api, track } from "lwc";
+import { LightningElement, api, track, wire } from "lwc";
 import { loadD3 } from "c/d3Lib";
 import {
   prepareData,
   aggregateData,
   OPERATIONS,
-  MAX_RECORDS
+  MAX_RECORDS,
+  CHART_LIMITS
 } from "c/dataService";
 import { getColors, DEFAULT_THEME } from "c/themeService";
 import {
@@ -17,11 +18,19 @@ import {
   createTooltip,
   createResizeHandler,
   buildTooltipContent,
-  createLayoutRetry
+  createLayoutRetry,
+  applySvgA11y
 } from "c/chartUtils";
 import { NavigationMixin } from "lightning/navigation";
 import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
 import getAggregatedData from "@salesforce/apex/D3ChartController.getAggregatedData";
+import { gql, graphql } from "lightning/graphql";
+import {
+  buildAggregateQuery,
+  normalizeAggregate,
+  buildRecordQuery,
+  normalizeRecords
+} from "c/graphqlService";
 
 export default class D3HorizontalBarChart extends NavigationMixin(
   LightningElement
@@ -65,6 +74,12 @@ export default class D3HorizontalBarChart extends NavigationMixin(
 
   /** Optional WHERE clause fragment for server-side aggregation */
   @api filterClause = "";
+
+  /** Fetch-mode selector: "auto" (default, existing priority order), "apex", or "graphql". */
+  @api fetchMode = "auto";
+
+  /** Structured filter for the GraphQL path: { field, operator, value }. */
+  @api graphqlFilter;
 
   // ═══════════════════════════════════════════════════════════════
   // TRACKED STATE
@@ -119,6 +134,132 @@ export default class D3HorizontalBarChart extends NavigationMixin(
     return this._config;
   }
 
+  get effectiveShowLegend() {
+    return !!this.config.showLegend;
+  }
+
+  /** Legend placement: "bottom" (default, wraps under the chart) or "right" (sidebar). */
+  get legendPosition() {
+    return this.config.legendPosition === "right" ? "right" : "bottom";
+  }
+
+  get chartWrapperClass() {
+    return this.legendPosition === "right"
+      ? "chart-wrapper chart-wrapper_row"
+      : "chart-wrapper chart-wrapper_column";
+  }
+
+  get legendContainerClass() {
+    return this.legendPosition === "right"
+      ? "legend-container legend-container_right"
+      : "legend-container legend-container_bottom";
+  }
+
+  get legendItems() {
+    if (!this.chartData || !this.effectiveShowLegend) return [];
+    const colors = getColors(
+      this.theme,
+      this.chartData.length,
+      this.config.customColors
+    );
+    return this.chartData.map((d, i) => ({
+      label: d.label,
+      value: d.value,
+      color: colors[i],
+      colorStyle: `background-color: ${colors[i]};`
+    }));
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // GRAPHQL SELF-FETCH PATH (Approach A — additive)
+  // ═══════════════════════════════════════════════════════════════
+
+  /**
+   * Reactive GraphQL query for the self-fetch path. Returns undefined (so the wire
+   * is skipped) unless fetchMode is "graphql" and all required config is present.
+   */
+  get gqlQuery() {
+    if (this.fetchMode !== "graphql") return undefined;
+    if (!this.objectApiName || !this.groupByField || !this.operation) {
+      return undefined;
+    }
+    // valueField is not required for Count.
+    if (this.operation !== OPERATIONS.COUNT && !this.valueField) {
+      return undefined;
+    }
+    let queryString;
+    try {
+      if (this.operation === OPERATIONS.COUNT) {
+        queryString = buildRecordQuery({
+          objectApiName: this.objectApiName,
+          fields: [this.groupByField],
+          filter: this.graphqlFilter,
+          first: CHART_LIMITS.HORIZONTAL_BAR
+        });
+      } else {
+        queryString = buildAggregateQuery({
+          objectApiName: this.objectApiName,
+          groupByField: this.groupByField,
+          valueField: this.valueField,
+          operation: this.operation,
+          filter: this.graphqlFilter,
+          first: this.recordLimit || 2000
+        });
+      }
+    } catch {
+      // Unsupported operation/config: leave the wire un-provisioned; error surfaces below.
+      return undefined;
+    }
+    return gql`
+      ${queryString}
+    `;
+  }
+
+  @wire(graphql, { query: "$gqlQuery" })
+  wiredAggregate({ data, errors }) {
+    if (this.fetchMode !== "graphql") return;
+    if (errors) {
+      this.error = this._formatGqlErrors(errors);
+      this.isLoading = false;
+      return;
+    }
+    if (!data) return; // initial undefined emission
+    try {
+      let normalized;
+      if (this.operation === OPERATIONS.COUNT) {
+        const records = normalizeRecords(data, {
+          objectApiName: this.objectApiName,
+          labelField: this.groupByField
+        });
+        normalized = this._aggregateRawData(
+          records.map((r) => ({ [this.groupByField]: r.label }))
+        );
+      } else {
+        normalized = normalizeAggregate(data, {
+          objectApiName: this.objectApiName,
+          groupByField: this.groupByField,
+          valueField: this.valueField,
+          operation: this.operation
+        });
+      }
+      if (!normalized.length) {
+        this.error = "No data after aggregation";
+      } else {
+        this.chartData = normalized;
+        this.error = null;
+        this.chartRendered = false; // force renderedCallback to re-initialize the SVG
+      }
+    } catch (e) {
+      this.error = e.message;
+    }
+    this.isLoading = false;
+  }
+
+  _formatGqlErrors(errors) {
+    const list = Array.isArray(errors) ? errors : [errors];
+    return list.map((e) => e?.message || e).join("; ") || "GraphQL error";
+  }
+
   // ═══════════════════════════════════════════════════════════════
   // LIFECYCLE HOOKS
   // ═══════════════════════════════════════════════════════════════
@@ -165,6 +306,11 @@ export default class D3HorizontalBarChart extends NavigationMixin(
   // ═══════════════════════════════════════════════════════════════
 
   async loadData() {
+    // GraphQL path is handled reactively by the @wire(graphql) — nothing to do here.
+    if (this.fetchMode === "graphql") {
+      return;
+    }
+
     // Priority 1: Use recordCollection if provided (client-side aggregation)
     if (this.recordCollection && this.recordCollection.length > 0) {
       this.chartData = this._aggregateRawData([...this.recordCollection]);
@@ -300,12 +446,19 @@ export default class D3HorizontalBarChart extends NavigationMixin(
     if (width <= 0 || height <= 0) return;
 
     // Create SVG
-    this.svg = d3
+    const svgRoot = d3
       .select(container)
       .append("svg")
       .attr("width", containerWidth)
       .attr("height", this.height)
-      .attr("class", "horizontal-bar-chart-svg")
+      .attr("class", "horizontal-bar-chart-svg");
+
+    applySvgA11y(svgRoot, {
+      title: `Horizontal bar chart: ${this.operation} of ${this.valueField} by ${this.groupByField}`,
+      desc: `${this.chartData.length} categories`
+    });
+
+    this.svg = svgRoot
       .append("g")
       .attr("transform", `translate(${margin.left},${margin.top})`);
 
@@ -401,17 +554,6 @@ export default class D3HorizontalBarChart extends NavigationMixin(
       .on("click", (event, d) => {
         this.handleBarClick(d);
       });
-
-    if (this.config.showLegend) {
-      this.renderLegend(colors);
-    }
-  }
-
-  // eslint-disable-next-line no-unused-vars
-  renderLegend(colors) {
-    // eslint-disable-next-line no-unused-vars
-    const legendPosition = this.config.legendPosition || "bottom";
-    // Legend implementation for horizontal bar chart (simplified — typically less needed for bar charts)
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -469,6 +611,25 @@ export default class D3HorizontalBarChart extends NavigationMixin(
         composed: true
       })
     );
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // LEGEND CLICK
+  // ═══════════════════════════════════════════════════════════════
+
+  handleLegendClick(event) {
+    const label = event.currentTarget.dataset.label;
+    const item = this.chartData.find((d) => d.label === label);
+    if (item) {
+      this.handleBarClick(item);
+    }
+  }
+
+  /** Activates a legend item via keyboard (Enter/Space), matching the click behavior. */
+  handleLegendKeydown(event) {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    this.handleLegendClick(event);
   }
 
   // ═══════════════════════════════════════════════════════════════

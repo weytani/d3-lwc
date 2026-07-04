@@ -1,0 +1,58 @@
+/* ABOUTME: Styles for the D3 Horizontal Bar Chart Lightning Web Component. */
+/* ABOUTME: Defines svg font, HTML legend layout (bottom-wrap or right-sidebar), and hover state. */
+
+.horizontal-bar-chart-svg {
+  font-family: "Salesforce Sans", Arial, sans-serif;
+}
+
+.chart-wrapper_row {
+  display: flex;
+  align-items: flex-start;
+}
+
+.chart-wrapper_column {
+  display: flex;
+  flex-direction: column;
+}
+
+.legend-container_right {
+  width: clamp(100px, 25%, 180px);
+  flex-shrink: 0;
+  padding: 10px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.legend-container_bottom {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  padding: 10px 0 0;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  padding: 4px 0;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.legend-item:hover {
+  background-color: #f3f2f2;
+}
+
+.legend-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+
+.legend-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #3e3e3c;
+}

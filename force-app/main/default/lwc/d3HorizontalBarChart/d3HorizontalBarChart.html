@@ -30,11 +30,35 @@
 
     <!-- Chart Container (has data) -->
     <template lwc:elseif={hasData}>
-      <div
-        class="chart-container"
-        lwc:dom="manual"
-        style={containerStyle}
-      ></div>
+      <div class={chartWrapperClass}>
+        <div
+          class="chart-container"
+          lwc:dom="manual"
+          style={containerStyle}
+        ></div>
+
+        <!-- Legend -->
+        <template lwc:if={effectiveShowLegend}>
+          <div class={legendContainerClass}>
+            <template for:each={legendItems} for:item="item">
+              <div
+                key={item.label}
+                class="legend-item"
+                data-label={item.label}
+                role="button"
+                tabindex="0"
+                onclick={handleLegendClick}
+                onkeydown={handleLegendKeydown}
+              >
+                <span class="legend-color" style={item.colorStyle}></span>
+                <span class="legend-label" title={item.label}
+                  >{item.label}</span
+                >
+              </div>
+            </template>
+          </div>
+        </template>
+      </div>
     </template>
 
     <!-- No Data State -->

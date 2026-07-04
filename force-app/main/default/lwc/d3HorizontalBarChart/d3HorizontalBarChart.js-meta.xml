@@ -92,12 +92,22 @@
         max="10000"
       />
 
+            <!-- GraphQL Self-Fetch -->
+            <property
+        name="fetchMode"
+        type="String"
+        label="Data Source"
+        default="auto"
+        datasource="auto,apex,graphql"
+        description="How to fetch data: auto (existing priority order), apex (Apex-backed SOQL), or graphql (UI API GraphQL)"
+      />
+
             <!-- Advanced -->
             <property
         name="advancedConfig"
         type="String"
         label="Advanced Config (JSON)"
-        description='{"showGrid": true, "showLegend": false, "customColors": ["#FF5733"]}'
+        description='{"showGrid": true, "showLegend": false, "legendPosition": "bottom" | "right", "customColors": ["#FF5733"]}'
       />
         </targetConfig>
     </targetConfigs>
