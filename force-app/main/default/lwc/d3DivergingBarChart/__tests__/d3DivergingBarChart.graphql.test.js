@@ -7,11 +7,27 @@ import { loadD3 } from "c/d3Lib";
 
 jest.mock("c/d3Lib", () => ({ loadD3: jest.fn() }));
 
-// Minimal chainable D3 stub: every call returns the same chainable object.
+// Minimal chainable D3 stub: every call returns the same chainable object,
+// except max(), which renderChart uses synchronously (-maxAbs, maxAbs) before
+// any further D3 chaining and so needs a real number back, not the chain
+// object. Calling the stub itself (invoking a scale, e.g. `xScale(0)`) also
+// returns a real number rather than the chain object — renderChart computes
+// `zero = xScale(0)` eagerly and interpolates it into a template literal
+// (`translate(${zero},0)`), which throws the same "cannot convert to
+// primitive" error if it gets a non-primitive back.
+// The `then` guard keeps this from looking like a thenable to
+// Promise.resolve()/await — without it, `prop === "then"` would return a
+// callable that swallows (resolve, reject), and awaiting loadD3() would
+// hang forever.
 function makeD3Stub() {
   const chain = new Proxy(function () {}, {
-    get: () => () => chain,
-    apply: () => chain
+    get: (target, prop) => {
+      if (prop === "then") return undefined;
+      if (prop === "max")
+        return (arr, accessor) => Math.max(...arr.map(accessor ?? ((d) => d)));
+      return () => chain;
+    },
+    apply: () => 0
   });
   return chain;
 }

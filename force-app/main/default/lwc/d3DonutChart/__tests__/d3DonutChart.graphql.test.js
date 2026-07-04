@@ -8,9 +8,13 @@ import { loadD3 } from "c/d3Lib";
 jest.mock("c/d3Lib", () => ({ loadD3: jest.fn() }));
 
 // Minimal chainable D3 stub: every call returns the same chainable object.
+// The `then` guard keeps this from looking like a thenable to
+// Promise.resolve()/await — without it, `prop === "then"` would return a
+// callable that swallows (resolve, reject), and awaiting loadD3() would
+// hang forever.
 function makeD3Stub() {
   const chain = new Proxy(function () {}, {
-    get: () => () => chain,
+    get: (target, prop) => (prop === "then" ? undefined : () => chain),
     apply: () => chain
   });
   return chain;
