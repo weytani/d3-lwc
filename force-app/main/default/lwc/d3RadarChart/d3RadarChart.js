@@ -1,24 +1,21 @@
 // ABOUTME: D3 Radar Chart Lightning Web Component.
 // ABOUTME: Displays multi-axis polygon overlays for scorecards and benchmarking.
-import { LightningElement, api, track } from "lwc";
+import { LightningElement, api, track, wire } from "lwc";
 import { loadD3 } from "c/d3Lib";
-import {
-  prepareData,
-  aggregateData,
-  OPERATIONS,
-  MAX_RECORDS
-} from "c/dataService";
+import { prepareData, OPERATIONS, MAX_RECORDS } from "c/dataService";
 import { getColors, DEFAULT_THEME } from "c/themeService";
 import {
-  formatNumber,
   createTooltip,
   createResizeHandler,
   buildTooltipContent,
-  createLayoutRetry
+  createLayoutRetry,
+  applySvgA11y
 } from "c/chartUtils";
 import { NavigationMixin } from "lightning/navigation";
 import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
 import getAggregatedData from "@salesforce/apex/D3ChartController.getAggregatedData";
+import { gql, graphql } from "lightning/graphql";
+import { buildRecordQuery } from "c/graphqlService";
 
 // Number of concentric grid levels to draw
 const GRID_LEVELS = 5;
@@ -63,6 +60,12 @@ export default class D3RadarChart extends NavigationMixin(LightningElement) {
 
   /** Optional WHERE clause fragment for server-side aggregation */
   @api filterClause = "";
+
+  /** Fetch-mode selector: "auto" (default, existing priority order), "apex", or "graphql". */
+  @api fetchMode = "auto";
+
+  /** Structured filter for the GraphQL path: { field, operator, value }. */
+  @api graphqlFilter;
 
   // ═══════════════════════════════════════════════════════════════
   // TRACKED STATE
@@ -136,6 +139,89 @@ export default class D3RadarChart extends NavigationMixin(LightningElement) {
   }
 
   // ═══════════════════════════════════════════════════════════════
+  // GRAPHQL SELF-FETCH PATH (Approach A — additive, CT-REC)
+  // ═══════════════════════════════════════════════════════════════
+
+  /**
+   * Reactive GraphQL query for the self-fetch path. Returns undefined (so the wire
+   * is skipped) unless fetchMode is "graphql" and objectApiName/groupByField are set.
+   * Radar has no server-side aggregate: it always fetches raw records for
+   * groupByField plus every configured axis field, deduped, then feeds the
+   * existing _processRawData path (same as recordCollection/soqlQuery).
+   */
+  get gqlQuery() {
+    if (this.fetchMode !== "graphql") return undefined;
+    if (!this.objectApiName || !this.groupByField) return undefined;
+    const axisFields = this.axes.map((a) => a.field).filter(Boolean);
+    const fields = [...new Set([this.groupByField, ...axisFields])];
+    if (fields.length === 0) return undefined;
+    let queryString;
+    try {
+      queryString = buildRecordQuery({
+        objectApiName: this.objectApiName,
+        fields,
+        filter: this.graphqlFilter,
+        first: this.recordLimit || 2000
+      });
+    } catch {
+      // Unsupported config: leave the wire un-provisioned; error surfaces below.
+      return undefined;
+    }
+    return gql`
+      ${queryString}
+    `;
+  }
+
+  @wire(graphql, { query: "$gqlQuery" })
+  wiredRecords({ data, errors }) {
+    if (this.fetchMode !== "graphql") return;
+    if (errors) {
+      this.error = this._formatGqlErrors(errors);
+      this.isLoading = false;
+      return;
+    }
+    if (!data) return; // initial undefined emission
+    try {
+      const axisFields = this.axes.map((a) => a.field).filter(Boolean);
+      const fields = [...new Set([this.groupByField, ...axisFields])];
+      const records = this._normalizeGqlRecords(data, fields);
+      const processed = this._processRawData(records);
+      if (!processed.length) {
+        this.error = "No data after aggregation";
+      } else {
+        this.chartData = processed;
+        this.error = null;
+        this.chartRendered = false; // force renderedCallback to re-initialize the SVG
+      }
+    } catch (e) {
+      this.error = e.message;
+    }
+    this.isLoading = false;
+  }
+
+  /**
+   * Maps a record-query wire result into plain {field: value} records for the
+   * requested field list. Reads the same live-verified envelope shape as
+   * graphqlService.normalizeRecords (data.uiapi.query.<Object>.edges[].node.<field>.value),
+   * generalized to an arbitrary field list instead of gantt's fixed label/start/end.
+   */
+  _normalizeGqlRecords(data, fields) {
+    const edges = data?.uiapi?.query?.[this.objectApiName]?.edges ?? [];
+    return edges.map((e) => {
+      const record = {};
+      fields.forEach((f) => {
+        record[f] = e.node[f]?.value ?? null;
+      });
+      return record;
+    });
+  }
+
+  _formatGqlErrors(errors) {
+    const list = Array.isArray(errors) ? errors : [errors];
+    return list.map((e) => e?.message || e).join("; ") || "GraphQL error";
+  }
+
+  // ═══════════════════════════════════════════════════════════════
   // LIFECYCLE HOOKS
   // ═══════════════════════════════════════════════════════════════
 
@@ -186,6 +272,11 @@ export default class D3RadarChart extends NavigationMixin(LightningElement) {
   // ═══════════════════════════════════════════════════════════════
 
   async loadData() {
+    // GraphQL path is handled reactively by the @wire(graphql) — nothing to do here.
+    if (this.fetchMode === "graphql") {
+      return;
+    }
+
     // Priority 1: Use recordCollection if provided (client-side processing)
     if (this.recordCollection && this.recordCollection.length > 0) {
       this.chartData = this._processRawData([...this.recordCollection]);
@@ -372,17 +463,25 @@ export default class D3RadarChart extends NavigationMixin(LightningElement) {
     const centerX = containerWidth / 2;
     const centerY = chartHeight / 2;
 
+    const axesDef = this.axes;
+
     // Create SVG
-    this.svg = d3
+    const svgRoot = d3
       .select(container)
       .append("svg")
       .attr("width", containerWidth)
       .attr("height", chartHeight)
-      .attr("class", "radar-chart-svg")
+      .attr("class", "radar-chart-svg");
+
+    applySvgA11y(svgRoot, {
+      title: `Radar chart: ${this.chartData.length} entities across ${axesDef.length} axes`,
+      desc: axesDef.map((a) => a.label).join(", ")
+    });
+
+    this.svg = svgRoot
       .append("g")
       .attr("transform", `translate(${centerX},${centerY})`);
 
-    const axesDef = this.axes;
     const axisCount = axesDef.length;
     const angleSlice = (2 * Math.PI) / axisCount;
 
@@ -428,9 +527,7 @@ export default class D3RadarChart extends NavigationMixin(LightningElement) {
       // Close the polygon
       const pathData =
         points
-          .map((p, idx) =>
-            idx === 0 ? `M${p[0]},${p[1]}` : `L${p[0]},${p[1]}`
-          )
+          .map((p, idx) => `${idx === 0 ? "M" : "L"}${p[0]},${p[1]}`)
           .join("") + "Z";
 
       this.svg
@@ -503,9 +600,7 @@ export default class D3RadarChart extends NavigationMixin(LightningElement) {
       }
       const pathData =
         points
-          .map((p, idx) =>
-            idx === 0 ? `M${p[0]},${p[1]}` : `L${p[0]},${p[1]}`
-          )
+          .map((p, idx) => `${idx === 0 ? "M" : "L"}${p[0]},${p[1]}`)
           .join("") + "Z";
 
       this.svg
@@ -541,11 +636,15 @@ export default class D3RadarChart extends NavigationMixin(LightningElement) {
           .attr("fill", colors[entityIdx])
           .attr("stroke", "#fff")
           .attr("stroke-width", 1.5)
+          .attr("cursor", this.objectApiName ? "pointer" : "default")
           .on("mouseenter", (event) => {
             this.showTooltip(event, entity.entity, axisLabel, rawValue);
           })
           .on("mouseleave", () => {
             this.hideTooltip();
+          })
+          .on("click", () => {
+            this.handleVertexClick(entity.entity, axisLabel, rawValue);
           });
       }
     });
@@ -568,6 +667,42 @@ export default class D3RadarChart extends NavigationMixin(LightningElement) {
   hideTooltip() {
     if (!this.tooltip) return;
     this.tooltip.hide();
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // CLICK HANDLER - DRILL DOWN
+  // ═══════════════════════════════════════════════════════════════
+
+  handleVertexClick(entityName, axisLabel, rawValue) {
+    if (!this.objectApiName) return;
+
+    const filterFieldName = this.filterField || this.groupByField;
+
+    // Navigate to list view with filter
+    this[NavigationMixin.Navigate]({
+      type: "standard__objectPage",
+      attributes: {
+        objectApiName: this.objectApiName,
+        actionName: "list"
+      },
+      state: {
+        filterName: "Recent"
+      }
+    });
+
+    // Dispatch custom event for parent components to handle filtering
+    this.dispatchEvent(
+      new CustomEvent("radarclick", {
+        detail: {
+          entity: entityName,
+          axis: axisLabel,
+          value: rawValue,
+          filterField: filterFieldName
+        },
+        bubbles: true,
+        composed: true
+      })
+    );
   }
 
   // ═══════════════════════════════════════════════════════════════

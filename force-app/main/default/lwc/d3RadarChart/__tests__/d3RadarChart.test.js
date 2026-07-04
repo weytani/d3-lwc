@@ -54,6 +54,7 @@ const createMockD3 = () => {
     each: jest.fn(() => mockD3),
     classed: jest.fn(() => mockD3),
     datum: jest.fn(() => mockD3),
+    insert: jest.fn(() => mockD3),
     scaleLinear: jest.fn(() => {
       const scale = jest.fn((v) => v * 100);
       scale.domain = jest.fn(() => scale);
@@ -1215,6 +1216,101 @@ describe("c-d3-radar-chart", () => {
 
       document.body.removeChild(element);
       expect(true).toBe(true);
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════
+  // ACCESSIBILITY WIRING
+  // ═══════════════════════════════════════════════════════════════
+
+  describe("accessibility wiring", () => {
+    it("applies role=img and a title to the rendered svg", async () => {
+      await createChart();
+      await flushPromises();
+
+      const attrCalls = mockD3.attr.mock.calls;
+      const roleCall = attrCalls.find((call) => call[0] === "role");
+      expect(roleCall).toBeTruthy();
+      expect(roleCall[1]).toBe("img");
+
+      const insertCalls = mockD3.insert.mock.calls;
+      const titleInsert = insertCalls.find((call) => call[0] === "title");
+      expect(titleInsert).toBeTruthy();
+      expect(titleInsert[1]).toBe(":first-child");
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════
+  // VERTEX CLICK - DRILL DOWN
+  // ═══════════════════════════════════════════════════════════════
+
+  describe("vertex click drill-down", () => {
+    it("registers a click handler on radar vertices", async () => {
+      await createChart();
+      await flushPromises();
+
+      const onCalls = mockD3.on.mock.calls;
+      const clickCalls = onCalls.filter((c) => c[0] === "click");
+      expect(clickCalls.length).toBeGreaterThan(0);
+    });
+
+    it("sets pointer cursor on vertices with objectApiName", async () => {
+      await createChart({ objectApiName: "Opportunity" });
+      await flushPromises();
+
+      const attrCalls = mockD3.attr.mock.calls;
+      const cursorCalls = attrCalls.filter((c) => c[0] === "cursor");
+      expect(cursorCalls.length).toBeGreaterThan(0);
+      expect(cursorCalls[cursorCalls.length - 1][1]).toBe("pointer");
+    });
+
+    it("does not set pointer cursor without objectApiName", async () => {
+      await createChart({ objectApiName: "" });
+      await flushPromises();
+
+      const attrCalls = mockD3.attr.mock.calls;
+      const cursorCalls = attrCalls.filter((c) => c[0] === "cursor");
+      expect(cursorCalls.length).toBeGreaterThan(0);
+      expect(cursorCalls[cursorCalls.length - 1][1]).toBe("default");
+    });
+
+    it("dispatches radarclick with entity/axis/value detail when objectApiName is set", async () => {
+      await createChart({
+        objectApiName: "Opportunity",
+        filterField: "Type"
+      });
+      await flushPromises();
+
+      const radarclickHandler = jest.fn();
+      element.addEventListener("radarclick", radarclickHandler);
+
+      const onCalls = mockD3.on.mock.calls;
+      const clickCall = onCalls.find((c) => c[0] === "click");
+      expect(clickCall).toBeTruthy();
+      // Invoke the registered click handler directly (no real DOM event needed)
+      clickCall[1]();
+
+      expect(radarclickHandler).toHaveBeenCalledTimes(1);
+      const detail = radarclickHandler.mock.calls[0][0].detail;
+      expect(detail.filterField).toBe("Type");
+      expect(detail).toHaveProperty("entity");
+      expect(detail).toHaveProperty("axis");
+      expect(detail).toHaveProperty("value");
+    });
+
+    it("does not dispatch radarclick without objectApiName", async () => {
+      await createChart({ objectApiName: "" });
+      await flushPromises();
+
+      const radarclickHandler = jest.fn();
+      element.addEventListener("radarclick", radarclickHandler);
+
+      const onCalls = mockD3.on.mock.calls;
+      const clickCall = onCalls.find((c) => c[0] === "click");
+      expect(clickCall).toBeTruthy();
+      clickCall[1]();
+
+      expect(radarclickHandler).not.toHaveBeenCalled();
     });
   });
 });
