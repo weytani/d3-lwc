@@ -49,35 +49,55 @@
   stroke-width: 0;
 }
 
-/* Tooltip Styles */
-.chart-tooltip {
-  position: absolute;
-  background: #16325c;
-  color: white;
-  padding: 8px 12px;
-  border-radius: 4px;
-  font-size: 12px;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.2s ease;
-  z-index: 1000;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  max-width: 200px;
+/* Legend Layout */
+.chart-wrapper_row {
+  display: flex;
+  align-items: flex-start;
 }
 
-.chart-tooltip::after {
-  content: "";
-  position: absolute;
-  top: 100%;
-  left: 50%;
-  margin-left: -5px;
-  border-width: 5px;
-  border-style: solid;
-  border-color: #16325c transparent transparent transparent;
+.chart-wrapper_column {
+  display: flex;
+  flex-direction: column;
 }
 
-/* Warning Banner */
-.slds-alert_warning {
+.legend-container_right {
+  width: clamp(100px, 25%, 180px);
+  flex-shrink: 0;
+  padding: 10px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.legend-container_bottom {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  padding: 10px 0 0;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  padding: 4px 0;
+  cursor: pointer;
   font-size: 12px;
-  padding: 0.5rem 1rem;
+}
+
+.legend-item:hover {
+  background-color: #f3f2f2;
+}
+
+.legend-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+
+.legend-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #3e3e3c;
 }

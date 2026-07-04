@@ -17,7 +17,8 @@ import {
   createTooltip,
   createResizeHandler,
   buildTooltipContent,
-  createLayoutRetry
+  createLayoutRetry,
+  applySvgA11y
 } from "c/chartUtils";
 import { NavigationMixin } from "lightning/navigation";
 import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
@@ -122,6 +123,42 @@ export default class D3BarChart extends NavigationMixin(LightningElement) {
       this._configParsed = true;
     }
     return this._config;
+  }
+
+  get effectiveShowLegend() {
+    return !!this.config.showLegend;
+  }
+
+  /** Legend placement: "bottom" (default, wraps under the chart) or "right" (sidebar). */
+  get legendPosition() {
+    return this.config.legendPosition === "right" ? "right" : "bottom";
+  }
+
+  get chartWrapperClass() {
+    return this.legendPosition === "right"
+      ? "chart-wrapper chart-wrapper_row"
+      : "chart-wrapper chart-wrapper_column";
+  }
+
+  get legendContainerClass() {
+    return this.legendPosition === "right"
+      ? "legend-container legend-container_right"
+      : "legend-container legend-container_bottom";
+  }
+
+  get legendItems() {
+    if (!this.chartData || !this.effectiveShowLegend) return [];
+    const colors = getColors(
+      this.theme,
+      this.chartData.length,
+      this.config.customColors
+    );
+    return this.chartData.map((d, i) => ({
+      label: d.label,
+      value: d.value,
+      color: colors[i],
+      colorStyle: `background-color: ${colors[i]};`
+    }));
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -393,12 +430,19 @@ export default class D3BarChart extends NavigationMixin(LightningElement) {
     if (width <= 0 || height <= 0) return;
 
     // Create SVG
-    this.svg = d3
+    const svgRoot = d3
       .select(container)
       .append("svg")
       .attr("width", containerWidth)
       .attr("height", this.height)
-      .attr("class", "bar-chart-svg")
+      .attr("class", "bar-chart-svg");
+
+    applySvgA11y(svgRoot, {
+      title: `Bar chart: ${this.operation} of ${this.valueField} by ${this.groupByField}`,
+      desc: `${this.chartData.length} categories`
+    });
+
+    this.svg = svgRoot
       .append("g")
       .attr("transform", `translate(${margin.left},${margin.top})`);
 
@@ -504,19 +548,6 @@ export default class D3BarChart extends NavigationMixin(LightningElement) {
       .on("click", (event, d) => {
         this.handleBarClick(d);
       });
-
-    // Legend (if enabled in config)
-    if (this.config.showLegend) {
-      this.renderLegend(colors);
-    }
-  }
-
-  // eslint-disable-next-line no-unused-vars
-  renderLegend(colors) {
-    // eslint-disable-next-line no-unused-vars
-    const legendPosition = this.config.legendPosition || "bottom";
-    // Legend implementation for bar chart (simplified - typically less needed for bar charts)
-    // Can be extended based on requirements
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -579,6 +610,25 @@ export default class D3BarChart extends NavigationMixin(LightningElement) {
         composed: true
       })
     );
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // LEGEND CLICK
+  // ═══════════════════════════════════════════════════════════════
+
+  handleLegendClick(event) {
+    const label = event.currentTarget.dataset.label;
+    const item = this.chartData.find((d) => d.label === label);
+    if (item) {
+      this.handleBarClick(item);
+    }
+  }
+
+  /** Activates a legend item via keyboard (Enter/Space), matching the click behavior. */
+  handleLegendKeydown(event) {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    this.handleLegendClick(event);
   }
 
   // ═══════════════════════════════════════════════════════════════

@@ -107,7 +107,7 @@
         name="advancedConfig"
         type="String"
         label="Advanced Config (JSON)"
-        description='{"showGrid": true, "showLegend": false, "customColors": ["#FF5733"]}'
+        description='{"showGrid": true, "showLegend": false, "legendPosition": "bottom" | "right", "customColors": ["#FF5733"]}'
       />
         </targetConfig>
     </targetConfigs>

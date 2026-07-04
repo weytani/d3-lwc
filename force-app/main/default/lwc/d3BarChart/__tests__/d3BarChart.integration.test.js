@@ -72,6 +72,7 @@ const createMockD3 = () => {
     remove: jest.fn(() => mockD3),
     html: jest.fn(() => mockD3),
     text: jest.fn(() => mockD3),
+    insert: jest.fn(() => mockD3),
     scaleBand: jest.fn(() => {
       const scale = jest.fn(() => 50);
       scale.domain = jest.fn(() => scale);
@@ -547,6 +548,85 @@ describe("c-d3-bar-chart integration", () => {
       // select should have been called again for the re-render
       const selectCallsAfter = mockD3.select.mock.calls.length;
       expect(selectCallsAfter).toBeGreaterThan(selectCallsBefore);
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════
+  // HTML LEGEND
+  // ═══════════════════════════════════════════════════════════════
+
+  describe("HTML legend", () => {
+    it("does not render a legend when showLegend is not set", async () => {
+      await createChart();
+
+      const legend = element.shadowRoot.querySelector(".legend-container");
+      expect(legend).toBeFalsy();
+    });
+
+    it("renders one keyboard-operable legend item per category when showLegend is true", async () => {
+      await createChart({ advancedConfig: '{"showLegend": true}' });
+
+      const legendItems = element.shadowRoot.querySelectorAll(".legend-item");
+      expect(legendItems.length).toBe(3);
+      legendItems.forEach((item) => {
+        expect(item.getAttribute("role")).toBe("button");
+        expect(item.getAttribute("tabindex")).toBe("0");
+      });
+    });
+
+    it("dispatches barclick on legend click and on Enter/Space keydown", async () => {
+      await createChart({
+        advancedConfig: '{"showLegend": true}',
+        objectApiName: "Opportunity",
+        filterField: "StageName"
+      });
+
+      const barclickHandler = jest.fn();
+      element.addEventListener("barclick", barclickHandler);
+
+      const legendItems = element.shadowRoot.querySelectorAll(".legend-item");
+      legendItems[0].click();
+      legendItems[0].dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", bubbles: true })
+      );
+
+      expect(barclickHandler).toHaveBeenCalledTimes(2);
+      expect(barclickHandler.mock.calls[0][0].detail.label).toBe("Closed Won");
+    });
+
+    it("places the legend below the chart by default and beside it when legendPosition is right", async () => {
+      await createChart({ advancedConfig: '{"showLegend": true}' });
+      expect(
+        element.shadowRoot.querySelector(".legend-container_bottom")
+      ).toBeTruthy();
+
+      document.body.removeChild(element);
+      await createChart({
+        advancedConfig: '{"showLegend": true, "legendPosition": "right"}'
+      });
+      expect(
+        element.shadowRoot.querySelector(".legend-container_right")
+      ).toBeTruthy();
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════
+  // ACCESSIBILITY WIRING
+  // ═══════════════════════════════════════════════════════════════
+
+  describe("accessibility wiring", () => {
+    it("applies role=img and a title to the rendered svg", async () => {
+      await createChart();
+
+      const attrCalls = mockD3.attr.mock.calls;
+      const roleCall = attrCalls.find((call) => call[0] === "role");
+      expect(roleCall).toBeTruthy();
+      expect(roleCall[1]).toBe("img");
+
+      const insertCalls = mockD3.insert.mock.calls;
+      const titleInsert = insertCalls.find((call) => call[0] === "title");
+      expect(titleInsert).toBeTruthy();
+      expect(titleInsert[1]).toBe(":first-child");
     });
   });
 });
