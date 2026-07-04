@@ -45,7 +45,10 @@
                 key={item.label}
                 class="legend-item"
                 data-label={item.label}
+                role="button"
+                tabindex="0"
                 onclick={handleLegendClick}
+                onkeydown={handleLegendKeydown}
               >
                 <span class="legend-color" style={item.colorStyle}></span>
                 <span class="legend-label" title={item.label}

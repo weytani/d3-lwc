@@ -63,7 +63,8 @@ jest.mock("c/chartUtils", () => ({
   calculateDimensions: jest
     .fn()
     .mockReturnValue({ width: 300, height: 200, margins: {} }),
-  shouldUseCompactMode: jest.fn().mockReturnValue(false)
+  shouldUseCompactMode: jest.fn().mockReturnValue(false),
+  applySvgA11y: jest.fn()
 }));
 
 // Factory function for isolated mock D3 instances (prevents shared mutable state between tests)

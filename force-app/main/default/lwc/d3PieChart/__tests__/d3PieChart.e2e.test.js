@@ -77,6 +77,7 @@ const createMockD3 = () => {
     on: jest.fn(() => d3),
     remove: jest.fn(() => d3),
     text: jest.fn(() => d3),
+    insert: jest.fn(() => d3),
     pie: jest.fn(() => {
       const pieFn = jest.fn((data) =>
         data.map((d, i) => ({

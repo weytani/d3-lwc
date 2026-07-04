@@ -66,6 +66,7 @@ const createMockD3 = () => {
     on: jest.fn(() => d3),
     remove: jest.fn(() => d3),
     text: jest.fn(() => d3),
+    insert: jest.fn(() => d3),
     pie: jest.fn(() => {
       const pieFn = jest.fn((data) =>
         data.map((d, i) => ({
@@ -274,6 +275,40 @@ describe("c-d3-pie-chart integration", () => {
       expect(typeof fillFn).toBe("function");
       expect(fillFn({}, 0)).toBe("#FF6B6B");
     });
+
+    it("applies Salesforce Standard palette colors to slice fills", async () => {
+      await createChart({ theme: "Salesforce Standard" });
+
+      // Real getColors for 'Salesforce Standard' returns:
+      // ['#1589EE', '#FF9E2C', '#4BCA81', ...] sliced to count
+      const fillCalls = mockD3.attr.mock.calls.filter((c) => c[0] === "fill");
+      expect(fillCalls.length).toBeGreaterThan(0);
+      const fillFn = fillCalls[0][1];
+      expect(typeof fillFn).toBe("function");
+      expect(fillFn({}, 0)).toBe("#1589EE");
+      expect(fillFn({}, 1)).toBe("#FF9E2C");
+      expect(fillFn({}, 2)).toBe("#4BCA81");
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════
+  // ACCESSIBILITY WIRING
+  // ═══════════════════════════════════════════════════════════════
+
+  describe("accessibility wiring", () => {
+    it("applies role=img and a title to the rendered svg", async () => {
+      await createChart();
+
+      const attrCalls = mockD3.attr.mock.calls;
+      const roleCall = attrCalls.find((call) => call[0] === "role");
+      expect(roleCall).toBeTruthy();
+      expect(roleCall[1]).toBe("img");
+
+      const insertCalls = mockD3.insert.mock.calls;
+      const titleInsert = insertCalls.find((call) => call[0] === "title");
+      expect(titleInsert).toBeTruthy();
+      expect(titleInsert[1]).toBe(":first-child");
+    });
   });
 
   // ═══════════════════════════════════════════════════════════════
@@ -340,6 +375,33 @@ describe("c-d3-pie-chart integration", () => {
 
       const eventDetail = sliceclickHandler.mock.calls[0][0].detail;
       expect(eventDetail.filterField).toBe("Custom__c");
+    });
+
+    it("legend item responds to Enter and Space keydown like a click", async () => {
+      const element = await createChart({
+        objectApiName: "Opportunity",
+        filterField: "StageName"
+      });
+
+      const sliceclickHandler = jest.fn();
+      element.addEventListener("sliceclick", sliceclickHandler);
+
+      const legendItems = element.shadowRoot.querySelectorAll(".legend-item");
+      expect(legendItems.length).toBeGreaterThan(0);
+      expect(legendItems[0].getAttribute("role")).toBe("button");
+      expect(legendItems[0].getAttribute("tabindex")).toBe("0");
+
+      legendItems[0].dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", bubbles: true })
+      );
+      legendItems[0].dispatchEvent(
+        new KeyboardEvent("keydown", { key: " ", bubbles: true })
+      );
+
+      expect(sliceclickHandler).toHaveBeenCalledTimes(2);
+      expect(sliceclickHandler.mock.calls[0][0].detail.label).toBe(
+        "Closed Won"
+      );
     });
   });
 
