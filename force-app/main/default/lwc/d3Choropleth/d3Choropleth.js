@@ -1,6 +1,6 @@
 // ABOUTME: D3 Choropleth Map Lightning Web Component for geographic data visualization.
 // ABOUTME: Displays regions colored by aggregated values, supporting US states, world maps, or custom GeoJSON.
-import { LightningElement, api, track } from "lwc";
+import { LightningElement, api, track, wire } from "lwc";
 import { loadD3 } from "c/d3Lib";
 import {
   prepareData,
@@ -8,17 +8,29 @@ import {
   OPERATIONS,
   CHART_LIMITS
 } from "c/dataService";
-import { DEFAULT_THEME } from "c/themeService";
+import {
+  DEFAULT_THEME,
+  getRampHueForTheme,
+  getSequentialRamp
+} from "c/themeService";
 import {
   formatNumber,
   createTooltip,
   createResizeHandler,
   createLayoutRetry,
-  truncateLabel
+  truncateLabel,
+  applySvgA11y
 } from "c/chartUtils";
 import { NavigationMixin } from "lightning/navigation";
 import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
 import US_STATES from "@salesforce/resourceUrl/usStates";
+import { gql, graphql } from "lightning/graphql";
+import {
+  buildAggregateQuery,
+  normalizeAggregate,
+  buildRecordQuery,
+  normalizeRecordsGeneric
+} from "c/graphqlService";
 
 // Maximum regions to process
 const MAX_REGIONS = CHART_LIMITS.CHOROPLETH;
@@ -185,6 +197,12 @@ export default class D3Choropleth extends NavigationMixin(LightningElement) {
   /** Advanced configuration JSON */
   @api advancedConfig = "{}";
 
+  /** Fetch-mode selector: "auto" (default, existing priority order), "apex", or "graphql". */
+  @api fetchMode = "auto";
+
+  /** Structured filter for the GraphQL path: { field, operator, value }. */
+  @api graphqlFilter;
+
   // ═══════════════════════════════════════════════════════════════
   // TRACKED STATE
   // ═══════════════════════════════════════════════════════════════
@@ -257,6 +275,163 @@ export default class D3Choropleth extends NavigationMixin(LightningElement) {
   get effectiveShowLabels() {
     // Default to false
     return this.showLabels === true;
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // THEME WIRING (sequential ramp)
+  // ═══════════════════════════════════════════════════════════════
+
+  /**
+   * True when lowColor/highColor are both still at their historical hardcoded
+   * defaults (i.e. the admin hasn't explicitly customized them).
+   */
+  get _usingDefaultSequentialColors() {
+    return this.lowColor === "#f7fbff" && this.highColor === "#08519c";
+  }
+
+  /**
+   * Low end of the sequential color scale. An explicit lowColor/highColor
+   * pair always wins (backward-compat with pages set up before theme wiring
+   * existed). When both are unset (still at default), a non-default theme
+   * picks its own ramp via getRampHueForTheme; the default theme falls back
+   * to the historical hardcoded "#f7fbff"->"#08519c" ramp.
+   */
+  get effectiveLowColor() {
+    if (this._usingDefaultSequentialColors && this.theme !== DEFAULT_THEME) {
+      return getSequentialRamp(getRampHueForTheme(this.theme), 2)[0];
+    }
+    return this.lowColor;
+  }
+
+  /** High end of the sequential color scale. See effectiveLowColor. */
+  get effectiveHighColor() {
+    if (this._usingDefaultSequentialColors && this.theme !== DEFAULT_THEME) {
+      return getSequentialRamp(getRampHueForTheme(this.theme), 2)[1];
+    }
+    return this.highColor;
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // GRAPHQL SELF-FETCH PATH (Approach A — additive)
+  // ═══════════════════════════════════════════════════════════════
+
+  /**
+   * Reactive GraphQL query for the self-fetch path. Returns undefined (so the
+   * wire is skipped) unless fetchMode is "graphql" and objectApiName/regionField/
+   * operation are set. CT-AGG: regionField -> groupByField, valueField, operation.
+   * Count has no server aggregate, so it fetches bounded raw region-field rows
+   * instead, fed through the existing client aggregateData() computation.
+   * NOTE: the server-aggregate (non-Count) branch returns [{label,value}] with
+   * no raw rows, so drill-down navigation (which needs a specific record's Id)
+   * has nothing to navigate to under graphql mode — region-level events
+   * (label/value) still fire; see _applyAggregatedRegions.
+   */
+  get gqlQuery() {
+    if (this.fetchMode !== "graphql") return undefined;
+    if (!this.objectApiName || !this.regionField || !this.operation) {
+      return undefined;
+    }
+    let queryString;
+    try {
+      if (this.operation === OPERATIONS.COUNT) {
+        queryString = buildRecordQuery({
+          objectApiName: this.objectApiName,
+          fields: [this.regionField],
+          filter: this.graphqlFilter,
+          first: this.recordLimit || MAX_REGIONS * 10
+        });
+      } else {
+        if (!this.valueField) return undefined;
+        queryString = buildAggregateQuery({
+          objectApiName: this.objectApiName,
+          groupByField: this.regionField,
+          valueField: this.valueField,
+          operation: this.operation,
+          filter: this.graphqlFilter,
+          first: this.recordLimit || MAX_REGIONS
+        });
+      }
+    } catch {
+      // Unsupported operation/config: leave the wire un-provisioned; error surfaces below.
+      return undefined;
+    }
+    return gql`
+      ${queryString}
+    `;
+  }
+
+  @wire(graphql, { query: "$gqlQuery" })
+  wiredAggregate({ data, errors }) {
+    if (this.fetchMode !== "graphql") return;
+    if (errors) {
+      this.error = this._formatGqlErrors(errors);
+      this.isLoading = false;
+      return;
+    }
+    if (!data) return; // initial undefined emission
+    try {
+      if (this.operation === OPERATIONS.COUNT) {
+        const records = normalizeRecordsGeneric(data, {
+          objectApiName: this.objectApiName,
+          fields: [this.regionField]
+        });
+        const aggregated = aggregateData(
+          records,
+          this.regionField,
+          this.valueField,
+          this.operation
+        );
+        this._applyAggregatedRegions(aggregated, records);
+      } else {
+        const aggregated = normalizeAggregate(data, {
+          objectApiName: this.objectApiName,
+          groupByField: this.regionField,
+          valueField: this.valueField,
+          operation: this.operation
+        });
+        this._applyAggregatedRegions(aggregated, []);
+      }
+      this.error = null;
+      this.chartRendered = false; // force renderedCallback to re-initialize the SVG
+    } catch (e) {
+      this.error = e.message;
+    }
+    this.isLoading = false;
+  }
+
+  _formatGqlErrors(errors) {
+    const list = Array.isArray(errors) ? errors : [errors];
+    return list.map((e) => e?.message || e).join("; ") || "GraphQL error";
+  }
+
+  /**
+   * Builds this.chartData (normalized region key -> {label,value,originalRecords})
+   * and this._valueExtent from an already-aggregated [{label,value}] list.
+   * Shared by loadData()'s client-aggregation path and the graphql wire.
+   * @param {Array} aggregated - [{label, value}]
+   * @param {Array} rawRecords - underlying rows to attribute to each region
+   *   for drill-down navigation (empty when none are available, e.g. a
+   *   server-side aggregate result).
+   */
+  _applyAggregatedRegions(aggregated, rawRecords) {
+    this.chartData = new Map();
+    aggregated.forEach((item) => {
+      const normalizedKey = this.normalizeRegionKey(item.label);
+      this.chartData.set(normalizedKey, {
+        label: item.label,
+        value: item.value,
+        originalRecords: rawRecords.filter(
+          (r) =>
+            this.normalizeRegionKey(String(r[this.regionField])) ===
+            normalizedKey
+        )
+      });
+    });
+
+    const values = aggregated.map((d) => d.value);
+    this._valueExtent = aggregated.length
+      ? [Math.min(0, ...values), Math.max(...values)]
+      : [0, 0];
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -488,6 +663,11 @@ export default class D3Choropleth extends NavigationMixin(LightningElement) {
   // ═══════════════════════════════════════════════════════════════
 
   async loadData() {
+    // GraphQL path is handled reactively by the @wire(graphql) — nothing to do here.
+    if (this.fetchMode === "graphql") {
+      return;
+    }
+
     let rawData = [];
 
     if (this.recordCollection && this.recordCollection.length > 0) {
@@ -531,25 +711,7 @@ export default class D3Choropleth extends NavigationMixin(LightningElement) {
       this.operation
     );
 
-    // Convert to Map for efficient lookup
-    this.chartData = new Map();
-    aggregated.forEach((item) => {
-      // Normalize region key for matching
-      const normalizedKey = this.normalizeRegionKey(item.label);
-      this.chartData.set(normalizedKey, {
-        label: item.label,
-        value: item.value,
-        originalRecords: prepared.data.filter(
-          (r) =>
-            this.normalizeRegionKey(String(r[this.regionField])) ===
-            normalizedKey
-        )
-      });
-    });
-
-    // Calculate value extent for color scale
-    const values = aggregated.map((d) => d.value);
-    this._valueExtent = [Math.min(0, ...values), Math.max(...values)];
+    this._applyAggregatedRegions(aggregated, prepared.data);
   }
 
   /**
@@ -626,6 +788,11 @@ export default class D3Choropleth extends NavigationMixin(LightningElement) {
       .attr("viewBox", [0, 0, width, height]);
 
     this.svg = svg;
+
+    applySvgA11y(svg, {
+      title: `Choropleth map: ${this.getOperationLabel()} of ${this.valueField} by ${this.regionField}`,
+      desc: `${this.chartData ? this.chartData.size : 0} regions with data`
+    });
 
     // Create main group for zoom/pan
     const g = svg.append("g").attr("class", "map-container");
@@ -730,7 +897,9 @@ export default class D3Choropleth extends NavigationMixin(LightningElement) {
       this._colorScale = d3
         .scaleSequential()
         .domain([0, maxVal || 1])
-        .interpolator(d3.interpolateRgb(this.lowColor, this.highColor));
+        .interpolator(
+          d3.interpolateRgb(this.effectiveLowColor, this.effectiveHighColor)
+        );
     }
   }
 

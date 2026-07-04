@@ -7,18 +7,18 @@
 
 ## Already Built (10)
 
-| #   | Component       | Status      |
-| --- | --------------- | ----------- |
-| —   | `d3Gauge`       | Done        |
-| —   | `d3BarChart`    | Done        |
-| —   | `d3DonutChart`  | Done        |
-| —   | `d3LineChart`   | Done        |
-| —   | `d3ScatterPlot` | Done        |
-| —   | `d3Histogram`   | Done        |
-| —   | `d3Treemap`     | Done        |
-| —   | `d3Sankey`      | Done        |
-| —   | `d3ForceGraph`  | Done        |
-| —   | `d3Choropleth`  | In Progress |
+| #   | Component       | Status |
+| --- | --------------- | ------ |
+| —   | `d3Gauge`       | Done   |
+| —   | `d3BarChart`    | Done   |
+| —   | `d3DonutChart`  | Done   |
+| —   | `d3LineChart`   | Done   |
+| —   | `d3ScatterPlot` | Done   |
+| —   | `d3Histogram`   | Done   |
+| —   | `d3Treemap`     | Done   |
+| —   | `d3Sankey`      | Done   |
+| —   | `d3ForceGraph`  | Done   |
+| —   | `d3Choropleth`  | Done   |
 
 ## Already Planned in ROADMAP.md (16)
 

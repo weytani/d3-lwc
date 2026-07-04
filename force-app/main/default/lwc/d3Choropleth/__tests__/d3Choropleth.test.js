@@ -48,7 +48,8 @@ jest.mock("c/chartUtils", () => ({
     disconnect: jest.fn()
   }),
   createLayoutRetry: jest.fn().mockReturnValue({ cancel: jest.fn() }),
-  truncateLabel: jest.fn((label) => label)
+  truncateLabel: jest.fn((label) => label),
+  applySvgA11y: jest.fn()
 }));
 
 // Mock static resource URL
@@ -776,6 +777,38 @@ describe("c-d3-choropleth", () => {
       await createChart({ theme: "Salesforce Standard" });
       expect(element.theme).toBe("Salesforce Standard");
     });
+
+    it("preserves the historical default blue ramp for the default theme", async () => {
+      await createChart(); // theme unset -> DEFAULT_THEME, lowColor/highColor unset -> defaults
+      const call = mockD3.interpolateRgb.mock.calls[0];
+      expect(call).toEqual(["#f7fbff", "#08519c"]);
+    });
+
+    it("wires a non-default theme into the sequential ramp when colors are unset", async () => {
+      const {
+        getRampHueForTheme,
+        getSequentialRamp
+      } = require("c/themeService");
+      await createChart({ theme: "Warm" });
+
+      const call = mockD3.interpolateRgb.mock.calls[0];
+      const [expectedLow, expectedHigh] = getSequentialRamp(
+        getRampHueForTheme("Warm"),
+        2
+      );
+      expect(call).toEqual([expectedLow, expectedHigh]);
+    });
+
+    it("respects an explicit lowColor/highColor pair over the theme", async () => {
+      await createChart({
+        theme: "Warm",
+        lowColor: "#111111",
+        highColor: "#222222"
+      });
+
+      const call = mockD3.interpolateRgb.mock.calls[0];
+      expect(call).toEqual(["#111111", "#222222"]);
+    });
   });
 
   // ═══════════════════════════════════════════════════════════════
@@ -841,6 +874,19 @@ describe("c-d3-choropleth", () => {
       await Promise.resolve();
 
       expect(mockD3.append).toHaveBeenCalled();
+    });
+
+    it("applies role=img and a title to the root svg", async () => {
+      const { applySvgA11y } = require("c/chartUtils");
+      await createChart();
+      await Promise.resolve();
+
+      expect(applySvgA11y).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          title: expect.stringContaining("Choropleth map")
+        })
+      );
     });
 
     it("creates geoPath for regions", async () => {

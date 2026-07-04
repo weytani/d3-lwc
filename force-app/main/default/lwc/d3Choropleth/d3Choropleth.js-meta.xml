@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <LightningComponentBundle xmlns="http://soap.sforce.com/2006/04/metadata">
-    <apiVersion>59.0</apiVersion>
+    <apiVersion>65.0</apiVersion>
     <isExposed>true</isExposed>
     <masterLabel>D3 Choropleth Map</masterLabel>
     <description
@@ -53,8 +53,8 @@
         type="String"
         label="Map Type"
         default="us-states"
-        datasource="us-states,world,custom"
-        description="Type of map to display"
+        datasource="us-states,custom"
+        description="Type of map to display. World maps require custom GeoJSON: set mapType to custom and provide geoJsonData."
       />
             <property
         name="geoJsonData"
@@ -116,13 +116,20 @@
         description="Color for negative values (diverging scale)"
       />
             <property
+        name="midColor"
+        type="String"
+        label="Diverging Midpoint Color"
+        default="#f7f7f7"
+        description="Color for the zero/neutral midpoint (diverging scale)"
+      />
+            <property
         name="positiveColor"
         type="String"
         label="Positive Color"
         default="#2166ac"
         description="Color for positive values (diverging scale)"
       />
-            
+
             <!-- Theme -->
             <property
         name="theme"
@@ -130,7 +137,7 @@
         label="Color Theme"
         default="Salesforce Standard"
         datasource="Salesforce Standard,Warm,Cool,Vibrant"
-        description="Color theme for categorical elements"
+        description="Color theme for categorical elements. Also drives the sequential ramp's low/high colors when lowColor/highColor are left at their defaults."
       />
             
             <!-- Display Options -->
@@ -163,9 +170,10 @@
       />
             <property
         name="borderWidth"
-        type="Integer"
+        type="String"
         label="Border Width"
-        default="1"
+        default="0.5"
+        description="Region border stroke width in pixels. Accepts decimals (e.g. 0.5); Lightning App Builder property panels only support String/Integer/Boolean, and this value isn't a whole number."
       />
             <property
         name="hoverBorderColor"
@@ -173,7 +181,14 @@
         label="Hover Border Color"
         default="#333333"
       />
-            
+            <property
+        name="hoverBorderWidth"
+        type="Integer"
+        label="Hover Border Width"
+        default="2"
+        description="Region border stroke width on hover, in pixels"
+      />
+
             <!-- Interaction -->
             <property
         name="enableZoom"
@@ -207,15 +222,25 @@
         max="10000"
       />
 
+            <!-- GraphQL Self-Fetch -->
+            <property
+        name="fetchMode"
+        type="String"
+        label="Data Source"
+        default="auto"
+        datasource="auto,apex,graphql"
+        description="How to fetch data: auto (existing priority order), apex (Apex-backed SOQL), or graphql (UI API GraphQL). graphql uses a server-side aggregate, so region click events fire without a specific record to navigate to."
+      />
+
             <!-- Advanced -->
             <property
         name="advancedConfig"
         type="String"
         label="Advanced Config (JSON)"
-        description="JSON object for additional customization"
+        description='{"noDataColor": "#E5E5E5"}. noDataColor overrides the fill for regions with no matching data (default "#E5E5E5").'
       />
         </targetConfig>
-        
+
         <targetConfig targets="lightning__FlowScreen">
             <propertyType
         name="T"
