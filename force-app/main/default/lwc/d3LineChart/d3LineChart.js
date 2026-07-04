@@ -2,19 +2,21 @@
  * ABOUTME: D3 Line Chart Lightning Web Component.
  * ABOUTME: Displays time series data as lines with multi-series and drill-down support.
  */
-import { LightningElement, api, track } from "lwc";
+import { LightningElement, api, track, wire } from "lwc";
 import { loadD3 } from "c/d3Lib";
 import { prepareData, CHART_LIMITS } from "c/dataService";
 import { getColors, DEFAULT_THEME } from "c/themeService";
 import {
   formatNumber,
-  truncateLabel,
   createTooltip,
   createResizeHandler,
-  createLayoutRetry
+  createLayoutRetry,
+  applySvgA11y
 } from "c/chartUtils";
 import { NavigationMixin } from "lightning/navigation";
 import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
+import { gql, graphql } from "lightning/graphql";
+import { buildRecordQuery, normalizeRecordsGeneric } from "c/graphqlService";
 
 export default class D3LineChart extends NavigationMixin(LightningElement) {
   // ═══════════════════════════════════════════════════════════════
@@ -66,6 +68,12 @@ export default class D3LineChart extends NavigationMixin(LightningElement) {
 
   /** Filter field for drill-down */
   @api filterField = "";
+
+  /** Fetch-mode selector: "auto" (default, existing priority order), "apex", or "graphql". */
+  @api fetchMode = "auto";
+
+  /** Structured filter for the GraphQL path: { field, operator, value }. */
+  @api graphqlFilter;
 
   // ═══════════════════════════════════════════════════════════════
   // TRACKED STATE
@@ -149,6 +157,81 @@ export default class D3LineChart extends NavigationMixin(LightningElement) {
   }
 
   // ═══════════════════════════════════════════════════════════════
+  // GRAPHQL SELF-FETCH PATH (Approach A — additive, CT-REC)
+  // ═══════════════════════════════════════════════════════════════
+
+  /**
+   * Reactive GraphQL query for the self-fetch path. Returns undefined (so the wire
+   * is skipped) unless fetchMode is "graphql" and objectApiName/dateField/valueField
+   * are set. Line has no server-side aggregate: it always fetches raw records for
+   * dateField, valueField, and (if set) seriesField, then feeds the existing
+   * processTimeSeriesData path (same as recordCollection/soqlQuery).
+   */
+  get gqlQuery() {
+    if (this.fetchMode !== "graphql") return undefined;
+    if (!this.objectApiName || !this.dateField || !this.valueField) {
+      return undefined;
+    }
+    const fields = [
+      ...new Set(
+        [this.dateField, this.valueField, this.seriesField].filter(Boolean)
+      )
+    ];
+    let queryString;
+    try {
+      queryString = buildRecordQuery({
+        objectApiName: this.objectApiName,
+        fields,
+        filter: this.graphqlFilter,
+        first: this.recordLimit || 2000
+      });
+    } catch {
+      // Unsupported config: leave the wire un-provisioned; error surfaces below.
+      return undefined;
+    }
+    return gql`
+      ${queryString}
+    `;
+  }
+
+  @wire(graphql, { query: "$gqlQuery" })
+  wiredRecords({ data, errors }) {
+    if (this.fetchMode !== "graphql") return;
+    if (errors) {
+      this.error = this._formatGqlErrors(errors);
+      this.isLoading = false;
+      return;
+    }
+    if (!data) return; // initial undefined emission
+    try {
+      const fields = [
+        ...new Set(
+          [this.dateField, this.valueField, this.seriesField].filter(Boolean)
+        )
+      ];
+      const records = normalizeRecordsGeneric(data, {
+        objectApiName: this.objectApiName,
+        fields
+      });
+      this.processTimeSeriesData(records);
+      if (this.seriesData.length === 0) {
+        this.error = "No data after processing";
+      } else {
+        this.error = null;
+        this.chartRendered = false; // force renderedCallback to re-initialize the SVG
+      }
+    } catch (e) {
+      this.error = e.message;
+    }
+    this.isLoading = false;
+  }
+
+  _formatGqlErrors(errors) {
+    const list = Array.isArray(errors) ? errors : [errors];
+    return list.map((e) => e?.message || e).join("; ") || "GraphQL error";
+  }
+
+  // ═══════════════════════════════════════════════════════════════
   // LIFECYCLE HOOKS
   // ═══════════════════════════════════════════════════════════════
 
@@ -194,6 +277,11 @@ export default class D3LineChart extends NavigationMixin(LightningElement) {
   // ═══════════════════════════════════════════════════════════════
 
   async loadData() {
+    // GraphQL path is handled reactively by the @wire(graphql) — nothing to do here.
+    if (this.fetchMode === "graphql") {
+      return;
+    }
+
     let rawData = [];
 
     if (this.recordCollection && this.recordCollection.length > 0) {
@@ -351,11 +439,10 @@ export default class D3LineChart extends NavigationMixin(LightningElement) {
     d3.select(container).select("svg").remove();
 
     // Margins
-    const legendHeight = this.effectiveShowLegend ? 30 : 0;
     const margin = {
       top: 20,
       right: 30,
-      bottom: 50 + legendHeight,
+      bottom: 50,
       left: 60
     };
 
@@ -365,12 +452,19 @@ export default class D3LineChart extends NavigationMixin(LightningElement) {
     if (width <= 0 || height <= 0) return;
 
     // Create SVG
-    this.svg = d3
+    const svgRoot = d3
       .select(container)
       .append("svg")
       .attr("width", containerWidth)
       .attr("height", this.height)
-      .attr("class", "line-chart-svg")
+      .attr("class", "line-chart-svg");
+
+    applySvgA11y(svgRoot, {
+      title: `Line chart: ${this.valueField} over ${this.dateField}`,
+      desc: `${this.seriesData.length} series`
+    });
+
+    this.svg = svgRoot
       .append("g")
       .attr("transform", `translate(${margin.left},${margin.top})`);
 
@@ -513,11 +607,6 @@ export default class D3LineChart extends NavigationMixin(LightningElement) {
           .attr("r", 5);
       }
     });
-
-    // Legend
-    if (this.effectiveShowLegend) {
-      this.renderLegend(colors, width, height);
-    }
   }
 
   /**
@@ -567,47 +656,6 @@ export default class D3LineChart extends NavigationMixin(LightningElement) {
       }
     }
     return `${month} ${day}`;
-  }
-
-  /**
-   * Renders legend below the chart.
-   * @param {Array} colors - Color array
-   * @param {Number} width - Chart width
-   * @param {Number} height - Chart height
-   */
-  renderLegend(colors, width, height) {
-    const legend = this.svg
-      .append("g")
-      .attr("class", "legend")
-      .attr("transform", `translate(0, ${height + 35})`);
-
-    let xOffset = 0;
-    this.seriesData.forEach((series, i) => {
-      const item = legend
-        .append("g")
-        .attr("class", "legend-item")
-        .attr("transform", `translate(${xOffset}, 0)`)
-        .style("cursor", "pointer");
-
-      item
-        .append("rect")
-        .attr("width", 12)
-        .attr("height", 12)
-        .attr("rx", 2)
-        .attr("fill", colors[i]);
-
-      item
-        .append("text")
-        .attr("x", 16)
-        .attr("y", 10)
-        .style("font-size", "12px")
-        .style("fill", "#706e6b")
-        .text(truncateLabel(series.name, 15));
-
-      // Update offset for next item
-      const textWidth = series.name.length * 7 + 25;
-      xOffset += Math.min(textWidth, 130);
-    });
   }
 
   // ═══════════════════════════════════════════════════════════════

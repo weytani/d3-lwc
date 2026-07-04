@@ -24,6 +24,7 @@ const mockD3 = {
   attr: jest.fn(() => mockD3),
   style: jest.fn(() => mockD3),
   call: jest.fn(() => mockD3),
+  insert: jest.fn(() => mockD3),
   selectAll: jest.fn(() => mockD3),
   data: jest.fn(() => mockD3),
   datum: jest.fn(() => mockD3),
@@ -409,6 +410,25 @@ describe("c-d3-line-chart", () => {
       const container = element.shadowRoot.querySelector(".chart-container");
       expect(container).toBeTruthy();
     });
+
+    it("renders exactly one legend for multi-series data (no duplicate SVG legend)", async () => {
+      await createChart({
+        recordCollection: SAMPLE_TIME_SERIES,
+        seriesField: "StageName"
+      });
+      await flushPromises();
+
+      // Accessible HTML legend (kept).
+      const htmlLegends =
+        element.shadowRoot.querySelectorAll(".legend-container");
+      expect(htmlLegends.length).toBe(1);
+
+      // SVG legend group must NOT be appended (removed as a duplicate).
+      const svgLegendCalls = mockD3.attr.mock.calls.filter(
+        (call) => call[0] === "class" && call[1] === "legend"
+      );
+      expect(svgLegendCalls.length).toBe(0);
+    });
   });
 
   // ═══════════════════════════════════════════════════════════════
@@ -517,6 +537,38 @@ describe("c-d3-line-chart", () => {
       await flushPromises();
 
       expect(element.shadowRoot.querySelector(".chart-container")).toBeTruthy();
+    });
+
+    it("wires the theme prop to the line stroke color", async () => {
+      await createChart({ theme: "Salesforce Standard" });
+      await flushPromises();
+      expect(mockD3.attr).toHaveBeenCalledWith("stroke", "#1589EE");
+
+      jest.clearAllMocks();
+      loadD3.mockResolvedValue(mockD3);
+      document.body.removeChild(element);
+
+      await createChart({ theme: "Warm" });
+      await flushPromises();
+      expect(mockD3.attr).toHaveBeenCalledWith("stroke", "#FF6B6B");
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════
+  // ACCESSIBILITY TESTS
+  // ═══════════════════════════════════════════════════════════════
+
+  describe("accessibility", () => {
+    it("applies SVG accessibility attributes (role=img + title)", async () => {
+      await createChart();
+      await flushPromises();
+
+      expect(mockD3.attr).toHaveBeenCalledWith("role", "img");
+      expect(mockD3.attr).toHaveBeenCalledWith(
+        "aria-label",
+        expect.stringContaining("Line chart")
+      );
+      expect(mockD3.insert).toHaveBeenCalledWith("title", ":first-child");
     });
   });
 
