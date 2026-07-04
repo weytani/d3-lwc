@@ -22,7 +22,18 @@
       {error}
     </div>
 
+    <!-- No Data State -->
+    <div class="chart-no-data slds-text-color_weak" if:true={showNoData}>
+      <lightning-icon
+        icon-name="utility:chart"
+        alternative-text="No data"
+        size="small"
+        class="slds-m-right_x-small"
+      ></lightning-icon>
+      No data available
+    </div>
+
     <!-- Chart SVG -->
-    <svg lwc:ref="svg" class="chart-svg" if:false={hasError}></svg>
+    <svg lwc:ref="svg" class="chart-svg" if:true={showChart}></svg>
   </div>
 </template>

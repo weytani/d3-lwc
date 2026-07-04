@@ -1,9 +1,10 @@
 // ABOUTME: D3 Gauge Chart Lightning Web Component for single KPI visualization.
 // ABOUTME: Displays a value as a half-circle gauge with zones, tooltips, and navigation.
-import { LightningElement, api } from "lwc";
+import { LightningElement, api, wire } from "lwc";
 import { NavigationMixin } from "lightning/navigation";
 import { loadD3 } from "c/d3Lib";
 import { getColor } from "c/themeService";
+import { CHART_LIMITS } from "c/dataService";
 import {
   formatNumber,
   formatCurrency,
@@ -12,9 +13,12 @@ import {
   buildTooltipContent,
   createResizeHandler,
   createLayoutRetry,
-  shouldUseCompactMode
+  shouldUseCompactMode,
+  applySvgA11y
 } from "c/chartUtils";
 import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
+import { gql, graphql } from "lightning/graphql";
+import { buildRecordQuery, normalizeRecordsGeneric } from "c/graphqlService";
 
 export default class D3Gauge extends NavigationMixin(LightningElement) {
   // ===== DATA SOURCE PROPERTIES =====
@@ -32,11 +36,23 @@ export default class D3Gauge extends NavigationMixin(LightningElement) {
   // ===== NAVIGATION PROPERTY =====
   @api targetRecordId = "";
 
+  /** Object API name for the GraphQL self-fetch path. */
+  @api objectApiName = "";
+
+  /** Fetch-mode selector: "auto" (default, existing priority order), "apex", or "graphql". */
+  @api fetchMode = "auto";
+
+  /** Structured filter for the GraphQL path: { field, operator, value }. */
+  @api graphqlFilter;
+
   // ===== INTERNAL STATE =====
   d3 = null;
   isLoading = true;
   error = null;
   currentValue = 0;
+  /** True once a record with a usable value has actually been loaded — distinguishes
+   * a genuine zero value from no data at all (see hasData). */
+  hasReceivedData = false;
   tooltip = null;
   resizeHandler = null;
   chartRendered = false;
@@ -45,6 +61,18 @@ export default class D3Gauge extends NavigationMixin(LightningElement) {
   // ===== GETTERS =====
   get hasError() {
     return !!this.error;
+  }
+
+  get hasData() {
+    return this.hasReceivedData;
+  }
+
+  get showChart() {
+    return !this.isLoading && !this.hasError && this.hasData;
+  }
+
+  get showNoData() {
+    return !this.isLoading && !this.hasError && !this.hasData;
   }
 
   get parsedConfig() {
@@ -77,6 +105,62 @@ export default class D3Gauge extends NavigationMixin(LightningElement) {
     }
   }
 
+  // ===== GRAPHQL SELF-FETCH PATH (Approach A — additive, CT-REC) =====
+
+  /**
+   * Reactive GraphQL query for the self-fetch path. Returns undefined (so the wire
+   * is skipped) unless fetchMode is "graphql" and objectApiName/valueField are set.
+   * The gauge only ever displays the first matching record's value, so the fetch
+   * is bounded to CHART_LIMITS.GAUGE (1) rather than a general record limit.
+   */
+  get gqlQuery() {
+    if (this.fetchMode !== "graphql") return undefined;
+    if (!this.objectApiName || !this.valueField) return undefined;
+    let queryString;
+    try {
+      queryString = buildRecordQuery({
+        objectApiName: this.objectApiName,
+        fields: [this.valueField],
+        filter: this.graphqlFilter,
+        first: CHART_LIMITS.GAUGE
+      });
+    } catch {
+      // Unsupported config: leave the wire un-provisioned; error surfaces below.
+      return undefined;
+    }
+    return gql`
+      ${queryString}
+    `;
+  }
+
+  @wire(graphql, { query: "$gqlQuery" })
+  wiredRecord({ data, errors }) {
+    if (this.fetchMode !== "graphql") return;
+    if (errors) {
+      this.error = this._formatGqlErrors(errors);
+      this.isLoading = false;
+      return;
+    }
+    if (!data) return; // initial undefined emission
+    try {
+      const records = normalizeRecordsGeneric(data, {
+        objectApiName: this.objectApiName,
+        fields: [this.valueField]
+      });
+      this.processData(records);
+      this.error = null;
+      this.chartRendered = false; // force renderedCallback to re-initialize the SVG
+    } catch (e) {
+      this.error = e.message;
+    }
+    this.isLoading = false;
+  }
+
+  _formatGqlErrors(errors) {
+    const list = Array.isArray(errors) ? errors : [errors];
+    return list.map((e) => e?.message || e).join("; ") || "GraphQL error";
+  }
+
   // ===== LIFECYCLE =====
   async connectedCallback() {
     try {
@@ -91,7 +175,7 @@ export default class D3Gauge extends NavigationMixin(LightningElement) {
   }
 
   renderedCallback() {
-    if (!this.isLoading && !this.error && this.d3 && !this.chartRendered) {
+    if (this.showChart && this.d3 && !this.chartRendered) {
       this.chartRendered = this.initializeChart();
       if (!this.chartRendered && !this._layoutRetry) {
         const container = this.refs.container;
@@ -154,6 +238,11 @@ export default class D3Gauge extends NavigationMixin(LightningElement) {
 
   // ===== DATA LOADING =====
   async loadData() {
+    // GraphQL path is handled reactively by the @wire(graphql) — nothing to do here.
+    if (this.fetchMode === "graphql") {
+      return;
+    }
+
     // Priority: recordCollection > soqlQuery
     if (this.recordCollection && this.recordCollection.length > 0) {
       this.processData(this.recordCollection);
@@ -180,6 +269,7 @@ export default class D3Gauge extends NavigationMixin(LightningElement) {
   processData(records) {
     if (!records || records.length === 0) {
       this.currentValue = 0;
+      this.hasReceivedData = false;
       return;
     }
 
@@ -188,11 +278,13 @@ export default class D3Gauge extends NavigationMixin(LightningElement) {
 
     if (!this.valueField) {
       this.currentValue = 0;
+      this.hasReceivedData = false;
       return;
     }
 
     const rawValue = record[this.valueField];
     this.currentValue = Number(rawValue) || 0;
+    this.hasReceivedData = true;
   }
 
   // ===== RENDERING =====
@@ -224,6 +316,11 @@ export default class D3Gauge extends NavigationMixin(LightningElement) {
       .attr("width", width)
       .attr("height", height)
       .attr("viewBox", `0 0 ${width} ${height}`);
+
+    applySvgA11y(svgSelection, {
+      title: `Gauge: ${this.valueFormatter(this.currentValue)}`,
+      desc: `Range ${formatNumber(this.effectiveMinValue)} to ${formatNumber(this.effectiveMaxValue)}`
+    });
 
     const g = svgSelection
       .append("g")

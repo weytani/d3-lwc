@@ -55,6 +55,7 @@ const createMockD3 = () => {
     duration: jest.fn(() => d3),
     on: jest.fn(() => d3),
     remove: jest.fn(() => d3),
+    insert: jest.fn(() => d3),
     text: jest.fn(() => d3),
     arc: jest.fn(() => {
       const arcFn = jest.fn(() => "M0,0");

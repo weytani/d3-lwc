@@ -38,7 +38,8 @@ jest.mock("c/chartUtils", () => ({
   calculateDimensions: jest
     .fn()
     .mockReturnValue({ width: 300, height: 200, margins: {} }),
-  shouldUseCompactMode: jest.fn().mockReturnValue(false)
+  shouldUseCompactMode: jest.fn().mockReturnValue(false),
+  applySvgA11y: jest.fn()
 }));
 
 // Mock Apex
@@ -261,7 +262,10 @@ describe("d3Gauge", () => {
 
   describe("Theme Integration", () => {
     it("uses getColor from themeService", async () => {
-      await createComponent({ theme: "Warm" });
+      await createComponent({
+        theme: "Warm",
+        recordCollection: [{ Amount: 50 }]
+      });
       // getColor should be called during render
       expect(getColor).toHaveBeenCalled();
     });
@@ -312,7 +316,9 @@ describe("d3Gauge", () => {
       };
       createResizeHandler.mockReturnValue(mockHandler);
 
-      const element = await createComponent();
+      const element = await createComponent({
+        recordCollection: [{ Amount: 50 }]
+      });
 
       // Trigger renderedCallback by waiting
       await Promise.resolve();
@@ -333,7 +339,9 @@ describe("d3Gauge", () => {
       };
       createTooltip.mockReturnValue(mockTooltip);
 
-      const element = await createComponent();
+      const element = await createComponent({
+        recordCollection: [{ Amount: 50 }]
+      });
       await Promise.resolve();
 
       document.body.removeChild(element);
@@ -470,27 +478,23 @@ describe("d3Gauge", () => {
       expect(domainCall).toHaveBeenCalledWith([0, 100]);
     });
 
-    it("sets currentValue to 0 when records array is empty", async () => {
-      await createComponent({ recordCollection: [] });
+    it("shows the no-data state (not a min-pinned gauge) when records array is empty", async () => {
+      const element = await createComponent({ recordCollection: [] });
 
       await Promise.resolve();
       await Promise.resolve();
 
-      // With currentValue = 0 and no data, the value formatter should
-      // receive 0 when rendering center text. Since shouldUseCompactMode
-      // returns false, text() will be called with the formatted value.
-      const { formatNumber } = require("c/chartUtils");
-      // formatNumber is called for min/max labels and the value itself
-      // when currentValue is 0, formatNumber(0) should appear in calls
-      const zeroFormatCalls = formatNumber.mock.calls.filter(
-        (call) => call[0] === 0
-      );
-      expect(zeroFormatCalls.length).toBeGreaterThan(0);
+      // No gauge should be rendered at all — no arc, no value text.
+      expect(mockD3.arc).not.toHaveBeenCalled();
+      const noDataEl = element.shadowRoot.querySelector(".chart-no-data");
+      expect(noDataEl).not.toBeNull();
+      const svg = element.shadowRoot.querySelector(".chart-svg");
+      expect(svg).toBeNull();
     });
 
-    it("sets currentValue to 0 when valueField is empty string", async () => {
+    it("shows the no-data state (not a min-pinned gauge) when valueField is empty string", async () => {
       const records = [{ Amount: 50 }];
-      await createComponent({
+      const element = await createComponent({
         recordCollection: records,
         valueField: ""
       });
@@ -498,13 +502,11 @@ describe("d3Gauge", () => {
       await Promise.resolve();
       await Promise.resolve();
 
-      // With empty valueField, processData sets currentValue to 0.
-      // formatNumber(0) should be called for the value display.
-      const { formatNumber } = require("c/chartUtils");
-      const zeroFormatCalls = formatNumber.mock.calls.filter(
-        (call) => call[0] === 0
-      );
-      expect(zeroFormatCalls.length).toBeGreaterThan(0);
+      // Without a configured valueField there is nothing to plot — the
+      // no-data state should show instead of a gauge pinned at 0.
+      expect(mockD3.arc).not.toHaveBeenCalled();
+      const noDataEl = element.shadowRoot.querySelector(".chart-no-data");
+      expect(noDataEl).not.toBeNull();
     });
 
     it("treats non-numeric values as 0", async () => {

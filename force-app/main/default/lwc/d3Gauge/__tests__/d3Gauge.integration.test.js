@@ -62,6 +62,7 @@ const createMockD3 = () => {
     duration: jest.fn(() => d3),
     on: jest.fn(() => d3),
     remove: jest.fn(() => d3),
+    insert: jest.fn(() => d3),
     text: jest.fn(() => d3),
     arc: jest.fn(() => {
       const arcFn = jest.fn(() => "M0,0");
@@ -242,6 +243,27 @@ describe("d3Gauge integration tests", () => {
         (call) => call[0] === "fill" && call[1] === "#1589EE"
       );
       expect(themeFillCalls.length).toBe(0);
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════
+  // ACCESSIBILITY INTEGRATION
+  // ═══════════════════════════════════════════════════════════════
+
+  describe("accessibility integration", () => {
+    it("applies role=img and a title to the root svg via real applySvgA11y", async () => {
+      const records = [{ Amount: 60 }];
+      await createGauge({ recordCollection: records });
+
+      const roleCalls = mockD3.attr.mock.calls.filter(
+        (call) => call[0] === "role" && call[1] === "img"
+      );
+      expect(roleCalls.length).toBeGreaterThanOrEqual(1);
+
+      const titleInsertCalls = mockD3.insert.mock.calls.filter(
+        (call) => call[0] === "title"
+      );
+      expect(titleInsertCalls.length).toBeGreaterThanOrEqual(1);
     });
   });
 

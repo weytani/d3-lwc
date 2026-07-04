@@ -29,6 +29,15 @@
   min-height: 100px;
 }
 
+.chart-no-data {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  text-align: center;
+  min-height: 100px;
+}
+
 /* Gauge specific styles */
 .gauge-value {
   font-family: "Salesforce Sans", Arial, sans-serif;

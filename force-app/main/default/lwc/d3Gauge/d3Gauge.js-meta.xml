@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <LightningComponentBundle xmlns="http://soap.sforce.com/2006/04/metadata">
-    <apiVersion>59.0</apiVersion>
+    <apiVersion>65.0</apiVersion>
     <isExposed>true</isExposed>
     <masterLabel>D3 Gauge Chart</masterLabel>
     <description
@@ -67,15 +67,32 @@
         name="advancedConfig"
         type="String"
         label="Advanced Config (JSON)"
-        description="JSON configuration: {label, valueFormat, zones, customColors}"
+        description="JSON configuration: {label, valueFormat, zones, customColors, minValue, maxValue}. minValue/maxValue here override the Minimum/Maximum Value properties above."
       />
-            
+
             <!-- Navigation -->
             <property
         name="targetRecordId"
         type="String"
         label="Target Record ID"
         description="Record ID to navigate to on click"
+      />
+
+            <!-- GraphQL Self-Fetch -->
+            <property
+        name="objectApiName"
+        type="String"
+        label="Object API Name"
+        description="Object API name to query for the GraphQL data source"
+        placeholder="Opportunity"
+      />
+            <property
+        name="fetchMode"
+        type="String"
+        label="Data Source"
+        default="auto"
+        datasource="auto,apex,graphql"
+        description="How to fetch data: auto (existing priority order), apex (Apex-backed SOQL), or graphql (UI API GraphQL)"
       />
         </targetConfig>
     </targetConfigs>
