@@ -1,0 +1,15 @@
+/* D3 Treemap Styles */
+.chart-container {
+  width: 100%;
+  position: relative;
+  overflow: hidden;
+}
+
+.treemap-svg {
+  display: block;
+  font-family: "Salesforce Sans", Arial, sans-serif;
+}
+
+.tile:hover {
+  filter: brightness(0.95);
+}

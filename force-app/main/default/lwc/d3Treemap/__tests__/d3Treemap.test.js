@@ -45,7 +45,9 @@ jest.mock(
   { virtual: true }
 );
 
-// Mock chartUtils
+// Mock chartUtils. getContrastColor delegates to the REAL WCAG-verified
+// implementation (not stubbed) so the tile-text-contrast tests exercise
+// actual luminance math, not a fake fixed answer.
 jest.mock("c/chartUtils", () => ({
   formatNumber: jest.fn((v) => String(v)),
   formatPercent: jest.fn((v) => (v * 100).toFixed(1) + "%"),
@@ -59,7 +61,9 @@ jest.mock("c/chartUtils", () => ({
     disconnect: jest.fn()
   }),
   createLayoutRetry: jest.fn().mockReturnValue({ cancel: jest.fn() }),
-  truncateLabel: jest.fn((label) => label)
+  truncateLabel: jest.fn((label) => label),
+  applySvgA11y: jest.fn(),
+  getContrastColor: jest.requireActual("c/chartUtils").getContrastColor
 }));
 
 // Mock D3 instance with treemap-specific functions
@@ -71,7 +75,10 @@ const createMockD3 = () => {
     style: jest.fn(() => mockD3),
     call: jest.fn(() => mockD3),
     selectAll: jest.fn(() => mockD3),
-    data: jest.fn(() => mockD3),
+    data: jest.fn((arr) => {
+      mockD3._lastData = arr;
+      return mockD3;
+    }),
     enter: jest.fn(() => mockD3),
     transition: jest.fn(() => mockD3),
     duration: jest.fn(() => mockD3),
@@ -82,7 +89,18 @@ const createMockD3 = () => {
     text: jest.fn(() => mockD3),
     datum: jest.fn(() => mockD3),
     node: jest.fn(() => null),
-    each: jest.fn(() => mockD3),
+    // Invokes the callback once per item in the array from the most recent
+    // .data() call (mirrors the real d3 selection.each() semantics closely
+    // enough to exercise the per-leaf label-rendering code in renderChart,
+    // which the old no-op stub silently skipped).
+    each: jest.fn((callback) => {
+      const items = mockD3._lastData || [];
+      if (callback) {
+        const nodes = items.map(() => ({}));
+        items.forEach((item, i) => callback(item, i, nodes));
+      }
+      return mockD3;
+    }),
     hierarchy: jest.fn((data) => {
       const createNode = (d, parent = null, depth = 0) => {
         const node = {
@@ -721,6 +739,54 @@ describe("c-d3-treemap", () => {
 
       expect(element.filterField).toBe("StageName");
     });
+
+    it("threads filterField into the tileclick event payload", async () => {
+      await createChart({ filterField: "Type" });
+      await Promise.resolve();
+
+      const clickHandler = jest.fn();
+      element.addEventListener("tileclick", clickHandler);
+
+      const clickCall = mockD3.on.mock.calls.find((c) => c[0] === "click");
+      expect(clickCall).toBeDefined();
+      const fakeNode = {
+        data: {
+          name: "Closed Won",
+          data: { label: "Closed Won", value: 105000 }
+        },
+        value: 105000,
+        depth: 1,
+        children: undefined
+      };
+      clickCall[1]({}, fakeNode);
+
+      expect(clickHandler).toHaveBeenCalled();
+      expect(clickHandler.mock.calls[0][0].detail.filterField).toBe("Type");
+    });
+
+    it("defaults filterField in the tileclick payload to groupByField when unset", async () => {
+      await createChart();
+      await Promise.resolve();
+
+      const clickHandler = jest.fn();
+      element.addEventListener("tileclick", clickHandler);
+
+      const clickCall = mockD3.on.mock.calls.find((c) => c[0] === "click");
+      const fakeNode = {
+        data: {
+          name: "Closed Won",
+          data: { label: "Closed Won", value: 105000 }
+        },
+        value: 105000,
+        depth: 1,
+        children: undefined
+      };
+      clickCall[1]({}, fakeNode);
+
+      expect(clickHandler.mock.calls[0][0].detail.filterField).toBe(
+        "StageName"
+      );
+    });
   });
 
   // ═══════════════════════════════════════════════════════════════
@@ -1140,6 +1206,66 @@ describe("c-d3-treemap", () => {
       await Promise.resolve();
 
       expect(mockD3.append).toHaveBeenCalled();
+    });
+
+    it("applies role=img and a title to the root svg", async () => {
+      const { applySvgA11y } = require("c/chartUtils");
+      await createChart();
+      await Promise.resolve();
+
+      expect(applySvgA11y).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          title: expect.stringContaining("Treemap")
+        })
+      );
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════
+  // TILE TEXT CONTRAST TESTS
+  // ═══════════════════════════════════════════════════════════════
+
+  describe("tile text contrast", () => {
+    it("uses the shared WCAG-verified getContrastColor (#1589EE -> black)", async () => {
+      // Salesforce Standard's first palette color is #1589EE. The shared
+      // getContrastColor (real WCAG relative luminance, 0.242 > 0.179
+      // threshold) resolves that to black text. Treemap's own former
+      // hand-rolled formula used the wrong threshold and returned white here
+      // (0.446 luminance vs its 0.5 cutoff) — a real contrast bug this fix
+      // corrects. customColors pins every category to the same known hex so
+      // the assertion isn't dependent on which category sorts first.
+      await createChart({
+        theme: "Salesforce Standard",
+        advancedConfig: '{"customColors": ["#1589EE"]}'
+      });
+      await Promise.resolve();
+
+      const fillCalls = mockD3.style.mock.calls.filter((c) => c[0] === "fill");
+      expect(fillCalls.length).toBeGreaterThan(0);
+      expect(fillCalls.every((c) => c[1] === "#000000")).toBe(true);
+      expect(fillCalls.some((c) => c[1] === "#16325c")).toBe(false);
+      expect(fillCalls.some((c) => c[1] === "#ffffff")).toBe(false);
+    });
+
+    it("wires the theme's palette into tile text contrast (not a hardcoded color)", async () => {
+      const { getColors } = require("c/themeService");
+      const { getContrastColor } = require("c/chartUtils");
+      const singleCategoryData = [
+        { Id: "1", StageName: "OnlyStage", Amount: 100 },
+        { Id: "2", StageName: "OnlyStage", Amount: 200 }
+      ];
+
+      await createChart({
+        recordCollection: singleCategoryData,
+        theme: "Warm"
+      });
+      await Promise.resolve();
+
+      const expectedColor = getColors("Warm", 5)[0];
+      const expectedContrast = getContrastColor(expectedColor);
+      const fillCalls = mockD3.style.mock.calls.filter((c) => c[0] === "fill");
+      expect(fillCalls.some((c) => c[1] === expectedContrast)).toBe(true);
     });
   });
 

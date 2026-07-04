@@ -1,6 +1,6 @@
 // ABOUTME: D3 Treemap Lightning Web Component for hierarchical data visualization.
 // ABOUTME: Displays nested rectangles sized by value, supporting flat data with auto-nesting via groupByField.
-import { LightningElement, api, track } from "lwc";
+import { LightningElement, api, track, wire } from "lwc";
 import { loadD3 } from "c/d3Lib";
 import {
   prepareData,
@@ -15,11 +15,22 @@ import {
   createTooltip,
   createResizeHandler,
   createLayoutRetry,
-  truncateLabel
+  truncateLabel,
+  applySvgA11y,
+  getContrastColor
 } from "c/chartUtils";
 import { NavigationMixin } from "lightning/navigation";
 import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
 import getAggregatedData from "@salesforce/apex/D3ChartController.getAggregatedData";
+import { gql, graphql } from "lightning/graphql";
+import {
+  buildRecordQuery,
+  normalizeRecordsGeneric,
+  buildAggregateQuery,
+  normalizeAggregate,
+  buildMultiGroupQuery,
+  normalizeMultiGroup
+} from "c/graphqlService";
 
 export default class D3Treemap extends NavigationMixin(LightningElement) {
   // ═══════════════════════════════════════════════════════════════
@@ -88,6 +99,12 @@ export default class D3Treemap extends NavigationMixin(LightningElement) {
 
   /** Maximum records to process (overrides default limit) */
   @api recordLimit;
+
+  /** Fetch-mode selector: "auto" (default, existing priority order), "apex", or "graphql". */
+  @api fetchMode = "auto";
+
+  /** Structured filter for the GraphQL path: { field, operator, value }. */
+  @api graphqlFilter;
 
   // ═══════════════════════════════════════════════════════════════
   // TRACKED STATE
@@ -167,6 +184,179 @@ export default class D3Treemap extends NavigationMixin(LightningElement) {
   }
 
   // ═══════════════════════════════════════════════════════════════
+  // GRAPHQL SELF-FETCH PATH (Approach A — additive)
+  // ═══════════════════════════════════════════════════════════════
+
+  /**
+   * Reactive GraphQL query for the self-fetch path. Returns undefined (so the
+   * wire is skipped) unless fetchMode is "graphql" and objectApiName/groupByField/
+   * operation are set. Mirrors the existing server-side branch: secondaryGroupByField
+   * present -> two-field grouped aggregate (CT-MG, via buildMultiGroupQuery, same
+   * decision _canUseServerAggregation() makes to fall back to client nesting);
+   * secondaryGroupByField empty -> single-field aggregate (CT-AGG, via
+   * buildAggregateQuery, same as getAggregatedData). Count has no server aggregate
+   * on either branch, so it fetches bounded raw records instead, fed through the
+   * existing buildHierarchy() client path (which already handles Count).
+   */
+  get gqlQuery() {
+    if (this.fetchMode !== "graphql") return undefined;
+    if (!this.objectApiName || !this.groupByField || !this.operation) {
+      return undefined;
+    }
+    let queryString;
+    try {
+      if (this.operation === OPERATIONS.COUNT) {
+        const fields = this.secondaryGroupByField
+          ? [this.groupByField, this.secondaryGroupByField]
+          : [this.groupByField];
+        queryString = buildRecordQuery({
+          objectApiName: this.objectApiName,
+          fields: [...new Set(fields)],
+          filter: this.graphqlFilter,
+          first: this.recordLimit || MAX_RECORDS
+        });
+      } else {
+        if (!this.valueField) return undefined;
+        if (this.secondaryGroupByField) {
+          queryString = buildMultiGroupQuery({
+            objectApiName: this.objectApiName,
+            groupByField: this.groupByField,
+            seriesField: this.secondaryGroupByField,
+            valueField: this.valueField,
+            operation: this.operation,
+            filter: this.graphqlFilter,
+            first: this.recordLimit || MAX_RECORDS
+          });
+        } else {
+          queryString = buildAggregateQuery({
+            objectApiName: this.objectApiName,
+            groupByField: this.groupByField,
+            valueField: this.valueField,
+            operation: this.operation,
+            filter: this.graphqlFilter,
+            first: this.recordLimit || MAX_RECORDS
+          });
+        }
+      }
+    } catch {
+      // Unsupported operation/config: leave the wire un-provisioned; error surfaces below.
+      return undefined;
+    }
+    return gql`
+      ${queryString}
+    `;
+  }
+
+  @wire(graphql, { query: "$gqlQuery" })
+  wiredAggregate({ data, errors }) {
+    if (this.fetchMode !== "graphql") return;
+    if (errors) {
+      this.error = this._formatGqlErrors(errors);
+      this.isLoading = false;
+      return;
+    }
+    if (!data) return; // initial undefined emission
+    try {
+      if (this.operation === OPERATIONS.COUNT) {
+        const fields = this.secondaryGroupByField
+          ? [this.groupByField, this.secondaryGroupByField]
+          : [this.groupByField];
+        const records = normalizeRecordsGeneric(data, {
+          objectApiName: this.objectApiName,
+          fields: [...new Set(fields)]
+        });
+        this.rootData = this.buildHierarchy(records);
+      } else if (this.secondaryGroupByField) {
+        const edges = normalizeMultiGroup(data, {
+          objectApiName: this.objectApiName,
+          groupByField: this.groupByField,
+          seriesField: this.secondaryGroupByField,
+          valueField: this.valueField,
+          operation: this.operation
+        });
+        this.rootData = this._edgesToNestedHierarchy(edges);
+      } else {
+        const aggregated = normalizeAggregate(data, {
+          objectApiName: this.objectApiName,
+          groupByField: this.groupByField,
+          valueField: this.valueField,
+          operation: this.operation
+        });
+        this.rootData = {
+          name: "Root",
+          children: aggregated.map((item) => ({
+            name: String(item.label ?? "Null"),
+            value: Number(item.value) || 0,
+            data: {
+              label: String(item.label ?? "Null"),
+              value: Number(item.value) || 0
+            }
+          }))
+        };
+      }
+      this.currentRoot = this.rootData;
+      this.breadcrumbs = [];
+      this.calculateTotalValue();
+      if (!this.rootData.children || this.rootData.children.length === 0) {
+        this.error = "No data after aggregation";
+      } else {
+        this.error = null;
+        this.chartRendered = false; // force renderedCallback to re-initialize the SVG
+      }
+    } catch (e) {
+      this.error = e.message;
+    }
+    this.isLoading = false;
+  }
+
+  /**
+   * Pivots a {label, series, value} edge list (buildMultiGroupQuery/
+   * normalizeMultiGroup output) into a two-level hierarchy, mirroring
+   * buildNestedHierarchy's grouping and sort order exactly (primary groups
+   * sorted by total value descending, sub-children sorted by value descending)
+   * since the edges are already aggregated server-side.
+   */
+  _edgesToNestedHierarchy(edges) {
+    const groups = new Map();
+    edges.forEach((edge) => {
+      const primaryKey = String(edge.label ?? "Null");
+      const secondaryKey = String(edge.series ?? "Null");
+      if (!groups.has(primaryKey)) {
+        groups.set(primaryKey, []);
+      }
+      const value = Number(edge.value) || 0;
+      groups.get(primaryKey).push({
+        name: secondaryKey,
+        value,
+        data: { primaryGroup: primaryKey, secondaryGroup: secondaryKey, value }
+      });
+    });
+
+    const children = [];
+    groups.forEach((subChildren, primaryKey) => {
+      subChildren.sort((a, b) => b.value - a.value);
+      children.push({
+        name: primaryKey,
+        children: subChildren,
+        data: { primaryGroup: primaryKey }
+      });
+    });
+
+    children.sort((a, b) => {
+      const sumA = a.children.reduce((s, c) => s + c.value, 0);
+      const sumB = b.children.reduce((s, c) => s + c.value, 0);
+      return sumB - sumA;
+    });
+
+    return { name: "Root", children };
+  }
+
+  _formatGqlErrors(errors) {
+    const list = Array.isArray(errors) ? errors : [errors];
+    return list.map((e) => e?.message || e).join("; ") || "GraphQL error";
+  }
+
+  // ═══════════════════════════════════════════════════════════════
   // LIFECYCLE HOOKS
   // ═══════════════════════════════════════════════════════════════
 
@@ -212,6 +402,11 @@ export default class D3Treemap extends NavigationMixin(LightningElement) {
   // ═══════════════════════════════════════════════════════════════
 
   async loadData() {
+    // GraphQL path is handled reactively by the @wire(graphql) — nothing to do here.
+    if (this.fetchMode === "graphql") {
+      return;
+    }
+
     // Check for pre-built hierarchy data first
     if (this.hierarchyData) {
       this.rootData = this.validateHierarchy(this.hierarchyData);
@@ -549,12 +744,19 @@ export default class D3Treemap extends NavigationMixin(LightningElement) {
     if (width <= 0 || height <= 0) return;
 
     // Create SVG
-    this.svg = d3
+    const svgRoot = d3
       .select(container)
       .append("svg")
       .attr("width", containerWidth)
       .attr("height", this.height)
-      .attr("class", "treemap-svg")
+      .attr("class", "treemap-svg");
+
+    applySvgA11y(svgRoot, {
+      title: `Treemap: ${this.operation} of ${this.valueField} by ${this.groupByField}`,
+      desc: `${(this.rootData?.children || []).length} categories`
+    });
+
+    this.svg = svgRoot
       .append("g")
       .attr("transform", `translate(${margin.left},${margin.top})`);
 
@@ -696,7 +898,7 @@ export default class D3Treemap extends NavigationMixin(LightningElement) {
             .style("font-weight", "bold")
             .style(
               "fill",
-              this.getContrastColor(d, colors, categories, depthColors)
+              this.resolveTileTextColor(d, colors, categories, depthColors)
             )
             .style("pointer-events", "none")
             .text(truncateLabel(d.data.name, maxChars));
@@ -711,7 +913,7 @@ export default class D3Treemap extends NavigationMixin(LightningElement) {
               .style("font-size", "10px")
               .style(
                 "fill",
-                this.getContrastColor(d, colors, categories, depthColors)
+                this.resolveTileTextColor(d, colors, categories, depthColors)
               )
               .style("opacity", 0.9)
               .style("pointer-events", "none")
@@ -723,14 +925,16 @@ export default class D3Treemap extends NavigationMixin(LightningElement) {
   }
 
   /**
-   * Determines appropriate text color for contrast.
+   * Resolves a tile's background color, then defers the black/white
+   * text-contrast decision to the shared WCAG-verified c/chartUtils
+   * getContrastColor.
    * @param {Object} d - Data node
    * @param {Array} colors - Color palette
    * @param {Array} categories - Category names
    * @param {Array} depthColors - Depth color palette
    * @returns {String} - Color hex
    */
-  getContrastColor(d, colors, categories, depthColors) {
+  resolveTileTextColor(d, colors, categories, depthColors) {
     let bgColor;
     if (this.colorMode === "depth") {
       bgColor = depthColors[d.depth % depthColors.length];
@@ -740,14 +944,7 @@ export default class D3Treemap extends NavigationMixin(LightningElement) {
       bgColor = colors[catIndex >= 0 ? catIndex : 0];
     }
 
-    // Simple luminance check
-    const hex = bgColor.replace("#", "");
-    const r = parseInt(hex.substr(0, 2), 16);
-    const g = parseInt(hex.substr(2, 2), 16);
-    const b = parseInt(hex.substr(4, 2), 16);
-    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-
-    return luminance > 0.5 ? "#16325c" : "#ffffff";
+    return getContrastColor(bgColor);
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -794,6 +991,8 @@ export default class D3Treemap extends NavigationMixin(LightningElement) {
   // ═══════════════════════════════════════════════════════════════
 
   handleTileClick(d) {
+    const filterFieldName = this.filterField || this.groupByField;
+
     // Dispatch custom event
     this.dispatchEvent(
       new CustomEvent("tileclick", {
@@ -802,7 +1001,8 @@ export default class D3Treemap extends NavigationMixin(LightningElement) {
           value: d.value,
           data: d.data.data || d.data,
           depth: d.depth,
-          hasChildren: !!d.children
+          hasChildren: !!d.children,
+          filterField: filterFieldName
         },
         bubbles: true,
         composed: true
