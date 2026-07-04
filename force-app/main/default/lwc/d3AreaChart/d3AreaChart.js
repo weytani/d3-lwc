@@ -1,6 +1,6 @@
 // ABOUTME: D3 Area Chart Lightning Web Component.
 // ABOUTME: Displays time series data as filled areas with stacked/overlapping modes and gradient fill.
-import { LightningElement, api, track } from "lwc";
+import { LightningElement, api, track, wire } from "lwc";
 import { loadD3 } from "c/d3Lib";
 import { prepareData, CHART_LIMITS } from "c/dataService";
 import { getColors, DEFAULT_THEME } from "c/themeService";
@@ -9,10 +9,13 @@ import {
   truncateLabel,
   createTooltip,
   createResizeHandler,
-  createLayoutRetry
+  createLayoutRetry,
+  applySvgA11y
 } from "c/chartUtils";
 import { NavigationMixin } from "lightning/navigation";
 import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
+import { gql, graphql } from "lightning/graphql";
+import { buildRecordQuery, normalizeRecordsGeneric } from "c/graphqlService";
 
 export default class D3AreaChart extends NavigationMixin(LightningElement) {
   // ═══════════════════════════════════════════════════════════════
@@ -64,6 +67,12 @@ export default class D3AreaChart extends NavigationMixin(LightningElement) {
 
   /** Optional WHERE clause fragment */
   @api filterClause = "";
+
+  /** Fetch-mode selector: "auto" (default, existing priority order), "apex", or "graphql". */
+  @api fetchMode = "auto";
+
+  /** Structured filter for the GraphQL path: { field, operator, value }. */
+  @api graphqlFilter;
 
   // ═══════════════════════════════════════════════════════════════
   // TRACKED STATE
@@ -140,6 +149,81 @@ export default class D3AreaChart extends NavigationMixin(LightningElement) {
   }
 
   // ═══════════════════════════════════════════════════════════════
+  // GRAPHQL SELF-FETCH PATH (Approach A — additive, CT-REC)
+  // ═══════════════════════════════════════════════════════════════
+
+  /**
+   * Reactive GraphQL query for the self-fetch path. Returns undefined (so the wire
+   * is skipped) unless fetchMode is "graphql" and objectApiName/dateField/valueField
+   * are set. Area has no server-side aggregate: it always fetches raw records for
+   * dateField, valueField, and (if set) seriesField, then feeds the existing
+   * processTimeSeriesData path (same as recordCollection/soqlQuery).
+   */
+  get gqlQuery() {
+    if (this.fetchMode !== "graphql") return undefined;
+    if (!this.objectApiName || !this.dateField || !this.valueField) {
+      return undefined;
+    }
+    const fields = [
+      ...new Set(
+        [this.dateField, this.valueField, this.seriesField].filter(Boolean)
+      )
+    ];
+    let queryString;
+    try {
+      queryString = buildRecordQuery({
+        objectApiName: this.objectApiName,
+        fields,
+        filter: this.graphqlFilter,
+        first: this.recordLimit || 2000
+      });
+    } catch {
+      // Unsupported config: leave the wire un-provisioned; error surfaces below.
+      return undefined;
+    }
+    return gql`
+      ${queryString}
+    `;
+  }
+
+  @wire(graphql, { query: "$gqlQuery" })
+  wiredRecords({ data, errors }) {
+    if (this.fetchMode !== "graphql") return;
+    if (errors) {
+      this.error = this._formatGqlErrors(errors);
+      this.isLoading = false;
+      return;
+    }
+    if (!data) return; // initial undefined emission
+    try {
+      const fields = [
+        ...new Set(
+          [this.dateField, this.valueField, this.seriesField].filter(Boolean)
+        )
+      ];
+      const records = normalizeRecordsGeneric(data, {
+        objectApiName: this.objectApiName,
+        fields
+      });
+      this.processTimeSeriesData(records);
+      if (this.seriesData.length === 0) {
+        this.error = "No data after processing";
+      } else {
+        this.error = null;
+        this.chartRendered = false; // force renderedCallback to re-initialize the SVG
+      }
+    } catch (e) {
+      this.error = e.message;
+    }
+    this.isLoading = false;
+  }
+
+  _formatGqlErrors(errors) {
+    const list = Array.isArray(errors) ? errors : [errors];
+    return list.map((e) => e?.message || e).join("; ") || "GraphQL error";
+  }
+
+  // ═══════════════════════════════════════════════════════════════
   // LIFECYCLE HOOKS
   // ═══════════════════════════════════════════════════════════════
 
@@ -185,13 +269,20 @@ export default class D3AreaChart extends NavigationMixin(LightningElement) {
   // ═══════════════════════════════════════════════════════════════
 
   async loadData() {
+    // GraphQL path is handled reactively by the @wire(graphql) — nothing to do here.
+    if (this.fetchMode === "graphql") {
+      return;
+    }
+
     let rawData = [];
 
     if (this.recordCollection && this.recordCollection.length > 0) {
       rawData = [...this.recordCollection];
     } else if (this.soqlQuery) {
       try {
-        rawData = await executeQuery({ queryString: this.soqlQuery });
+        rawData = await executeQuery({
+          queryString: this._applyFilterClause(this.soqlQuery)
+        });
       } catch (e) {
         throw new Error(`SOQL Error: ${e.body?.message || e.message}`);
       }
@@ -216,6 +307,29 @@ export default class D3AreaChart extends NavigationMixin(LightningElement) {
     if (this.seriesData.length === 0) {
       throw new Error("No data after processing");
     }
+  }
+
+  /**
+   * Injects filterClause as a WHERE-clause fragment into a raw SOQL query
+   * string, ahead of any ORDER BY / GROUP BY / LIMIT clause. Appends with
+   * AND if the query already has a WHERE; otherwise adds one. No-op when
+   * filterClause is blank.
+   * @param {String} soqlQuery - The base SOQL query
+   * @returns {String} - The query with filterClause applied
+   */
+  _applyFilterClause(soqlQuery) {
+    if (!this.filterClause) return soqlQuery;
+
+    const fragment = /\bWHERE\b/i.test(soqlQuery)
+      ? ` AND (${this.filterClause})`
+      : ` WHERE (${this.filterClause})`;
+
+    const trailingClause = soqlQuery.match(/\b(ORDER BY|GROUP BY|LIMIT)\b/i);
+    if (trailingClause) {
+      const idx = trailingClause.index;
+      return `${soqlQuery.slice(0, idx).trimEnd()}${fragment} ${soqlQuery.slice(idx)}`;
+    }
+    return `${soqlQuery}${fragment}`;
   }
 
   /**
@@ -346,12 +460,19 @@ export default class D3AreaChart extends NavigationMixin(LightningElement) {
     if (width <= 0 || height <= 0) return;
 
     // Create SVG
-    this.svg = d3
+    const svgRoot = d3
       .select(container)
       .append("svg")
       .attr("width", containerWidth)
       .attr("height", this.height)
-      .attr("class", "area-chart-svg")
+      .attr("class", "area-chart-svg");
+
+    applySvgA11y(svgRoot, {
+      title: `Area chart: ${this.valueField} over ${this.dateField}`,
+      desc: `${this.seriesData.length} series`
+    });
+
+    this.svg = svgRoot
       .append("g")
       .attr("transform", `translate(${margin.left},${margin.top})`);
 
@@ -543,7 +664,7 @@ export default class D3AreaChart extends NavigationMixin(LightningElement) {
         .attr("fill", fillValue)
         .attr("fill-opacity", isMultiSeries ? 0.3 : 1)
         .attr("cursor", this.objectApiName ? "pointer" : "default")
-        .on("mouseenter", (event, d) => {
+        .on("mouseenter", (event) => {
           this.showTooltipForSeries(event, series, colors[i]);
         })
         .on("mouseleave", () => {

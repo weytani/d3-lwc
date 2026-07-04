@@ -35,6 +35,7 @@ const createMockD3 = () => {
     attr: jest.fn(() => mockD3),
     style: jest.fn(() => mockD3),
     call: jest.fn(() => mockD3),
+    insert: jest.fn(() => mockD3),
     selectAll: jest.fn(() => mockD3),
     data: jest.fn(() => mockD3),
     datum: jest.fn(() => mockD3),
@@ -360,6 +361,31 @@ describe("c-d3-area-chart", () => {
         ".slds-text-color_error"
       );
       expect(errorElement).toBeTruthy();
+    });
+
+    it("wires filterClause into the SOQL query sent to Apex, before ORDER BY", async () => {
+      await createChart({
+        recordCollection: [],
+        soqlQuery:
+          "SELECT CloseDate, Amount FROM Opportunity ORDER BY CloseDate",
+        filterClause: "Amount > 1000"
+      });
+
+      expect(executeQuery).toHaveBeenCalledWith({
+        queryString:
+          "SELECT CloseDate, Amount FROM Opportunity WHERE (Amount > 1000) ORDER BY CloseDate"
+      });
+    });
+
+    it("leaves the SOQL query untouched when filterClause is empty", async () => {
+      await createChart({
+        recordCollection: [],
+        soqlQuery: "SELECT CloseDate, Amount FROM Opportunity"
+      });
+
+      expect(executeQuery).toHaveBeenCalledWith({
+        queryString: "SELECT CloseDate, Amount FROM Opportunity"
+      });
     });
   });
 
@@ -1016,6 +1042,47 @@ describe("c-d3-area-chart", () => {
         ".slds-text-color_error"
       );
       expect(errorElement).toBeFalsy();
+    });
+
+    it("wires the theme prop to the area stroke color", async () => {
+      await createChart({
+        theme: "Salesforce Standard",
+        recordCollection: SAMPLE_DATA,
+        seriesField: ""
+      });
+      await flushPromises();
+      expect(mockD3.attr).toHaveBeenCalledWith("stroke", "#1589EE");
+
+      jest.clearAllMocks();
+      mockD3 = createMockD3();
+      loadD3.mockResolvedValue(mockD3);
+      document.body.removeChild(element);
+
+      await createChart({
+        theme: "Warm",
+        recordCollection: SAMPLE_DATA,
+        seriesField: ""
+      });
+      await flushPromises();
+      expect(mockD3.attr).toHaveBeenCalledWith("stroke", "#FF6B6B");
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════
+  // ACCESSIBILITY TESTS
+  // ═══════════════════════════════════════════════════════════════
+
+  describe("accessibility", () => {
+    it("applies SVG accessibility attributes (role=img + title)", async () => {
+      await createChart();
+      await flushPromises();
+
+      expect(mockD3.attr).toHaveBeenCalledWith("role", "img");
+      expect(mockD3.attr).toHaveBeenCalledWith(
+        "aria-label",
+        expect.stringContaining("Area chart")
+      );
+      expect(mockD3.insert).toHaveBeenCalledWith("title", ":first-child");
     });
   });
 

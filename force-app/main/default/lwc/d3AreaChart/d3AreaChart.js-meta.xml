@@ -49,6 +49,14 @@
         description="Optional field to split into multiple areas (e.g., StageName)"
         placeholder="StageName"
       />
+            <property
+        name="dateFormat"
+        type="String"
+        label="Date Format"
+        default="ISO"
+        datasource="ISO,US,EU"
+        description="Date format for parsing: ISO (YYYY-MM-DD), US (MM/DD/YYYY), EU (DD/MM/YYYY)"
+      />
 
             <!-- Appearance -->
             <property
@@ -102,6 +110,16 @@
         max="10000"
       />
 
+            <!-- GraphQL Self-Fetch -->
+            <property
+        name="fetchMode"
+        type="String"
+        label="Data Source"
+        default="auto"
+        datasource="auto,apex,graphql"
+        description="How to fetch data: auto (existing priority order), apex (Apex-backed SOQL), or graphql (UI API GraphQL)"
+      />
+
             <!-- Advanced -->
             <property
         name="advancedConfig"
@@ -145,6 +163,12 @@
         type="String"
         label="Series Field"
         description="Optional field for multi-series"
+      />
+            <property
+        name="dateFormat"
+        type="String"
+        label="Date Format"
+        default="ISO"
       />
             <property
         name="curveType"
