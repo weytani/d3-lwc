@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<LightningComponentBundle xmlns="http://soap.sforce.com/2006/04/metadata">
+    <apiVersion>65.0</apiVersion>
+    <isExposed>true</isExposed>
+    <masterLabel>D3 Stacked Horizontal Bar Chart</masterLabel>
+    <description
+  >Multi-dimensional stacked horizontal bar chart powered by D3.js with drill-down support.</description>
+    <targets>
+        <target>lightning__AppPage</target>
+        <target>lightning__RecordPage</target>
+        <target>lightning__HomePage</target>
+    </targets>
+    <targetConfigs>
+        <targetConfig
+      targets="lightning__AppPage,lightning__RecordPage,lightning__HomePage"
+    >
+            <!-- Data Source -->
+            <property
+        name="soqlQuery"
+        type="String"
+        label="SOQL Query"
+        description="SOQL query to fetch data"
+        placeholder="SELECT StageName, Type, Amount FROM Opportunity"
+      />
+
+            <!-- Field Mapping -->
+            <property
+        name="groupByField"
+        type="String"
+        label="Group By Field"
+        default="StageName"
+        description="API name of the category field (y-axis)"
+        placeholder="StageName"
+      />
+            <property
+        name="seriesField"
+        type="String"
+        label="Series Field"
+        description="API name of the secondary grouping field (stack segments)"
+        placeholder="Type"
+      />
+            <property
+        name="valueField"
+        type="String"
+        label="Value Field"
+        default="Amount"
+        description="API name of the numeric field to aggregate (not required for Count)"
+        placeholder="Amount"
+      />
+            <property
+        name="operation"
+        type="String"
+        label="Aggregation"
+        default="Sum"
+        datasource="Sum,Count,Average"
+        description="How to aggregate the values"
+      />
+
+            <!-- Appearance -->
+            <property
+        name="height"
+        type="Integer"
+        label="Height (px)"
+        default="300"
+        description="Chart height in pixels"
+        min="150"
+        max="800"
+      />
+            <property
+        name="theme"
+        type="String"
+        label="Color Theme"
+        default="Salesforce Standard"
+        datasource="Salesforce Standard,Warm,Cool,Vibrant"
+        description="Color palette for the chart"
+      />
+
+            <!-- Drill-Down -->
+            <property
+        name="objectApiName"
+        type="String"
+        label="Drill-Down Object"
+        description="Object API name for navigation on bar click"
+        placeholder="Opportunity"
+      />
+            <property
+        name="filterField"
+        type="String"
+        label="Filter Field"
+        description="Field to filter by on drill-down (defaults to Group By Field)"
+      />
+
+            <property
+        name="recordLimit"
+        type="Integer"
+        label="Record Limit"
+        description="Maximum records to process. Leave empty for default."
+        min="1"
+        max="10000"
+      />
+
+            <!-- GraphQL Self-Fetch -->
+            <property
+        name="fetchMode"
+        type="String"
+        label="Data Source"
+        default="auto"
+        datasource="auto,apex,graphql"
+        description="How to fetch data: auto (existing priority order), apex (Apex-backed SOQL), or graphql (UI API GraphQL)"
+      />
+
+            <!-- Advanced -->
+            <property
+        name="advancedConfig"
+        type="String"
+        label="Advanced Config (JSON)"
+        description='{"showGrid": true, "stackMode": "stacked|normalized", "customColors": ["#FF5733"]}'
+      />
+        </targetConfig>
+    </targetConfigs>
+</LightningComponentBundle>
