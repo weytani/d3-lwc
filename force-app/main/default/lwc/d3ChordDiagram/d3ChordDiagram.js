@@ -1,7 +1,7 @@
 // force-app/main/default/lwc/d3ChordDiagram/d3ChordDiagram.js
 // ABOUTME: D3 Chord diagram Lightning Web Component visualizing flows between categories.
 // ABOUTME: Pivots a source-target edge list into a square matrix and renders group arcs with ribbon connections.
-import { LightningElement, api, track } from "lwc";
+import { LightningElement, api, track, wire } from "lwc";
 import { loadD3 } from "c/d3Lib";
 import {
   prepareData,
@@ -16,11 +16,19 @@ import {
   truncateLabel,
   createTooltip,
   createResizeHandler,
-  createLayoutRetry
+  createLayoutRetry,
+  applySvgA11y
 } from "c/chartUtils";
 import { NavigationMixin } from "lightning/navigation";
 import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
 import getMultiGroupData from "@salesforce/apex/D3ChartController.getMultiGroupData";
+import { gql, graphql } from "lightning/graphql";
+import {
+  buildRecordQuery,
+  normalizeRecordsGeneric,
+  buildMultiGroupQuery,
+  normalizeMultiGroup
+} from "c/graphqlService";
 
 export default class D3ChordDiagram extends NavigationMixin(LightningElement) {
   // ═══════════════════════════════════════════════════════════════
@@ -65,6 +73,12 @@ export default class D3ChordDiagram extends NavigationMixin(LightningElement) {
 
   /** Optional WHERE clause fragment for server-side aggregation */
   @api filterClause = "";
+
+  /** Fetch-mode selector: "auto" (default, existing priority order), "apex", or "graphql". */
+  @api fetchMode = "auto";
+
+  /** Structured filter for the GraphQL path: { field, operator, value }. */
+  @api graphqlFilter;
 
   // ═══════════════════════════════════════════════════════════════
   // TRACKED STATE
@@ -122,6 +136,94 @@ export default class D3ChordDiagram extends NavigationMixin(LightningElement) {
   }
 
   // ═══════════════════════════════════════════════════════════════
+  // GRAPHQL SELF-FETCH PATH (Approach A — additive)
+  // ═══════════════════════════════════════════════════════════════
+
+  /**
+   * Reactive GraphQL query for the self-fetch path. Returns undefined (so the
+   * wire is skipped) unless fetchMode is "graphql" and objectApiName/groupByField/
+   * seriesField/operation are set. CT-MG: groupByField (source) + seriesField
+   * (target) + valueField -> two-field grouped aggregate, same as the existing
+   * getMultiGroupData server branch. Count has no server aggregate, so it
+   * fetches bounded raw source/target rows instead, fed through the existing
+   * _aggregateRawData/_buildFromEdges client path (which already handles Count).
+   */
+  get gqlQuery() {
+    if (this.fetchMode !== "graphql") return undefined;
+    if (!this.objectApiName || !this.groupByField || !this.seriesField) {
+      return undefined;
+    }
+    let queryString;
+    try {
+      if (this.operation === OPERATIONS.COUNT) {
+        queryString = buildRecordQuery({
+          objectApiName: this.objectApiName,
+          fields: [...new Set([this.groupByField, this.seriesField])],
+          filter: this.graphqlFilter,
+          first: this.recordLimit || MAX_RECORDS
+        });
+      } else {
+        if (!this.valueField) return undefined;
+        queryString = buildMultiGroupQuery({
+          objectApiName: this.objectApiName,
+          groupByField: this.groupByField,
+          seriesField: this.seriesField,
+          valueField: this.valueField,
+          operation: this.operation,
+          filter: this.graphqlFilter,
+          first: this.recordLimit || MAX_RECORDS
+        });
+      }
+    } catch {
+      // Unsupported operation/config: leave the wire un-provisioned; error surfaces below.
+      return undefined;
+    }
+    return gql`
+      ${queryString}
+    `;
+  }
+
+  @wire(graphql, { query: "$gqlQuery" })
+  wiredEdges({ data, errors }) {
+    if (this.fetchMode !== "graphql") return;
+    if (errors) {
+      this.error = this._formatGqlErrors(errors);
+      this.isLoading = false;
+      return;
+    }
+    if (!data) return; // initial undefined emission
+    try {
+      let edges;
+      if (this.operation === OPERATIONS.COUNT) {
+        const records = normalizeRecordsGeneric(data, {
+          objectApiName: this.objectApiName,
+          fields: [...new Set([this.groupByField, this.seriesField])]
+        });
+        edges = this._aggregateRawData(records);
+      } else {
+        edges = normalizeMultiGroup(data, {
+          objectApiName: this.objectApiName,
+          groupByField: this.groupByField,
+          seriesField: this.seriesField,
+          valueField: this.valueField,
+          operation: this.operation
+        });
+      }
+      this._buildFromEdges(edges);
+      this.error = null;
+      this.chartRendered = false; // force renderedCallback to re-initialize the SVG
+    } catch (e) {
+      this.error = e.message;
+    }
+    this.isLoading = false;
+  }
+
+  _formatGqlErrors(errors) {
+    const list = Array.isArray(errors) ? errors : [errors];
+    return list.map((e) => e?.message || e).join("; ") || "GraphQL error";
+  }
+
+  // ═══════════════════════════════════════════════════════════════
   // LIFECYCLE HOOKS
   // ═══════════════════════════════════════════════════════════════
 
@@ -167,6 +269,11 @@ export default class D3ChordDiagram extends NavigationMixin(LightningElement) {
   // ═══════════════════════════════════════════════════════════════
 
   async loadData() {
+    // GraphQL path is handled reactively by the @wire(graphql) — nothing to do here.
+    if (this.fetchMode === "graphql") {
+      return;
+    }
+
     // Priority 1: recordCollection — aggregate to edges client-side, then pivot.
     if (this.recordCollection && this.recordCollection.length > 0) {
       const edges = this._aggregateRawData([...this.recordCollection]);
@@ -317,12 +424,19 @@ export default class D3ChordDiagram extends NavigationMixin(LightningElement) {
     const outerRadius = Math.max(20, Math.min(width, height) / 2 - labelMargin);
     const innerRadius = outerRadius - Math.max(12, outerRadius * 0.08);
 
-    this.svg = d3
+    const svgRoot = d3
       .select(container)
       .append("svg")
       .attr("width", containerWidth)
       .attr("height", this.height)
-      .attr("class", "chord-diagram-svg")
+      .attr("class", "chord-diagram-svg");
+
+    applySvgA11y(svgRoot, {
+      title: `Chord diagram: ${this.operation} of ${this.valueField} from ${this.groupByField} to ${this.seriesField}`,
+      desc: `${this._labels.length} categories`
+    });
+
+    this.svg = svgRoot
       .append("g")
       .attr(
         "transform",

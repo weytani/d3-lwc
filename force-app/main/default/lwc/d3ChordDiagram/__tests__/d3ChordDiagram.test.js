@@ -65,7 +65,8 @@ jest.mock("c/chartUtils", () => ({
   calculateDimensions: jest
     .fn()
     .mockReturnValue({ width: 300, height: 200, margins: {} }),
-  shouldUseCompactMode: jest.fn().mockReturnValue(false)
+  shouldUseCompactMode: jest.fn().mockReturnValue(false),
+  applySvgA11y: jest.fn()
 }));
 
 // Factory function for isolated mock D3 instances (prevents shared mutable state between tests)
@@ -435,6 +436,22 @@ describe("c-d3-chord-diagram", () => {
       await flushPromises();
       expect(element.shadowRoot.querySelector(".chart-container")).toBeTruthy();
     });
+
+    it("passes the theme's palette into the group arc fill color scale", async () => {
+      const { getColors } = require("c/themeService");
+      await createChart({ theme: "Warm" });
+      await flushPromises();
+
+      const fillCall = mockD3.attr.mock.calls.find(
+        (c) => c[0] === "fill" && typeof c[1] === "function"
+      );
+      expect(fillCall).toBeDefined();
+
+      // buildMatrix's label order for SAMPLE_DATA registers "Prospecting"
+      // (the first edge's source) at index 0.
+      const resolvedColor = fillCall[1]({ index: 0 });
+      expect(resolvedColor).toBe(getColors("Warm", 5)[0]);
+    });
   });
 
   // ═══════════════════════════════════════════════════════════════
@@ -672,6 +689,19 @@ describe("c-d3-chord-diagram", () => {
       const appendCalls = mockD3.append.mock.calls.map((c) => c[0]);
       const pathAppends = appendCalls.filter((a) => a === "path");
       expect(pathAppends.length).toBeGreaterThan(0);
+    });
+
+    it("applies role=img and a title to the root svg", async () => {
+      const { applySvgA11y } = require("c/chartUtils");
+      await createChart();
+      await flushPromises();
+
+      expect(applySvgA11y).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          title: expect.stringContaining("Chord diagram")
+        })
+      );
     });
   });
 

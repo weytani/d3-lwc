@@ -1,0 +1,15 @@
+/* D3 Chord Diagram Styles */
+.chart-container {
+  width: 100%;
+  position: relative;
+  overflow: hidden;
+}
+
+.chord-diagram-svg {
+  display: block;
+  font-family: "Salesforce Sans", Arial, sans-serif;
+}
+
+.chord-arc:hover {
+  filter: brightness(0.95);
+}
