@@ -1,0 +1,57 @@
+/* ABOUTME: Styles for the D3 Normalized (100%) Stacked Bar Chart component. */
+/* ABOUTME: Covers SVG layout, axes, bars, grid, tooltip, and legend. */
+
+:host {
+  display: block;
+}
+
+.chart-container {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+}
+
+/* SVG Styles */
+.normalized-bar-svg {
+  font-family: "Salesforce Sans", Arial, sans-serif;
+}
+
+/* Axis Styles */
+.x-axis text,
+.y-axis text {
+  font-size: 12px;
+  fill: #706e6b;
+}
+
+.x-axis path,
+.x-axis line,
+.y-axis path,
+.y-axis line {
+  stroke: #dddbda;
+}
+
+/* Segment Styles */
+.normalized-segment {
+  transition: opacity 0.2s ease;
+}
+
+.normalized-segment:hover {
+  opacity: 0.8;
+}
+
+/* Grid Styles */
+.grid line {
+  stroke: #e0e0e0;
+  stroke-opacity: 0.7;
+  shape-rendering: crispEdges;
+}
+
+.grid path {
+  stroke-width: 0;
+}
+
+/* Legend Styles */
+.legend text {
+  font-size: 11px;
+  fill: #706e6b;
+}
