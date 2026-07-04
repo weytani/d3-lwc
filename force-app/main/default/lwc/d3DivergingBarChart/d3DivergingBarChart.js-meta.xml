@@ -84,12 +84,22 @@
         max="10000"
       />
 
+            <!-- GraphQL Self-Fetch -->
+            <property
+        name="fetchMode"
+        type="String"
+        label="Data Source"
+        default="auto"
+        datasource="auto,apex,graphql"
+        description="How to fetch data: auto (existing priority order), apex (Apex-backed SOQL), or graphql (UI API GraphQL)"
+      />
+
             <!-- Advanced -->
             <property
         name="advancedConfig"
         type="String"
         label="Advanced Config (JSON)"
-        description='{"customColors": ["#FF5733"]}'
+        description='{"customColors": ["#00AA00", "#AA0000"]} — [positive, negative]; either side may be omitted to keep the theme default'
       />
         </targetConfig>
     </targetConfigs>

@@ -50,6 +50,7 @@ const createMockD3 = () => {
     remove: jest.fn(() => mockD3),
     html: jest.fn(() => mockD3),
     text: jest.fn(() => mockD3),
+    insert: jest.fn(() => mockD3),
     scaleBand: jest.fn(() => {
       const scale = jest.fn(() => 50);
       scale.domain = jest.fn(() => scale);
@@ -490,34 +491,22 @@ describe("c-d3-diverging-bar-chart", () => {
       expect(errorElement).toBeFalsy();
     });
 
-    it("accepts customColors in advancedConfig", async () => {
+    it("overrides the theme's positive/negative colors with customColors [positive, negative]", async () => {
       await createChart({
-        advancedConfig: '{"customColors": ["#ff0000", "#00ff00", "#0000ff"]}'
+        theme: "Salesforce Standard",
+        recordCollection: [
+          { StageName: "Loss", Amount: -300 },
+          { StageName: "Gain", Amount: 200 }
+        ],
+        advancedConfig: '{"customColors": ["#00AA00", "#AA0000"]}'
       });
 
       await flushPromises();
-      const errorElement = element.shadowRoot.querySelector(
-        ".slds-text-color_error"
-      );
-      expect(errorElement).toBeFalsy();
-    });
-
-    it("accepts showGrid config option", async () => {
-      await createChart({
-        advancedConfig: '{"showGrid": false}'
-      });
-
-      await flushPromises();
-      expect(loadD3).toHaveBeenCalled();
-    });
-
-    it("accepts showLegend config option", async () => {
-      await createChart({
-        advancedConfig: '{"showLegend": true}'
-      });
-
-      await flushPromises();
-      expect(loadD3).toHaveBeenCalled();
+      const fillCalls = mockD3.attr.mock.calls.filter((c) => c[0] === "fill");
+      expect(fillCalls.length).toBeGreaterThan(0);
+      const fillFn = fillCalls[fillCalls.length - 1][1];
+      expect(fillFn({ label: "Gain", value: 200 })).toBe("#00AA00");
+      expect(fillFn({ label: "Loss", value: -300 })).toBe("#AA0000");
     });
   });
 
@@ -526,14 +515,36 @@ describe("c-d3-diverging-bar-chart", () => {
   // ═══════════════════════════════════════════════════════════════
 
   describe("themes", () => {
-    it("accepts Salesforce Standard theme", async () => {
-      await createChart({ theme: "Salesforce Standard" });
+    it("wires the default theme's real semantic positive/negative colors to the bar fills", async () => {
+      await createChart({
+        theme: "Salesforce Standard",
+        recordCollection: [
+          { StageName: "Loss", Amount: -300 },
+          { StageName: "Gain", Amount: 200 }
+        ]
+      });
 
       await flushPromises();
-      const errorElement = element.shadowRoot.querySelector(
-        ".slds-text-color_error"
-      );
-      expect(errorElement).toBeFalsy();
+      const fillCalls = mockD3.attr.mock.calls.filter((c) => c[0] === "fill");
+      const fillFn = fillCalls[fillCalls.length - 1][1];
+      expect(fillFn({ label: "Gain", value: 200 })).toBe("#4BCA81");
+      expect(fillFn({ label: "Loss", value: -300 })).toBe("#FF5D5D");
+    });
+
+    it("wires the Warm theme's real semantic positive/negative colors to the bar fills", async () => {
+      await createChart({
+        theme: "Warm",
+        recordCollection: [
+          { StageName: "Loss", Amount: -300 },
+          { StageName: "Gain", Amount: 200 }
+        ]
+      });
+
+      await flushPromises();
+      const fillCalls = mockD3.attr.mock.calls.filter((c) => c[0] === "fill");
+      const fillFn = fillCalls[fillCalls.length - 1][1];
+      expect(fillFn({ label: "Gain", value: 200 })).toBe("#FFD93D");
+      expect(fillFn({ label: "Loss", value: -300 })).toBe("#F94144");
     });
   });
 
