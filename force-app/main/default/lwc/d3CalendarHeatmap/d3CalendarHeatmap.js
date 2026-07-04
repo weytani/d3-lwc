@@ -1,16 +1,24 @@
 // ABOUTME: D3 Calendar Heatmap Lightning Web Component.
 // ABOUTME: Displays daily activity as a GitHub-contribution-style grid with year navigation.
-import { LightningElement, api, track } from "lwc";
+import { LightningElement, api, track, wire } from "lwc";
 import { loadD3 } from "c/d3Lib";
 import { prepareData, OPERATIONS, CHART_LIMITS } from "c/dataService";
-import { getSequentialRamp, DEFAULT_THEME } from "c/themeService";
+import {
+  getSequentialRamp,
+  getRampHueForTheme,
+  DEFAULT_THEME
+} from "c/themeService";
 import {
   createTooltip,
   createResizeHandler,
   buildCalendarGrid,
-  createLayoutRetry
+  createLayoutRetry,
+  applySvgA11y
 } from "c/chartUtils";
+import { NavigationMixin } from "lightning/navigation";
 import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
+import { gql, graphql } from "lightning/graphql";
+import { buildRecordQuery, normalizeRecordsGeneric } from "c/graphqlService";
 
 const MONTH_LABELS = [
   "Jan",
@@ -34,7 +42,9 @@ const WEEKDAY_LABELS = [
 const EMPTY_DAY_COLOR = "#ebedf0";
 const COLOR_STEPS = 5;
 
-export default class D3CalendarHeatmap extends LightningElement {
+export default class D3CalendarHeatmap extends NavigationMixin(
+  LightningElement
+) {
   // ═══════════════════════════════════════════════════════════════
   // PUBLIC API PROPERTIES
   // ═══════════════════════════════════════════════════════════════
@@ -77,6 +87,12 @@ export default class D3CalendarHeatmap extends LightningElement {
 
   /** Maximum records to process (overrides default limit) */
   @api recordLimit;
+
+  /** Fetch-mode selector: "auto" (default, existing priority order), "apex", or "graphql". */
+  @api fetchMode = "auto";
+
+  /** Structured filter for the GraphQL path: { field, operator, value }. */
+  @api graphqlFilter;
 
   // ═══════════════════════════════════════════════════════════════
   // TRACKED STATE
@@ -137,6 +153,76 @@ export default class D3CalendarHeatmap extends LightningElement {
   }
 
   // ═══════════════════════════════════════════════════════════════
+  // GRAPHQL SELF-FETCH PATH (Approach A — additive, CT-REC)
+  // ═══════════════════════════════════════════════════════════════
+
+  /**
+   * Reactive GraphQL query for the self-fetch path. Returns undefined (so the
+   * wire is skipped) unless fetchMode is "graphql" and objectApiName/dateField
+   * are set. Calendar heatmap has no server-side aggregate: it always fetches
+   * raw records for dateField and (if set) valueField, then feeds the existing
+   * recordCollection processing path (_prepareRawData + per-render day
+   * aggregation), same as recordCollection/soqlQuery.
+   */
+  get gqlQuery() {
+    if (this.fetchMode !== "graphql") return undefined;
+    if (!this.objectApiName || !this.dateField) return undefined;
+    const fields = [
+      ...new Set([this.dateField, this.valueField].filter(Boolean))
+    ];
+    let queryString;
+    try {
+      queryString = buildRecordQuery({
+        objectApiName: this.objectApiName,
+        fields,
+        filter: this.graphqlFilter,
+        first: this.recordLimit || 2000
+      });
+    } catch {
+      // Unsupported config: leave the wire un-provisioned; error surfaces below.
+      return undefined;
+    }
+    return gql`
+      ${queryString}
+    `;
+  }
+
+  @wire(graphql, { query: "$gqlQuery" })
+  wiredRecords({ data, errors }) {
+    if (this.fetchMode !== "graphql") return;
+    if (errors) {
+      this.error = this._formatGqlErrors(errors);
+      this.isLoading = false;
+      return;
+    }
+    if (!data) return; // initial undefined emission
+    try {
+      const fields = [
+        ...new Set([this.dateField, this.valueField].filter(Boolean))
+      ];
+      const records = normalizeRecordsGeneric(data, {
+        objectApiName: this.objectApiName,
+        fields
+      });
+      this.rawData = this._prepareRawData(records);
+      if (this.rawData.length === 0) {
+        this.error = "No data after aggregation";
+      } else {
+        this.error = null;
+        this.chartRendered = false; // force renderedCallback to re-initialize the SVG
+      }
+    } catch (e) {
+      this.error = e.message;
+    }
+    this.isLoading = false;
+  }
+
+  _formatGqlErrors(errors) {
+    const list = Array.isArray(errors) ? errors : [errors];
+    return list.map((e) => e?.message || e).join("; ") || "GraphQL error";
+  }
+
+  // ═══════════════════════════════════════════════════════════════
   // LIFECYCLE HOOKS
   // ═══════════════════════════════════════════════════════════════
 
@@ -187,6 +273,11 @@ export default class D3CalendarHeatmap extends LightningElement {
   // ═══════════════════════════════════════════════════════════════
 
   async loadData() {
+    // GraphQL path is handled reactively by the @wire(graphql) — nothing to do here.
+    if (this.fetchMode === "graphql") {
+      return;
+    }
+
     if (this.recordCollection && this.recordCollection.length > 0) {
       this.rawData = this._prepareRawData([...this.recordCollection]);
       return;
@@ -195,7 +286,9 @@ export default class D3CalendarHeatmap extends LightningElement {
     if (this.soqlQuery) {
       let fetchedData = [];
       try {
-        fetchedData = await executeQuery({ queryString: this.soqlQuery });
+        fetchedData = await executeQuery({
+          queryString: this._applyFilterClause(this.soqlQuery)
+        });
       } catch (e) {
         throw new Error(`SOQL Error: ${e.body?.message || e.message}`);
       }
@@ -206,6 +299,29 @@ export default class D3CalendarHeatmap extends LightningElement {
     throw new Error(
       "No data source provided. Set recordCollection or soqlQuery."
     );
+  }
+
+  /**
+   * Injects filterClause as a WHERE-clause fragment into a raw SOQL query
+   * string, ahead of any ORDER BY / GROUP BY / LIMIT clause. Appends with
+   * AND if the query already has a WHERE; otherwise adds one. No-op when
+   * filterClause is blank.
+   * @param {String} soqlQuery - The base SOQL query
+   * @returns {String} - The query with filterClause applied
+   */
+  _applyFilterClause(soqlQuery) {
+    if (!this.filterClause) return soqlQuery;
+
+    const fragment = /\bWHERE\b/i.test(soqlQuery)
+      ? ` AND (${this.filterClause})`
+      : ` WHERE (${this.filterClause})`;
+
+    const trailingClause = soqlQuery.match(/\b(ORDER BY|GROUP BY|LIMIT)\b/i);
+    if (trailingClause) {
+      const idx = trailingClause.index;
+      return `${soqlQuery.slice(0, idx).trimEnd()}${fragment} ${soqlQuery.slice(idx)}`;
+    }
+    return `${soqlQuery}${fragment}`;
   }
 
   /**
@@ -382,8 +498,8 @@ export default class D3CalendarHeatmap extends LightningElement {
     const dayData = this._aggregateByDay(year);
     const grid = buildCalendarGrid(year);
 
-    // Determine color hue from config or default to green
-    const colorHue = this.config.cellColor || "green";
+    // Determine color hue: advancedConfig.cellColor wins, else derive from theme
+    const colorHue = this.config.cellColor || getRampHueForTheme(this.theme);
     const colorRamp = getSequentialRamp(colorHue, COLOR_STEPS);
 
     // Layout calculations
@@ -399,12 +515,19 @@ export default class D3CalendarHeatmap extends LightningElement {
     const colorScale = d3.scaleQuantize().domain([0, maxVal]).range(colorRamp);
 
     // Create SVG
-    this.svg = d3
+    const svgRoot = d3
       .select(container)
       .append("svg")
       .attr("width", containerWidth)
       .attr("height", chartHeight)
-      .attr("class", "calendar-heatmap-svg")
+      .attr("class", "calendar-heatmap-svg");
+
+    applySvgA11y(svgRoot, {
+      title: `Calendar heatmap: ${this.operation} of ${this.valueField} by ${this.dateField}, ${year}`,
+      desc: `${dayData.size} active days`
+    });
+
+    this.svg = svgRoot
       .append("g")
       .attr("transform", `translate(${margin.left},${margin.top})`);
 
@@ -425,11 +548,15 @@ export default class D3CalendarHeatmap extends LightningElement {
         const val = dayData.get(key);
         return val ? colorScale(val) : EMPTY_DAY_COLOR;
       })
+      .attr("cursor", this.objectApiName ? "pointer" : "default")
       .on("mouseenter", (event, d) => {
         this._showCellTooltip(event, d, dayData);
       })
       .on("mouseleave", () => {
         this._hideTooltip();
+      })
+      .on("click", (event, d) => {
+        this.handleDayClick(d, dayData);
       });
 
     // Month labels
@@ -500,6 +627,41 @@ export default class D3CalendarHeatmap extends LightningElement {
   _hideTooltip() {
     if (!this.tooltip) return;
     this.tooltip.hide();
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // CLICK HANDLER - DRILL DOWN
+  // ═══════════════════════════════════════════════════════════════
+
+  handleDayClick(d, dayData) {
+    if (!this.objectApiName) return;
+
+    const filterFieldName = this.filterField || this.dateField;
+    const key = this._formatDateKey(d.date);
+    const val = dayData.get(key) || 0;
+
+    this[NavigationMixin.Navigate]({
+      type: "standard__objectPage",
+      attributes: {
+        objectApiName: this.objectApiName,
+        actionName: "list"
+      },
+      state: {
+        filterName: "Recent"
+      }
+    });
+
+    this.dispatchEvent(
+      new CustomEvent("dayclick", {
+        detail: {
+          date: key,
+          value: val,
+          filterField: filterFieldName
+        },
+        bubbles: true,
+        composed: true
+      })
+    );
   }
 
   // ═══════════════════════════════════════════════════════════════

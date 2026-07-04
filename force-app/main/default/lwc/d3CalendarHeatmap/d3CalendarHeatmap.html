@@ -32,24 +32,38 @@
     <template lwc:elseif={hasData}>
       <!-- Year Navigation -->
       <div class="slds-grid slds-grid_align-center slds-m-bottom_x-small">
-        <button class="slds-button slds-button_icon" onclick={handlePrevYear}>
+        <button
+          class="slds-button slds-button_icon"
+          aria-label="Previous year"
+          onclick={handlePrevYear}
+        >
           <lightning-icon
             icon-name="utility:chevronleft"
+            alternative-text="Previous year"
             size="x-small"
           ></lightning-icon>
         </button>
         <span class="slds-text-heading_small slds-m-horizontal_medium"
           >{displayYear}</span
         >
-        <button class="slds-button slds-button_icon" onclick={handleNextYear}>
+        <button
+          class="slds-button slds-button_icon"
+          aria-label="Next year"
+          onclick={handleNextYear}
+        >
           <lightning-icon
             icon-name="utility:chevronright"
+            alternative-text="Next year"
             size="x-small"
           ></lightning-icon>
         </button>
       </div>
 
-      <div class="chart-container" lwc:dom="manual" style={containerStyle}></div>
+      <div
+        class="chart-container"
+        lwc:dom="manual"
+        style={containerStyle}
+      ></div>
     </template>
 
     <!-- No Data State -->

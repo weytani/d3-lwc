@@ -20,6 +20,23 @@ jest.mock(
   { virtual: true }
 );
 
+// Mock NavigationMixin
+const mockNavigate = jest.fn();
+jest.mock(
+  "lightning/navigation",
+  () => {
+    const Navigate = Symbol.for("NavigationMixin.Navigate");
+    const mixin = (Base) => {
+      return class extends Base {
+        [Navigate] = mockNavigate;
+      };
+    };
+    mixin.Navigate = Navigate;
+    return { NavigationMixin: mixin };
+  },
+  { virtual: true }
+);
+
 // ═══════════════════════════════════════════════════════════════
 // MOCK D3 FACTORY
 // ═══════════════════════════════════════════════════════════════
@@ -35,6 +52,7 @@ const createMockD3 = () => {
     attr: jest.fn(() => mockD3),
     style: jest.fn(() => mockD3),
     call: jest.fn(() => mockD3),
+    insert: jest.fn(() => mockD3),
     selectAll: jest.fn(() => mockD3),
     data: jest.fn(() => mockD3),
     enter: jest.fn(() => mockD3),
@@ -299,6 +317,30 @@ describe("c-d3-calendar-heatmap", () => {
       );
       expect(errorElement).toBeFalsy();
     });
+
+    it("wires filterClause into the SOQL query sent to Apex", async () => {
+      await createChart({
+        recordCollection: [],
+        soqlQuery: "SELECT CloseDate, Amount FROM Opportunity",
+        filterClause: "Amount > 1000"
+      });
+
+      expect(executeQuery).toHaveBeenCalledWith({
+        queryString:
+          "SELECT CloseDate, Amount FROM Opportunity WHERE (Amount > 1000)"
+      });
+    });
+
+    it("leaves the SOQL query untouched when filterClause is empty", async () => {
+      await createChart({
+        recordCollection: [],
+        soqlQuery: "SELECT CloseDate, Amount FROM Opportunity"
+      });
+
+      expect(executeQuery).toHaveBeenCalledWith({
+        queryString: "SELECT CloseDate, Amount FROM Opportunity"
+      });
+    });
   });
 
   // ═══════════════════════════════════════════════════════════════
@@ -525,6 +567,24 @@ describe("c-d3-calendar-heatmap", () => {
         ".slds-text-heading_small"
       );
       expect(yearLabel.textContent).toBe("2023");
+    });
+
+    it("labels both year-navigation buttons for accessibility", async () => {
+      await createChart({ year: 2025 });
+      await flushPromises();
+
+      const buttons = element.shadowRoot.querySelectorAll(
+        "button.slds-button_icon"
+      );
+      expect(buttons.length).toBe(2);
+      buttons.forEach((btn) => {
+        expect(btn.getAttribute("aria-label")).toBeTruthy();
+      });
+
+      const icons = element.shadowRoot.querySelectorAll("lightning-icon");
+      icons.forEach((icon) => {
+        expect(icon.alternativeText).toBeTruthy();
+      });
     });
   });
 
@@ -775,6 +835,83 @@ describe("c-d3-calendar-heatmap", () => {
         ".slds-text-color_error"
       );
       expect(errorElement).toBeFalsy();
+    });
+
+    it("wires the theme prop into the color ramp hue", async () => {
+      await createChart({ theme: "Cool" });
+      await flushPromises();
+      const coolScale = mockD3.scaleQuantize.mock.results[0].value;
+      const coolRange = coolScale.range.mock.calls[0][0];
+
+      jest.clearAllMocks();
+      mockD3 = createMockD3();
+      loadD3.mockResolvedValue(mockD3);
+      executeQuery.mockResolvedValue(SAMPLE_DATA);
+      document.body.removeChild(element);
+
+      await createChart({ theme: "Warm" });
+      await flushPromises();
+      const warmScale = mockD3.scaleQuantize.mock.results[0].value;
+      const warmRange = warmScale.range.mock.calls[0][0];
+
+      expect(coolRange).not.toEqual(warmRange);
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════
+  // ACCESSIBILITY TESTS
+  // ═══════════════════════════════════════════════════════════════
+
+  describe("accessibility", () => {
+    it("applies SVG accessibility attributes (role=img + title)", async () => {
+      await createChart();
+      await flushPromises();
+
+      expect(mockD3.attr).toHaveBeenCalledWith("role", "img");
+      expect(mockD3.attr).toHaveBeenCalledWith(
+        "aria-label",
+        expect.stringContaining("Calendar heatmap")
+      );
+      expect(mockD3.insert).toHaveBeenCalledWith("title", ":first-child");
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════
+  // DRILL-DOWN TESTS
+  // ═══════════════════════════════════════════════════════════════
+
+  describe("drill-down", () => {
+    it("does not navigate when objectApiName is not set", async () => {
+      await createChart({ objectApiName: "", year: 2025 });
+      await flushPromises();
+
+      const clickCall = mockD3.on.mock.calls.find((c) => c[0] === "click");
+      expect(clickCall).toBeTruthy();
+      clickCall[1](
+        {},
+        { date: new Date(2025, 0, 15), week: 0, dayOfWeek: 0, month: 0 }
+      );
+
+      expect(mockNavigate).not.toHaveBeenCalled();
+    });
+
+    it("navigates and dispatches dayclick event when objectApiName is set", async () => {
+      await createChart({ objectApiName: "Opportunity", year: 2025 });
+      await flushPromises();
+
+      const handler = jest.fn();
+      element.addEventListener("dayclick", handler);
+
+      const clickCall = mockD3.on.mock.calls.find((c) => c[0] === "click");
+      expect(clickCall).toBeTruthy();
+      clickCall[1](
+        {},
+        { date: new Date(2025, 0, 15), week: 0, dayOfWeek: 0, month: 0 }
+      );
+
+      expect(mockNavigate).toHaveBeenCalled();
+      expect(handler).toHaveBeenCalled();
+      expect(handler.mock.calls[0][0].detail.date).toBe("2025-01-15");
     });
   });
 
