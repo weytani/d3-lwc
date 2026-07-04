@@ -64,7 +64,8 @@ jest.mock("c/chartUtils", () => ({
     .fn()
     .mockReturnValue({ width: 300, height: 200, margins: {} }),
   shouldUseCompactMode: jest.fn().mockReturnValue(false),
-  getContrastColor: jest.fn(() => "#ffffff")
+  getContrastColor: jest.fn(() => "#ffffff"),
+  applySvgA11y: jest.fn()
 }));
 
 // Mock themeService — real createColorScale behaviour (label -> color Map, fallback colors[0])
@@ -94,7 +95,8 @@ const createMockD3 = () => {
     enter: jest.fn(() => d3),
     on: jest.fn(() => d3),
     remove: jest.fn(() => d3),
-    text: jest.fn(() => d3)
+    text: jest.fn(() => d3),
+    insert: jest.fn(() => d3)
   };
   return d3;
 };

@@ -1,6 +1,6 @@
 // ABOUTME: D3 waffle chart Lightning Web Component rendering part-to-whole as a 10x10 grid.
 // ABOUTME: Each category fills round(proportion*100) of 100 cells; colors via themeService, contrast via chartUtils.
-import { LightningElement, api, track } from "lwc";
+import { LightningElement, api, track, wire } from "lwc";
 import { loadD3 } from "c/d3Lib";
 import {
   prepareData,
@@ -15,11 +15,19 @@ import {
   createTooltip,
   createResizeHandler,
   createLayoutRetry,
-  getContrastColor
+  getContrastColor,
+  applySvgA11y
 } from "c/chartUtils";
 import { NavigationMixin } from "lightning/navigation";
 import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
 import getAggregatedData from "@salesforce/apex/D3ChartController.getAggregatedData";
+import { gql, graphql } from "lightning/graphql";
+import {
+  buildAggregateQuery,
+  normalizeAggregate,
+  buildRecordQuery,
+  normalizeRecords
+} from "c/graphqlService";
 
 const GRID_SIZE = 10;
 const TOTAL_CELLS = GRID_SIZE * GRID_SIZE;
@@ -67,6 +75,12 @@ export default class D3WaffleChart extends NavigationMixin(LightningElement) {
 
   /** Optional WHERE clause fragment for server-side aggregation */
   @api filterClause = "";
+
+  /** Fetch-mode selector: "auto" (default, existing priority order), "apex", or "graphql". */
+  @api fetchMode = "auto";
+
+  /** Structured filter for the GraphQL path: { field, operator, value }. */
+  @api graphqlFilter;
 
   // ═══════════════════════════════════════════════════════════════
   // TRACKED STATE
@@ -143,6 +157,98 @@ export default class D3WaffleChart extends NavigationMixin(LightningElement) {
   }
 
   // ═══════════════════════════════════════════════════════════════
+  // GRAPHQL SELF-FETCH PATH (Approach A — additive)
+  // ═══════════════════════════════════════════════════════════════
+
+  /**
+   * Reactive GraphQL query for the self-fetch path. Returns undefined (so the wire
+   * is skipped) unless fetchMode is "graphql" and all required config is present.
+   * Count is this chart's PRIMARY graphql path (default operation).
+   */
+  get gqlQuery() {
+    if (this.fetchMode !== "graphql") return undefined;
+    if (!this.objectApiName || !this.groupByField || !this.operation) {
+      return undefined;
+    }
+    // valueField is not required for Count.
+    if (this.operation !== OPERATIONS.COUNT && !this.valueField) {
+      return undefined;
+    }
+    let queryString;
+    try {
+      if (this.operation === OPERATIONS.COUNT) {
+        queryString = buildRecordQuery({
+          objectApiName: this.objectApiName,
+          fields: [this.groupByField],
+          filter: this.graphqlFilter,
+          first: this.recordLimit || 2000
+        });
+      } else {
+        queryString = buildAggregateQuery({
+          objectApiName: this.objectApiName,
+          groupByField: this.groupByField,
+          valueField: this.valueField,
+          operation: this.operation,
+          filter: this.graphqlFilter,
+          first: this.recordLimit || 2000
+        });
+      }
+    } catch {
+      // Unsupported operation/config: leave the wire un-provisioned; error surfaces below.
+      return undefined;
+    }
+    return gql`
+      ${queryString}
+    `;
+  }
+
+  @wire(graphql, { query: "$gqlQuery" })
+  wiredAggregate({ data, errors }) {
+    if (this.fetchMode !== "graphql") return;
+    if (errors) {
+      this.error = this._formatGqlErrors(errors);
+      this.isLoading = false;
+      return;
+    }
+    if (!data) return; // initial undefined emission
+    try {
+      let normalized;
+      if (this.operation === OPERATIONS.COUNT) {
+        const records = normalizeRecords(data, {
+          objectApiName: this.objectApiName,
+          labelField: this.groupByField
+        });
+        normalized = this._aggregateRawData(
+          records.map((r) => ({ [this.groupByField]: r.label }))
+        );
+      } else {
+        normalized = normalizeAggregate(data, {
+          objectApiName: this.objectApiName,
+          groupByField: this.groupByField,
+          valueField: this.valueField,
+          operation: this.operation
+        });
+      }
+      if (!normalized.length) {
+        this.error = "No data after aggregation";
+      } else {
+        this.chartData = normalized;
+        this.totalValue = normalized.reduce((sum, d) => sum + d.value, 0);
+        this.error = null;
+        this.chartRendered = false; // force renderedCallback to re-initialize the SVG
+      }
+    } catch (e) {
+      this.error = e.message;
+    }
+    this.isLoading = false;
+  }
+
+  _formatGqlErrors(errors) {
+    const list = Array.isArray(errors) ? errors : [errors];
+    return list.map((e) => e?.message || e).join("; ") || "GraphQL error";
+  }
+
+  // ═══════════════════════════════════════════════════════════════
   // LIFECYCLE HOOKS
   // ═══════════════════════════════════════════════════════════════
 
@@ -188,6 +294,11 @@ export default class D3WaffleChart extends NavigationMixin(LightningElement) {
   // ═══════════════════════════════════════════════════════════════
 
   async loadData() {
+    // GraphQL path is handled reactively by the @wire(graphql) — nothing to do here.
+    if (this.fetchMode === "graphql") {
+      return;
+    }
+
     // Priority 1: Use recordCollection if provided (client-side aggregation)
     if (this.recordCollection && this.recordCollection.length > 0) {
       this.chartData = this._aggregateRawData([...this.recordCollection]);
@@ -402,12 +513,19 @@ export default class D3WaffleChart extends NavigationMixin(LightningElement) {
     const offsetX = margin.left + Math.max(0, (width - side) / 2);
     const offsetY = margin.top + Math.max(0, (height - side) / 2);
 
-    this.svg = d3
+    const svgRoot = d3
       .select(container)
       .append("svg")
       .attr("width", containerWidth)
       .attr("height", this.height)
-      .attr("class", "waffle-chart-svg")
+      .attr("class", "waffle-chart-svg");
+
+    applySvgA11y(svgRoot, {
+      title: `Waffle chart: ${this.operation} of ${this.valueField || this.groupByField} by ${this.groupByField}`,
+      desc: `${this.chartData.length} categories, total ${formatNumber(this.totalValue)}`
+    });
+
+    this.svg = svgRoot
       .append("g")
       .attr("transform", `translate(${offsetX},${offsetY})`);
 

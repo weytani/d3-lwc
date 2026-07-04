@@ -62,7 +62,8 @@ const createMockD3 = () => {
     enter: jest.fn(() => d3),
     on: jest.fn(() => d3),
     remove: jest.fn(() => d3),
-    text: jest.fn(() => d3)
+    text: jest.fn(() => d3),
+    insert: jest.fn(() => d3)
   };
   return d3;
 };
@@ -291,6 +292,26 @@ describe("c-d3-waffle-chart integration", () => {
       expect(clickCalls.length).toBeGreaterThan(0);
 
       expect(element.objectApiName).toBe("Opportunity");
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════
+  // ACCESSIBILITY WIRING
+  // ═══════════════════════════════════════════════════════════════
+
+  describe("accessibility wiring", () => {
+    it("applies role=img and a title to the rendered svg", async () => {
+      await createChart();
+
+      const attrCalls = mockD3.attr.mock.calls;
+      const roleCall = attrCalls.find((call) => call[0] === "role");
+      expect(roleCall).toBeTruthy();
+      expect(roleCall[1]).toBe("img");
+
+      const insertCalls = mockD3.insert.mock.calls;
+      const titleInsert = insertCalls.find((call) => call[0] === "title");
+      expect(titleInsert).toBeTruthy();
+      expect(titleInsert[1]).toBe(":first-child");
     });
   });
 });
