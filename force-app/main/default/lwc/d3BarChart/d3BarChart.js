@@ -24,7 +24,12 @@ import { NavigationMixin } from "lightning/navigation";
 import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
 import getAggregatedData from "@salesforce/apex/D3ChartController.getAggregatedData";
 import { gql, graphql } from "lightning/graphql";
-import { buildAggregateQuery, normalizeAggregate } from "c/graphqlService";
+import {
+  buildAggregateQuery,
+  buildRecordQuery,
+  normalizeAggregate,
+  normalizeRecords
+} from "c/graphqlService";
 
 export default class D3BarChart extends NavigationMixin(LightningElement) {
   // ═══════════════════════════════════════════════════════════════
@@ -171,24 +176,32 @@ export default class D3BarChart extends NavigationMixin(LightningElement) {
    */
   get gqlQuery() {
     if (this.fetchMode !== "graphql") return undefined;
-    if (
-      !this.objectApiName ||
-      !this.groupByField ||
-      !this.valueField ||
-      !this.operation
-    ) {
+    if (!this.objectApiName || !this.groupByField || !this.operation) {
+      return undefined;
+    }
+    // valueField is not required for Count.
+    if (this.operation !== OPERATIONS.COUNT && !this.valueField) {
       return undefined;
     }
     let queryString;
     try {
-      queryString = buildAggregateQuery({
-        objectApiName: this.objectApiName,
-        groupByField: this.groupByField,
-        valueField: this.valueField,
-        operation: this.operation,
-        filter: this.graphqlFilter,
-        first: this.recordLimit || 2000
-      });
+      if (this.operation === OPERATIONS.COUNT) {
+        queryString = buildRecordQuery({
+          objectApiName: this.objectApiName,
+          fields: [this.groupByField],
+          filter: this.graphqlFilter,
+          first: this.recordLimit || 2000
+        });
+      } else {
+        queryString = buildAggregateQuery({
+          objectApiName: this.objectApiName,
+          groupByField: this.groupByField,
+          valueField: this.valueField,
+          operation: this.operation,
+          filter: this.graphqlFilter,
+          first: this.recordLimit || 2000
+        });
+      }
     } catch {
       // Unsupported operation/config: leave the wire un-provisioned; error surfaces below.
       return undefined;
@@ -208,12 +221,23 @@ export default class D3BarChart extends NavigationMixin(LightningElement) {
     }
     if (!data) return; // initial undefined emission
     try {
-      const normalized = normalizeAggregate(data, {
-        objectApiName: this.objectApiName,
-        groupByField: this.groupByField,
-        valueField: this.valueField,
-        operation: this.operation
-      });
+      let normalized;
+      if (this.operation === OPERATIONS.COUNT) {
+        const records = normalizeRecords(data, {
+          objectApiName: this.objectApiName,
+          labelField: this.groupByField
+        });
+        normalized = this._aggregateRawData(
+          records.map((r) => ({ [this.groupByField]: r.label }))
+        );
+      } else {
+        normalized = normalizeAggregate(data, {
+          objectApiName: this.objectApiName,
+          groupByField: this.groupByField,
+          valueField: this.valueField,
+          operation: this.operation
+        });
+      }
       if (!normalized.length) {
         this.error = "No data after aggregation";
       } else {

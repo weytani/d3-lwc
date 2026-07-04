@@ -2,7 +2,7 @@
 // ABOUTME: Sorting applies client-side to whichever data source populated chartData, including GraphQL.
 import { createElement } from "lwc";
 import D3SortedBarChart from "c/d3SortedBarChart";
-import { graphql } from "lightning/graphql";
+import { graphql, gql } from "lightning/graphql";
 import { loadD3 } from "c/d3Lib";
 
 jest.mock("c/d3Lib", () => ({ loadD3: jest.fn() }));
@@ -44,6 +44,20 @@ const AGG_RESPONSE = {
               }
             }
           }
+        ]
+      }
+    }
+  }
+};
+
+const RECORD_RESPONSE = {
+  uiapi: {
+    query: {
+      Opportunity: {
+        edges: [
+          { node: { StageName: { value: "Prospecting" } } },
+          { node: { StageName: { value: "Prospecting" } } },
+          { node: { StageName: { value: "Closed Won" } } }
         ]
       }
     }
@@ -158,5 +172,48 @@ describe("d3SortedBarChart GraphQL path (Approach A, CT-AGG)", () => {
     );
     const lastDomain = labelDomainCalls[labelDomainCalls.length - 1][1];
     expect(lastDomain).toEqual(["Closed Won", "Prospecting"]);
+  });
+
+  it("falls back to a raw record query for Count and draws a real bar mark", async () => {
+    const element = createElement("c-d3-sorted-bar-chart", {
+      is: D3SortedBarChart
+    });
+    element.fetchMode = "graphql";
+    element.objectApiName = "Opportunity";
+    element.groupByField = "StageName";
+    element.operation = "Count";
+    document.body.appendChild(element);
+
+    await flushPromises();
+    graphql.emit(RECORD_RESPONSE);
+    await flushPromises();
+    await flushPromises();
+
+    expect(element.shadowRoot.querySelector(".chart-container")).not.toBeNull();
+    expect(
+      element.shadowRoot.querySelector(".slds-text-color_error")
+    ).toBeNull();
+    expect(
+      d3Calls.some((c) => c[0] === "attr" && c[1] === "class" && c[2] === "bar")
+    ).toBe(true);
+
+    const queryStrings = gql.mock.results.map((r) => r.value);
+    expect(queryStrings.some((q) => q.includes("uiapi { query {"))).toBe(true);
+  });
+
+  it("bounds the Count-path query with the same first: value as the aggregate path", async () => {
+    const element = createElement("c-d3-sorted-bar-chart", {
+      is: D3SortedBarChart
+    });
+    element.fetchMode = "graphql";
+    element.objectApiName = "Opportunity";
+    element.groupByField = "StageName";
+    element.operation = "Count";
+    document.body.appendChild(element);
+
+    await flushPromises();
+
+    const queryStrings = gql.mock.results.map((r) => r.value);
+    expect(queryStrings.some((q) => q.includes("first: 2000"))).toBe(true);
   });
 });

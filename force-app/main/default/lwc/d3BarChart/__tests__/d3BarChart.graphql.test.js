@@ -2,7 +2,7 @@
 // ABOUTME: Uses the real HTML selectors: .chart-container (chart) and .slds-text-color_error (error).
 import { createElement } from "lwc";
 import D3BarChart from "c/d3BarChart";
-import { graphql } from "lightning/graphql";
+import { graphql, gql } from "lightning/graphql";
 import { loadD3 } from "c/d3Lib";
 
 jest.mock("c/d3Lib", () => ({ loadD3: jest.fn() }));
@@ -48,6 +48,20 @@ const AGG_RESPONSE = {
               }
             }
           }
+        ]
+      }
+    }
+  }
+};
+
+const RECORD_RESPONSE = {
+  uiapi: {
+    query: {
+      Opportunity: {
+        edges: [
+          { node: { StageName: { value: "Prospecting" } } },
+          { node: { StageName: { value: "Prospecting" } } },
+          { node: { StageName: { value: "Closed Won" } } }
         ]
       }
     }
@@ -122,5 +136,60 @@ describe("d3BarChart GraphQL path (Approach A)", () => {
     expect(
       element.shadowRoot.querySelector(".slds-text-color_error")
     ).not.toBeNull();
+  });
+
+  it("falls back to a raw record query for Count and draws a real bar mark", async () => {
+    const calls = [];
+    const chain = new Proxy(function () {}, {
+      get: (target, prop) => {
+        if (prop === "then") return undefined;
+        if (prop === "max")
+          return (arr, accessor) =>
+            Math.max(...arr.map(accessor ?? ((d) => d)));
+        return (...args) => {
+          calls.push([prop, ...args]);
+          return chain;
+        };
+      },
+      apply: () => chain
+    });
+    loadD3.mockResolvedValue(chain);
+
+    const element = createElement("c-d3-bar-chart", { is: D3BarChart });
+    element.fetchMode = "graphql";
+    element.objectApiName = "Opportunity";
+    element.groupByField = "StageName";
+    element.operation = "Count";
+    document.body.appendChild(element);
+
+    await flushPromises();
+    graphql.emit(RECORD_RESPONSE);
+    await flushPromises();
+    await flushPromises();
+
+    expect(element.shadowRoot.querySelector(".chart-container")).not.toBeNull();
+    expect(
+      element.shadowRoot.querySelector(".slds-text-color_error")
+    ).toBeNull();
+    expect(
+      calls.some((c) => c[0] === "attr" && c[1] === "class" && c[2] === "bar")
+    ).toBe(true);
+
+    const queryStrings = gql.mock.results.map((r) => r.value);
+    expect(queryStrings.some((q) => q.includes("uiapi { query {"))).toBe(true);
+  });
+
+  it("bounds the Count-path query with the same first: value as the aggregate path", async () => {
+    const element = createElement("c-d3-bar-chart", { is: D3BarChart });
+    element.fetchMode = "graphql";
+    element.objectApiName = "Opportunity";
+    element.groupByField = "StageName";
+    element.operation = "Count";
+    document.body.appendChild(element);
+
+    await flushPromises();
+
+    const queryStrings = gql.mock.results.map((r) => r.value);
+    expect(queryStrings.some((q) => q.includes("first: 2000"))).toBe(true);
   });
 });
