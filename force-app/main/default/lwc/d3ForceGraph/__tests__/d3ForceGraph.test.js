@@ -4,6 +4,7 @@ import { createElement } from "lwc";
 import D3ForceGraph from "c/d3ForceGraph";
 import { loadD3 } from "c/d3Lib";
 import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
+import { getColors } from "c/themeService";
 
 // Mock d3Lib
 jest.mock("c/d3Lib", () => ({
@@ -43,6 +44,7 @@ const createMockD3 = () => {
   const mockD3 = {
     select: jest.fn(() => mockD3),
     append: jest.fn(() => mockD3),
+    insert: jest.fn(() => mockD3),
     attr: jest.fn(() => mockD3),
     style: jest.fn(() => mockD3),
     call: jest.fn(() => mockD3),
@@ -714,6 +716,16 @@ describe("c-d3-force-graph", () => {
       await createChart({ theme: "Salesforce Standard" });
       expect(element.theme).toBe("Salesforce Standard");
     });
+
+    it("passes the theme's color palette into the node color scale", async () => {
+      // SAMPLE_RELATIONSHIP_DATA has two distinct Type values (Person, Company)
+      // on its source-owned nodes, so nodeTypeField drives a 2-color scale.
+      await createChart({ theme: "Warm", nodeTypeField: "Type" });
+      await Promise.resolve();
+
+      const ordinalScale = mockD3.scaleOrdinal.mock.results[0].value;
+      expect(ordinalScale.range).toHaveBeenCalledWith(getColors("Warm", 2));
+    });
   });
 
   // ═══════════════════════════════════════════════════════════════
@@ -1353,6 +1365,18 @@ describe("c-d3-force-graph", () => {
       await Promise.resolve();
 
       expect(mockD3.scaleOrdinal).toHaveBeenCalled();
+    });
+
+    it("applies role=img and a title to the root svg", async () => {
+      await createChart();
+      await Promise.resolve();
+
+      expect(mockD3.attr).toHaveBeenCalledWith("role", "img");
+      expect(mockD3.attr).toHaveBeenCalledWith(
+        "aria-label",
+        expect.stringContaining("Force-directed graph")
+      );
+      expect(mockD3.insert).toHaveBeenCalledWith("title", ":first-child");
     });
   });
 

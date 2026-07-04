@@ -1,6 +1,6 @@
 // ABOUTME: D3 Force Graph Lightning Web Component for network/graph visualization.
 // ABOUTME: Displays nodes and edges with force simulation, drag, zoom, tooltips, and navigation.
-import { LightningElement, api, track } from "lwc";
+import { LightningElement, api, track, wire } from "lwc";
 import { loadD3 } from "c/d3Lib";
 import { prepareData, CHART_LIMITS } from "c/dataService";
 import { getColors, DEFAULT_THEME } from "c/themeService";
@@ -9,10 +9,13 @@ import {
   createTooltip,
   createResizeHandler,
   createLayoutRetry,
-  truncateLabel
+  truncateLabel,
+  applySvgA11y
 } from "c/chartUtils";
 import { NavigationMixin } from "lightning/navigation";
 import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
+import { gql, graphql } from "lightning/graphql";
+import { buildRecordQuery, normalizeRecordsGeneric } from "c/graphqlService";
 
 // Lower default limit for force graphs due to performance
 const MAX_NODES = CHART_LIMITS.FORCE_GRAPH;
@@ -121,6 +124,12 @@ export default class D3ForceGraph extends NavigationMixin(LightningElement) {
   /** Advanced configuration JSON */
   @api advancedConfig = "{}";
 
+  /** Fetch-mode selector: "auto" (default, existing priority order), "apex", or "graphql". */
+  @api fetchMode = "auto";
+
+  /** Structured filter for the GraphQL path: { field, operator, value }. */
+  @api graphqlFilter;
+
   // ═══════════════════════════════════════════════════════════════
   // TRACKED STATE
   // ═══════════════════════════════════════════════════════════════
@@ -195,6 +204,90 @@ export default class D3ForceGraph extends NavigationMixin(LightningElement) {
   }
 
   // ═══════════════════════════════════════════════════════════════
+  // GRAPHQL SELF-FETCH PATH (Approach A — additive)
+  // ═══════════════════════════════════════════════════════════════
+
+  /**
+   * Reactive GraphQL query for the self-fetch path. Returns undefined (so the
+   * wire is skipped) unless fetchMode is "graphql" and objectApiName/sourceField/
+   * targetField are set. Fetches a single flat record set (CT-REC) — the same
+   * shape buildGraphData() already consumes on the apex/auto path, since this
+   * chart's node+edge graph comes from ONE relational object (each row is a
+   * node whose sourceField/targetField describe its own edge), not a separate
+   * node-set and edge-set query.
+   */
+  get gqlQuery() {
+    if (this.fetchMode !== "graphql") return undefined;
+    if (!this.objectApiName || !this.sourceField || !this.targetField) {
+      return undefined;
+    }
+    const fields = this._gqlFields();
+    let queryString;
+    try {
+      queryString = buildRecordQuery({
+        objectApiName: this.objectApiName,
+        fields,
+        filter: this.graphqlFilter,
+        first: (this.recordLimit || MAX_NODES) * 2
+      });
+    } catch {
+      // Unsupported operation/config: leave the wire un-provisioned; error surfaces below.
+      return undefined;
+    }
+    return gql`
+      ${queryString}
+    `;
+  }
+
+  /** Deduped, non-null field list consumed on the graphql record query. */
+  _gqlFields() {
+    return [
+      ...new Set(
+        [
+          this.sourceField,
+          this.targetField,
+          this.nodeIdField,
+          this.nodeLabelField,
+          this.nodeSizeField,
+          this.nodeTypeField
+        ].filter(Boolean)
+      )
+    ];
+  }
+
+  @wire(graphql, { query: "$gqlQuery" })
+  wiredRecords({ data, errors }) {
+    if (this.fetchMode !== "graphql") return;
+    if (errors) {
+      this.error = this._formatGqlErrors(errors);
+      this.isLoading = false;
+      return;
+    }
+    if (!data) return; // initial undefined emission
+    try {
+      const records = normalizeRecordsGeneric(data, {
+        objectApiName: this.objectApiName,
+        fields: this._gqlFields()
+      });
+      this.networkData = this.buildGraphData(records);
+      if (!this.networkData.nodes || this.networkData.nodes.length === 0) {
+        this.error = "No nodes generated from data";
+      } else {
+        this.error = null;
+        this.chartRendered = false; // force renderedCallback to re-initialize the SVG
+      }
+    } catch (e) {
+      this.error = e.message;
+    }
+    this.isLoading = false;
+  }
+
+  _formatGqlErrors(errors) {
+    const list = Array.isArray(errors) ? errors : [errors];
+    return list.map((e) => e?.message || e).join("; ") || "GraphQL error";
+  }
+
+  // ═══════════════════════════════════════════════════════════════
   // LIFECYCLE HOOKS
   // ═══════════════════════════════════════════════════════════════
 
@@ -240,6 +333,11 @@ export default class D3ForceGraph extends NavigationMixin(LightningElement) {
   // ═══════════════════════════════════════════════════════════════
 
   async loadData() {
+    // GraphQL path is handled reactively by the @wire(graphql) — nothing to do here.
+    if (this.fetchMode === "graphql") {
+      return;
+    }
+
     // Check for pre-built graph data first
     if (this.graphData) {
       this.networkData = this.validateGraphData(this.graphData);
@@ -485,6 +583,11 @@ export default class D3ForceGraph extends NavigationMixin(LightningElement) {
       .attr("viewBox", [0, 0, width, height]);
 
     this.svg = svg;
+
+    applySvgA11y(svg, {
+      title: `Force-directed graph: ${nodes.length} nodes, ${links.length} links`,
+      desc: `${nodes.length} nodes and ${links.length} links`
+    });
 
     // Create main group for zoom/pan
     const g = svg.append("g").attr("class", "graph-container");

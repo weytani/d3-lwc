@@ -53,12 +53,6 @@
   color: #aaa;
 }
 
-/* Warning alert styling */
-.slds-alert_warning {
-  padding: 0.5rem 1rem;
-  font-size: 0.75rem;
-}
-
 /* No data state */
 .slds-text-color_weak {
   color: #706e6b;
