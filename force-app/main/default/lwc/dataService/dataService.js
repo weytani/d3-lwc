@@ -170,6 +170,35 @@ export const prepareData = (data, options = {}) => {
 };
 
 /**
+ * Injects filterClause as a WHERE-clause fragment into a raw SOQL query
+ * string, ahead of any ORDER BY / GROUP BY / LIMIT clause. Appends with
+ * AND if the query already has a WHERE; otherwise adds one. No-op when
+ * filterClause is blank or whitespace-only.
+ *
+ * FLAT-QUERY ASSUMPTION: clause detection is lexical (regex over the raw
+ * string), not a real SOQL parse. A WHERE / ORDER BY / GROUP BY / LIMIT
+ * keyword occurring inside a subquery (e.g. a nested SELECT in a semi-join)
+ * will mis-match. Callers must pass flat, single-object queries.
+ * @param {String} soqlQuery - The base SOQL query
+ * @param {String} filterClause - WHERE-clause fragment to inject
+ * @returns {String} - The query with filterClause applied
+ */
+export const applyFilterClause = (soqlQuery, filterClause) => {
+  if (!filterClause || !filterClause.trim()) return soqlQuery;
+
+  const fragment = /\bWHERE\b/i.test(soqlQuery)
+    ? ` AND (${filterClause})`
+    : ` WHERE (${filterClause})`;
+
+  const trailingClause = soqlQuery.match(/\b(ORDER BY|GROUP BY|LIMIT)\b/i);
+  if (trailingClause) {
+    const idx = trailingClause.index;
+    return `${soqlQuery.slice(0, idx).trimEnd()}${fragment} ${soqlQuery.slice(idx)}`;
+  }
+  return `${soqlQuery}${fragment}`;
+};
+
+/**
  * Threshold above which scatter data is sampled to reduce SVG element count.
  */
 export const SVG_ELEMENT_CAP = 500;

@@ -12,6 +12,7 @@ import {
   buildMatrix,
   buildHierarchy,
   sampleData,
+  applyFilterClause,
   MAX_RECORDS,
   CHART_LIMITS,
   SVG_ELEMENT_CAP,
@@ -894,6 +895,61 @@ describe("dataService", () => {
         name: "Root",
         children: []
       });
+    });
+  });
+
+  describe("applyFilterClause", () => {
+    it("leaves the query unchanged when filterClause is blank", () => {
+      const query = "SELECT CloseDate, Amount FROM Opportunity";
+      expect(applyFilterClause(query, "")).toBe(query);
+    });
+
+    it("leaves the query unchanged when filterClause is whitespace-only", () => {
+      const query = "SELECT CloseDate, Amount FROM Opportunity";
+      expect(applyFilterClause(query, "   ")).toBe(query);
+    });
+
+    it("leaves the query unchanged when filterClause is undefined", () => {
+      const query = "SELECT CloseDate, Amount FROM Opportunity";
+      expect(applyFilterClause(query, undefined)).toBe(query);
+    });
+
+    it("inserts a WHERE clause when the query has none", () => {
+      const query = "SELECT CloseDate, Amount FROM Opportunity";
+      expect(applyFilterClause(query, "Amount > 1000")).toBe(
+        "SELECT CloseDate, Amount FROM Opportunity WHERE (Amount > 1000)"
+      );
+    });
+
+    it("AND-appends when the query already has a WHERE clause", () => {
+      const query =
+        "SELECT CloseDate, Amount FROM Opportunity WHERE StageName = 'Won'";
+      expect(applyFilterClause(query, "Amount > 1000")).toBe(
+        "SELECT CloseDate, Amount FROM Opportunity WHERE StageName = 'Won' AND (Amount > 1000)"
+      );
+    });
+
+    it("inserts ahead of ORDER BY", () => {
+      const query =
+        "SELECT CloseDate, Amount FROM Opportunity ORDER BY CloseDate";
+      expect(applyFilterClause(query, "Amount > 1000")).toBe(
+        "SELECT CloseDate, Amount FROM Opportunity WHERE (Amount > 1000) ORDER BY CloseDate"
+      );
+    });
+
+    it("inserts ahead of GROUP BY", () => {
+      const query =
+        "SELECT StageName, Amount FROM Opportunity GROUP BY StageName";
+      expect(applyFilterClause(query, "Amount > 1000")).toBe(
+        "SELECT StageName, Amount FROM Opportunity WHERE (Amount > 1000) GROUP BY StageName"
+      );
+    });
+
+    it("inserts ahead of LIMIT", () => {
+      const query = "SELECT CloseDate, Amount FROM Opportunity LIMIT 200";
+      expect(applyFilterClause(query, "Amount > 1000")).toBe(
+        "SELECT CloseDate, Amount FROM Opportunity WHERE (Amount > 1000) LIMIT 200"
+      );
     });
   });
 });

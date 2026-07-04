@@ -2,7 +2,12 @@
 // ABOUTME: Displays small multiples inline mini-charts for entity comparison with monthly aggregation.
 import { LightningElement, api, track, wire } from "lwc";
 import { loadD3 } from "c/d3Lib";
-import { prepareData, OPERATIONS, CHART_LIMITS } from "c/dataService";
+import {
+  prepareData,
+  OPERATIONS,
+  CHART_LIMITS,
+  applyFilterClause
+} from "c/dataService";
 import { getColors, DEFAULT_THEME } from "c/themeService";
 import {
   formatNumber,
@@ -254,7 +259,9 @@ export default class D3SparklineGrid extends NavigationMixin(LightningElement) {
       rawData = [...this.recordCollection];
     } else if (this.soqlQuery) {
       try {
-        rawData = await executeQuery({ queryString: this.soqlQuery });
+        rawData = await executeQuery({
+          queryString: applyFilterClause(this.soqlQuery, this.filterClause)
+        });
       } catch (e) {
         throw new Error(`SOQL Error: ${e.body?.message || e.message}`);
       }

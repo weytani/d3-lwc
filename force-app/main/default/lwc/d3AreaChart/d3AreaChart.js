@@ -2,7 +2,7 @@
 // ABOUTME: Displays time series data as filled areas with stacked/overlapping modes and gradient fill.
 import { LightningElement, api, track, wire } from "lwc";
 import { loadD3 } from "c/d3Lib";
-import { prepareData, CHART_LIMITS } from "c/dataService";
+import { prepareData, CHART_LIMITS, applyFilterClause } from "c/dataService";
 import { getColors, DEFAULT_THEME } from "c/themeService";
 import {
   formatNumber,
@@ -281,7 +281,7 @@ export default class D3AreaChart extends NavigationMixin(LightningElement) {
     } else if (this.soqlQuery) {
       try {
         rawData = await executeQuery({
-          queryString: this._applyFilterClause(this.soqlQuery)
+          queryString: applyFilterClause(this.soqlQuery, this.filterClause)
         });
       } catch (e) {
         throw new Error(`SOQL Error: ${e.body?.message || e.message}`);
@@ -307,29 +307,6 @@ export default class D3AreaChart extends NavigationMixin(LightningElement) {
     if (this.seriesData.length === 0) {
       throw new Error("No data after processing");
     }
-  }
-
-  /**
-   * Injects filterClause as a WHERE-clause fragment into a raw SOQL query
-   * string, ahead of any ORDER BY / GROUP BY / LIMIT clause. Appends with
-   * AND if the query already has a WHERE; otherwise adds one. No-op when
-   * filterClause is blank.
-   * @param {String} soqlQuery - The base SOQL query
-   * @returns {String} - The query with filterClause applied
-   */
-  _applyFilterClause(soqlQuery) {
-    if (!this.filterClause) return soqlQuery;
-
-    const fragment = /\bWHERE\b/i.test(soqlQuery)
-      ? ` AND (${this.filterClause})`
-      : ` WHERE (${this.filterClause})`;
-
-    const trailingClause = soqlQuery.match(/\b(ORDER BY|GROUP BY|LIMIT)\b/i);
-    if (trailingClause) {
-      const idx = trailingClause.index;
-      return `${soqlQuery.slice(0, idx).trimEnd()}${fragment} ${soqlQuery.slice(idx)}`;
-    }
-    return `${soqlQuery}${fragment}`;
   }
 
   /**

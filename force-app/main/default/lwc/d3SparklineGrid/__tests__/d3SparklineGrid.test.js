@@ -367,6 +367,20 @@ describe("c-d3-sparkline-grid", () => {
       await createChart({ filterClause: "Amount > 1000" });
       expect(element.filterClause).toBe("Amount > 1000");
     });
+
+    it("wires filterClause into the SOQL query sent to Apex, before ORDER BY", async () => {
+      await createChart({
+        recordCollection: [],
+        soqlQuery:
+          "SELECT Type, CloseDate, Amount FROM Opportunity ORDER BY CloseDate",
+        filterClause: "Amount > 1000"
+      });
+
+      expect(executeQuery).toHaveBeenCalledWith({
+        queryString:
+          "SELECT Type, CloseDate, Amount FROM Opportunity WHERE (Amount > 1000) ORDER BY CloseDate"
+      });
+    });
   });
 
   // ===============================================================
