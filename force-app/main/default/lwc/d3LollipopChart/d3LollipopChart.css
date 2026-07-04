@@ -1,0 +1,10 @@
+/* ABOUTME: Styles for the D3 Lollipop Chart Lightning Web Component. */
+/* ABOUTME: Defines svg font and the hover state for the value heads. */
+
+.lollipop-chart-svg {
+  font-family: "Salesforce Sans", Arial, sans-serif;
+}
+
+.lollipop-head:hover {
+  opacity: 0.9;
+}

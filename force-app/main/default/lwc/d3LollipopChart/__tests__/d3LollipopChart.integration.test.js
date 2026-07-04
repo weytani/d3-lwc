@@ -72,6 +72,7 @@ const createMockD3 = () => {
     remove: jest.fn(() => mockD3),
     html: jest.fn(() => mockD3),
     text: jest.fn(() => mockD3),
+    insert: jest.fn(() => mockD3),
     scaleBand: jest.fn(() => {
       const scale = jest.fn(() => 50);
       scale.domain = jest.fn(() => scale);
@@ -574,6 +575,26 @@ describe("c-d3-lollipop-chart integration", () => {
       // select should have been called again for the re-render
       const selectCallsAfter = mockD3.select.mock.calls.length;
       expect(selectCallsAfter).toBeGreaterThan(selectCallsBefore);
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════
+  // ACCESSIBILITY WIRING
+  // ═══════════════════════════════════════════════════════════════
+
+  describe("accessibility wiring", () => {
+    it("applies role=img and a title to the rendered svg", async () => {
+      await createChart();
+
+      const attrCalls = mockD3.attr.mock.calls;
+      const roleCall = attrCalls.find((call) => call[0] === "role");
+      expect(roleCall).toBeTruthy();
+      expect(roleCall[1]).toBe("img");
+
+      const insertCalls = mockD3.insert.mock.calls;
+      const titleInsert = insertCalls.find((call) => call[0] === "title");
+      expect(titleInsert).toBeTruthy();
+      expect(titleInsert[1]).toBe(":first-child");
     });
   });
 });
