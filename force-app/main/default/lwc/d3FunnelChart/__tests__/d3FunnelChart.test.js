@@ -51,6 +51,7 @@ const createMockD3 = () => {
     html: jest.fn(() => mockD3),
     text: jest.fn(() => mockD3),
     each: jest.fn(() => mockD3),
+    insert: jest.fn(() => mockD3),
     scaleBand: jest.fn(() => {
       const scale = jest.fn(() => 50);
       scale.domain = jest.fn(() => scale);
