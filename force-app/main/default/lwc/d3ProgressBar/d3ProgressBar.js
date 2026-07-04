@@ -1,6 +1,6 @@
 // ABOUTME: D3 Progress Bar chart Lightning Web Component.
 // ABOUTME: Renders a single KPI value as a horizontal track filled to value/target with an optional target marker and percent label.
-import { LightningElement, api, track } from "lwc";
+import { LightningElement, api, track, wire } from "lwc";
 import { loadD3 } from "c/d3Lib";
 import { getColor } from "c/themeService";
 import {
@@ -10,11 +10,14 @@ import {
   createTooltip,
   createResizeHandler,
   buildTooltipContent,
-  createLayoutRetry
+  createLayoutRetry,
+  applySvgA11y
 } from "c/chartUtils";
 import { NavigationMixin } from "lightning/navigation";
 import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
 import getAggregatedData from "@salesforce/apex/D3ChartController.getAggregatedData";
+import { gql, graphql } from "lightning/graphql";
+import { buildRecordQuery, normalizeRecordsGeneric } from "c/graphqlService";
 
 // Track background color (light gray)
 const TRACK_COLOR = "#e0e0e0";
@@ -50,6 +53,12 @@ export default class D3ProgressBar extends NavigationMixin(LightningElement) {
 
   /** Optional WHERE clause fragment for server-side aggregation */
   @api filterClause = "";
+
+  /** Fetch-mode selector: "auto" (default, existing priority order), "apex", or "graphql". */
+  @api fetchMode = "auto";
+
+  /** Structured filter for the GraphQL path: { field, operator, value }. */
+  @api graphqlFilter;
 
   // ═══════════════════════════════════════════════════════════════
   // TRACKED STATE
@@ -125,6 +134,65 @@ export default class D3ProgressBar extends NavigationMixin(LightningElement) {
   }
 
   // ═══════════════════════════════════════════════════════════════
+  // GRAPHQL SELF-FETCH PATH (Approach A — additive, CT-REC)
+  // ═══════════════════════════════════════════════════════════════
+
+  /**
+   * Reactive GraphQL query for the self-fetch path. Returns undefined (so the wire
+   * is skipped) unless fetchMode is "graphql" and objectApiName/valueField are set.
+   * PROGRESS_BAR has no per-chart CHART_LIMITS cap (null — server GROUP BY, single
+   * row), so this uses the general 2000 bounded fallback rather than a chart-specific
+   * constant.
+   */
+  get gqlQuery() {
+    if (this.fetchMode !== "graphql") return undefined;
+    if (!this.objectApiName || !this.valueField) return undefined;
+    let queryString;
+    try {
+      queryString = buildRecordQuery({
+        objectApiName: this.objectApiName,
+        fields: [this.valueField],
+        filter: this.graphqlFilter,
+        first: 2000
+      });
+    } catch {
+      // Unsupported config: leave the wire un-provisioned; error surfaces below.
+      return undefined;
+    }
+    return gql`
+      ${queryString}
+    `;
+  }
+
+  @wire(graphql, { query: "$gqlQuery" })
+  wiredRecord({ data, errors }) {
+    if (this.fetchMode !== "graphql") return;
+    if (errors) {
+      this.error = this._formatGqlErrors(errors);
+      this.isLoading = false;
+      return;
+    }
+    if (!data) return; // initial undefined emission
+    try {
+      const records = normalizeRecordsGeneric(data, {
+        objectApiName: this.objectApiName,
+        fields: [this.valueField]
+      });
+      this.processData(records);
+      this.error = null;
+      this.chartRendered = false; // force renderedCallback to re-initialize the SVG
+    } catch (e) {
+      this.error = e.message;
+    }
+    this.isLoading = false;
+  }
+
+  _formatGqlErrors(errors) {
+    const list = Array.isArray(errors) ? errors : [errors];
+    return list.map((e) => e?.message || e).join("; ") || "GraphQL error";
+  }
+
+  // ═══════════════════════════════════════════════════════════════
   // LIFECYCLE HOOKS
   // ═══════════════════════════════════════════════════════════════
 
@@ -170,6 +238,11 @@ export default class D3ProgressBar extends NavigationMixin(LightningElement) {
   // ═══════════════════════════════════════════════════════════════
 
   async loadData() {
+    // GraphQL path is handled reactively by the @wire(graphql) — nothing to do here.
+    if (this.fetchMode === "graphql") {
+      return;
+    }
+
     // Priority 1: Use recordCollection if provided (take first record's value)
     if (this.recordCollection && this.recordCollection.length > 0) {
       this.processData(this.recordCollection);
@@ -275,17 +348,32 @@ export default class D3ProgressBar extends NavigationMixin(LightningElement) {
 
     if (width <= 0 || height <= 0) return;
 
-    this.svg = d3
+    const config = this.config;
+    const target = this.effectiveTarget;
+
+    // ARIA progressbar semantics on the persistent (lwc:dom="manual")
+    // container — the D3-rendered svg/rects are torn down and rebuilt on
+    // every render, so the container is the only stable place to hold these.
+    container.setAttribute("role", "progressbar");
+    container.setAttribute("aria-valuemin", "0");
+    container.setAttribute("aria-valuemax", String(target));
+    container.setAttribute("aria-valuenow", String(this.currentValue));
+
+    const svgRoot = d3
       .select(container)
       .append("svg")
       .attr("width", containerWidth)
       .attr("height", this.height)
-      .attr("class", "progress-bar-svg")
+      .attr("class", "progress-bar-svg");
+
+    applySvgA11y(svgRoot, {
+      title: `Progress: ${this.valueFormatter(this.currentValue)} of ${this.valueFormatter(target)}`,
+      desc: `${formatPercent(target > 0 ? this.currentValue / target : 0)} complete`
+    });
+
+    this.svg = svgRoot
       .append("g")
       .attr("transform", `translate(${margin.left},${margin.top})`);
-
-    const config = this.config;
-    const target = this.effectiveTarget;
 
     // Linear scale: value domain [0, target] mapped to track width
     const xScale = d3

@@ -1,0 +1,10 @@
+/* ABOUTME: Styles for the d3ProgressBar Lightning Web Component. */
+/* ABOUTME: Provides SVG typography and hover styling for the value fill. */
+
+svg {
+  font-family: "Salesforce Sans", Arial, sans-serif;
+}
+
+.progress-value:hover {
+  opacity: 0.8;
+}

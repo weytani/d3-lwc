@@ -39,7 +39,8 @@ jest.mock("c/chartUtils", () => ({
   calculateDimensions: jest
     .fn()
     .mockReturnValue({ width: 300, height: 200, margins: {} }),
-  shouldUseCompactMode: jest.fn().mockReturnValue(false)
+  shouldUseCompactMode: jest.fn().mockReturnValue(false),
+  applySvgA11y: jest.fn()
 }));
 
 // Mock Apex
@@ -539,6 +540,24 @@ describe("d3ProgressBar", () => {
         ".slds-text-color_error"
       );
       expect(errorText).not.toBeNull();
+    });
+  });
+
+  // ── accessibility ─────────────────────────────────────────────
+  describe("accessibility", () => {
+    it("sets role=progressbar and aria-value attributes on the chart container", async () => {
+      const element = await createComponent({
+        recordCollection: [{ Amount: 40 }],
+        advancedConfig: JSON.stringify({ target: 100 })
+      });
+      await Promise.resolve();
+      await Promise.resolve();
+
+      const container = element.shadowRoot.querySelector(".chart-container");
+      expect(container.getAttribute("role")).toBe("progressbar");
+      expect(container.getAttribute("aria-valuemin")).toBe("0");
+      expect(container.getAttribute("aria-valuemax")).toBe("100");
+      expect(container.getAttribute("aria-valuenow")).toBe("40");
     });
   });
 

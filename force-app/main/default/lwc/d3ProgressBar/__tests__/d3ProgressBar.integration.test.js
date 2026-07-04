@@ -63,6 +63,7 @@ const createMockD3 = () => {
     duration: jest.fn(() => d3),
     on: jest.fn(() => d3),
     remove: jest.fn(() => d3),
+    insert: jest.fn(() => d3),
     text: jest.fn(() => d3),
     scaleLinear: jest.fn(() => {
       const scale = jest.fn((v) => v);
@@ -206,6 +207,25 @@ describe("d3ProgressBar integration tests", () => {
       // formatPercent(0.4) = '40.0%' rendered as the percent label.
       const textCalls = mockD3.text.mock.calls.map((c) => c[0]);
       expect(textCalls).toContain("40.0%");
+    });
+  });
+
+  describe("accessibility integration", () => {
+    it("applies role=img and a title to the root svg via real applySvgA11y", async () => {
+      await createChart({
+        recordCollection: [{ Amount: 50 }],
+        advancedConfig: JSON.stringify({ target: 200 })
+      });
+
+      const roleCalls = mockD3.attr.mock.calls.filter(
+        (call) => call[0] === "role" && call[1] === "img"
+      );
+      expect(roleCalls.length).toBeGreaterThanOrEqual(1);
+
+      const titleInsertCalls = mockD3.insert.mock.calls.filter(
+        (call) => call[0] === "title"
+      );
+      expect(titleInsertCalls.length).toBeGreaterThanOrEqual(1);
     });
   });
 
