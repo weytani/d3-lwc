@@ -59,7 +59,8 @@ jest.mock("c/chartUtils", () => ({
   calculateDimensions: jest
     .fn()
     .mockReturnValue({ width: 300, height: 200, margins: {} }),
-  shouldUseCompactMode: jest.fn().mockReturnValue(false)
+  shouldUseCompactMode: jest.fn().mockReturnValue(false),
+  applySvgA11y: jest.fn()
 }));
 
 // Factory: isolated mock D3 with sunburst-specific primitives (hierarchy, partition, arc).
@@ -599,6 +600,47 @@ describe("c-d3-sunburst-chart", () => {
       );
       expect(widthSet).toBe(true);
       expect(heightSet).toBe(true);
+    });
+
+    it("applies role=img and a title to the root svg", async () => {
+      const { applySvgA11y } = require("c/chartUtils");
+      await createChart();
+      await flushPromises();
+
+      expect(applySvgA11y).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          title: expect.stringContaining("Sunburst chart")
+        })
+      );
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════
+  // THEME WIRING TESTS
+  // ═══════════════════════════════════════════════════════════════
+
+  describe("theme wiring", () => {
+    it("passes the theme's palette into the arc fill color scale", async () => {
+      const { getColors } = require("c/themeService");
+      await createChart({ theme: "Warm" });
+      await flushPromises();
+
+      const fillCall = mockD3.attr.mock.calls.find(
+        (c) => c[0] === "fill" && typeof c[1] === "function"
+      );
+      expect(fillCall).toBeDefined();
+
+      // rootData.children order for single-field buildHierarchy is insertion
+      // order (Prospecting first-seen in SAMPLE_DATA); the mock's root.sort()
+      // is a no-op, so this matches what topLevel/colors[0] resolves to.
+      const fakeNode = {
+        depth: 1,
+        data: { name: "Prospecting" },
+        parent: null
+      };
+      const resolvedColor = fillCall[1](fakeNode);
+      expect(resolvedColor).toBe(getColors("Warm", 5)[0]);
     });
   });
 

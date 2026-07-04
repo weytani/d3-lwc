@@ -1,6 +1,6 @@
 // ABOUTME: D3 Sunburst chart Lightning Web Component for radial hierarchical data.
 // ABOUTME: Renders concentric rings via d3.partition + d3.arc; supports flat auto-nesting, two-level server hierarchy, and pre-built hierarchyData.
-import { LightningElement, api, track } from "lwc";
+import { LightningElement, api, track, wire } from "lwc";
 import { loadD3 } from "c/d3Lib";
 import {
   prepareData,
@@ -15,12 +15,22 @@ import {
   createTooltip,
   createResizeHandler,
   createLayoutRetry,
-  truncateLabel
+  truncateLabel,
+  applySvgA11y
 } from "c/chartUtils";
 import { NavigationMixin } from "lightning/navigation";
 import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
 import getAggregatedData from "@salesforce/apex/D3ChartController.getAggregatedData";
 import getMultiGroupData from "@salesforce/apex/D3ChartController.getMultiGroupData";
+import { gql, graphql } from "lightning/graphql";
+import {
+  buildRecordQuery,
+  normalizeRecordsGeneric,
+  buildAggregateQuery,
+  normalizeAggregate,
+  buildMultiGroupQuery,
+  normalizeMultiGroup
+} from "c/graphqlService";
 
 export default class D3SunburstChart extends NavigationMixin(LightningElement) {
   // ═══════════════════════════════════════════════════════════════
@@ -68,6 +78,12 @@ export default class D3SunburstChart extends NavigationMixin(LightningElement) {
 
   /** Maximum records to process (overrides default limit) */
   @api recordLimit;
+
+  /** Fetch-mode selector: "auto" (default, existing priority order), "apex", or "graphql". */
+  @api fetchMode = "auto";
+
+  /** Structured filter for the GraphQL path: { field, operator, value }. */
+  @api graphqlFilter;
 
   // ═══════════════════════════════════════════════════════════════
   // TRACKED STATE
@@ -128,6 +144,138 @@ export default class D3SunburstChart extends NavigationMixin(LightningElement) {
   }
 
   // ═══════════════════════════════════════════════════════════════
+  // GRAPHQL SELF-FETCH PATH (Approach A — additive)
+  // ═══════════════════════════════════════════════════════════════
+
+  /**
+   * Reactive GraphQL query for the self-fetch path. Returns undefined (so the
+   * wire is skipped) unless fetchMode is "graphql" and objectApiName/groupByField/
+   * valueField/operation are set. Mirrors _canUseServerAggregation's decision:
+   * secondaryGroupByField present -> two-field grouped aggregate (CT-MG, via
+   * buildMultiGroupQuery, same as getMultiGroupData); absent -> single-field
+   * aggregate (CT-AGG, via buildAggregateQuery, same as getAggregatedData).
+   * Count has no server aggregate on either branch, so it fetches bounded raw
+   * records instead, fed through the existing buildHierarchy() client path
+   * (which already handles Count).
+   */
+  get gqlQuery() {
+    if (this.fetchMode !== "graphql") return undefined;
+    if (!this.objectApiName || !this.groupByField || !this.operation) {
+      return undefined;
+    }
+    let queryString;
+    try {
+      if (this.operation === OPERATIONS.COUNT) {
+        const fields = this.secondaryGroupByField
+          ? [this.groupByField, this.secondaryGroupByField]
+          : [this.groupByField];
+        queryString = buildRecordQuery({
+          objectApiName: this.objectApiName,
+          fields: [...new Set(fields)],
+          filter: this.graphqlFilter,
+          first: this.recordLimit || MAX_RECORDS
+        });
+      } else {
+        if (!this.valueField) return undefined;
+        if (this.secondaryGroupByField) {
+          queryString = buildMultiGroupQuery({
+            objectApiName: this.objectApiName,
+            groupByField: this.groupByField,
+            seriesField: this.secondaryGroupByField,
+            valueField: this.valueField,
+            operation: this.operation,
+            filter: this.graphqlFilter,
+            first: this.recordLimit || MAX_RECORDS
+          });
+        } else {
+          queryString = buildAggregateQuery({
+            objectApiName: this.objectApiName,
+            groupByField: this.groupByField,
+            valueField: this.valueField,
+            operation: this.operation,
+            filter: this.graphqlFilter,
+            first: this.recordLimit || MAX_RECORDS
+          });
+        }
+      }
+    } catch {
+      // Unsupported operation/config: leave the wire un-provisioned; error surfaces below.
+      return undefined;
+    }
+    return gql`
+      ${queryString}
+    `;
+  }
+
+  @wire(graphql, { query: "$gqlQuery" })
+  wiredAggregate({ data, errors }) {
+    if (this.fetchMode !== "graphql") return;
+    if (errors) {
+      this.error = this._formatGqlErrors(errors);
+      this.isLoading = false;
+      return;
+    }
+    if (!data) return; // initial undefined emission
+    try {
+      if (this.operation === OPERATIONS.COUNT) {
+        const fields = this.secondaryGroupByField
+          ? [this.groupByField, this.secondaryGroupByField]
+          : [this.groupByField];
+        const records = normalizeRecordsGeneric(data, {
+          objectApiName: this.objectApiName,
+          fields: [...new Set(fields)]
+        });
+        this.rootData = buildHierarchy(
+          records,
+          this.secondaryGroupByField
+            ? [this.groupByField, this.secondaryGroupByField]
+            : [this.groupByField],
+          this.valueField,
+          this.operation
+        );
+      } else if (this.secondaryGroupByField) {
+        const edges = normalizeMultiGroup(data, {
+          objectApiName: this.objectApiName,
+          groupByField: this.groupByField,
+          seriesField: this.secondaryGroupByField,
+          valueField: this.valueField,
+          operation: this.operation
+        });
+        this.rootData = this._edgesToHierarchy(edges);
+      } else {
+        const aggregated = normalizeAggregate(data, {
+          objectApiName: this.objectApiName,
+          groupByField: this.groupByField,
+          valueField: this.valueField,
+          operation: this.operation
+        });
+        this.rootData = {
+          name: "Root",
+          children: aggregated.map((item) => ({
+            name: String(item.label ?? "Null"),
+            value: Number(item.value) || 0
+          }))
+        };
+      }
+      this.calculateTotalValue();
+      if (!this.rootData.children || this.rootData.children.length === 0) {
+        this.error = "No data after aggregation";
+      } else {
+        this.error = null;
+        this.chartRendered = false; // force renderedCallback to re-initialize the SVG
+      }
+    } catch (e) {
+      this.error = e.message;
+    }
+    this.isLoading = false;
+  }
+
+  _formatGqlErrors(errors) {
+    const list = Array.isArray(errors) ? errors : [errors];
+    return list.map((e) => e?.message || e).join("; ") || "GraphQL error";
+  }
+
+  // ═══════════════════════════════════════════════════════════════
   // LIFECYCLE HOOKS
   // ═══════════════════════════════════════════════════════════════
 
@@ -173,6 +321,11 @@ export default class D3SunburstChart extends NavigationMixin(LightningElement) {
   // ═══════════════════════════════════════════════════════════════
 
   async loadData() {
+    // GraphQL path is handled reactively by the @wire(graphql) — nothing to do here.
+    if (this.fetchMode === "graphql") {
+      return;
+    }
+
     // Path 1: pre-built hierarchy
     if (this.hierarchyData) {
       this.rootData = this.validateHierarchy(this.hierarchyData);
@@ -378,12 +531,19 @@ export default class D3SunburstChart extends NavigationMixin(LightningElement) {
 
     const radius = Math.min(width, height) / 2;
 
-    this.svg = d3
+    const svgRoot = d3
       .select(container)
       .append("svg")
       .attr("width", containerWidth)
       .attr("height", this.height)
-      .attr("class", "sunburst-svg")
+      .attr("class", "sunburst-svg");
+
+    applySvgA11y(svgRoot, {
+      title: `Sunburst chart: ${this.operation} of ${this.valueField} by ${this.groupByField}`,
+      desc: `${(this.rootData?.children || []).length} categories`
+    });
+
+    this.svg = svgRoot
       .append("g")
       .attr(
         "transform",

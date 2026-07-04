@@ -65,6 +65,7 @@ const createMockD3 = () => {
   const d3 = {
     select: jest.fn(() => d3),
     append: jest.fn(() => d3),
+    insert: jest.fn(() => d3),
     attr: jest.fn(() => d3),
     style: jest.fn(() => d3),
     call: jest.fn(() => d3),

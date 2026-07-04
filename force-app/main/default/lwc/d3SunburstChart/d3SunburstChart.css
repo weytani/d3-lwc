@@ -1,0 +1,15 @@
+/* D3 Sunburst Chart Styles */
+.chart-container {
+  width: 100%;
+  position: relative;
+  overflow: hidden;
+}
+
+.sunburst-svg {
+  display: block;
+  font-family: "Salesforce Sans", Arial, sans-serif;
+}
+
+.sunburst-arc:hover {
+  filter: brightness(0.95);
+}
