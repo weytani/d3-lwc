@@ -15,7 +15,7 @@ import { NavigationMixin } from "lightning/navigation";
 import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
 import getAggregatedData from "@salesforce/apex/D3ChartController.getAggregatedData";
 import { gql, graphql } from "lightning/graphql";
-import { buildRecordQuery } from "c/graphqlService";
+import { buildRecordQuery, normalizeRecordsGeneric } from "c/graphqlService";
 
 // Number of concentric grid levels to draw
 const GRID_LEVELS = 5;
@@ -184,7 +184,10 @@ export default class D3RadarChart extends NavigationMixin(LightningElement) {
     try {
       const axisFields = this.axes.map((a) => a.field).filter(Boolean);
       const fields = [...new Set([this.groupByField, ...axisFields])];
-      const records = this._normalizeGqlRecords(data, fields);
+      const records = normalizeRecordsGeneric(data, {
+        objectApiName: this.objectApiName,
+        fields
+      });
       const processed = this._processRawData(records);
       if (!processed.length) {
         this.error = "No data after aggregation";
@@ -197,23 +200,6 @@ export default class D3RadarChart extends NavigationMixin(LightningElement) {
       this.error = e.message;
     }
     this.isLoading = false;
-  }
-
-  /**
-   * Maps a record-query wire result into plain {field: value} records for the
-   * requested field list. Reads the same live-verified envelope shape as
-   * graphqlService.normalizeRecords (data.uiapi.query.<Object>.edges[].node.<field>.value),
-   * generalized to an arbitrary field list instead of gantt's fixed label/start/end.
-   */
-  _normalizeGqlRecords(data, fields) {
-    const edges = data?.uiapi?.query?.[this.objectApiName]?.edges ?? [];
-    return edges.map((e) => {
-      const record = {};
-      fields.forEach((f) => {
-        record[f] = e.node[f]?.value ?? null;
-      });
-      return record;
-    });
   }
 
   _formatGqlErrors(errors) {

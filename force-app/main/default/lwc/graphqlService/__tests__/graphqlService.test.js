@@ -3,6 +3,7 @@ import {
   buildWhere,
   buildRecordQuery,
   normalizeRecords,
+  normalizeRecordsGeneric,
   buildAggregateQuery,
   normalizeAggregate,
   buildMultiGroupQuery,
@@ -118,6 +119,79 @@ describe("normalizeRecords", () => {
         }
       )
     ).toEqual([]);
+  });
+});
+
+describe("normalizeRecordsGeneric", () => {
+  it("maps edges to {field: value} for an arbitrary field array", () => {
+    const data = {
+      uiapi: {
+        query: {
+          Project__c: {
+            edges: [
+              {
+                node: {
+                  Name: { value: "Apollo" },
+                  Status__c: { value: "Active" },
+                  Priority__c: { value: "High" }
+                }
+              }
+            ]
+          }
+        }
+      }
+    };
+    expect(
+      normalizeRecordsGeneric(data, {
+        objectApiName: "Project__c",
+        fields: ["Name", "Status__c", "Priority__c"]
+      })
+    ).toEqual([{ Name: "Apollo", Status__c: "Active", Priority__c: "High" }]);
+  });
+
+  it("returns [] when the object node is absent", () => {
+    expect(
+      normalizeRecordsGeneric(
+        { uiapi: { query: {} } },
+        { objectApiName: "Project__c", fields: ["Name"] }
+      )
+    ).toEqual([]);
+  });
+
+  it("maps a null field value to null", () => {
+    const data = {
+      uiapi: {
+        query: {
+          Project__c: {
+            edges: [{ node: { Name: { value: null } } }]
+          }
+        }
+      }
+    };
+    expect(
+      normalizeRecordsGeneric(data, {
+        objectApiName: "Project__c",
+        fields: ["Name"]
+      })
+    ).toEqual([{ Name: null }]);
+  });
+
+  it("maps a field absent on the node to null", () => {
+    const data = {
+      uiapi: {
+        query: {
+          Project__c: {
+            edges: [{ node: { Name: { value: "Apollo" } } }]
+          }
+        }
+      }
+    };
+    expect(
+      normalizeRecordsGeneric(data, {
+        objectApiName: "Project__c",
+        fields: ["Name", "Missing__c"]
+      })
+    ).toEqual([{ Name: "Apollo", Missing__c: null }]);
   });
 });
 

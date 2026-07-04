@@ -71,6 +71,27 @@ export function normalizeRecords(
   }));
 }
 
+/**
+ * Normalizes a record-query wire result into [{field: value}, ...] for an
+ * arbitrary field list, for record-shaped charts (radar, line, area, calendar,
+ * sparkline, histogram, scatter, bubble, boxPlot, gauge, bullet, progressBar).
+ * Unlike normalizeRecords (gantt-specific, fixed {label,start,end}), this
+ * projects any requested field set.
+ * @param {object} data wire `data` ({uiapi:{query:{Object:{edges:[...]}}}})
+ * @param {{objectApiName:string, fields:string[]}} cfg
+ * @returns {Array<Object<string,*>>}
+ */
+export function normalizeRecordsGeneric(data, { objectApiName, fields }) {
+  const edges = data?.uiapi?.query?.[objectApiName]?.edges ?? [];
+  return edges.map((e) => {
+    const record = {};
+    fields.forEach((f) => {
+      record[f] = e.node[f]?.value ?? null;
+    });
+    return record;
+  });
+}
+
 /** Chart aggregate operation -> GraphQL aggregate function. Count is intentionally
  * excluded in the prototype (see buildAggregateQuery). */
 export const AGG_FN = { Sum: "sum", Average: "avg", Min: "min", Max: "max" };
