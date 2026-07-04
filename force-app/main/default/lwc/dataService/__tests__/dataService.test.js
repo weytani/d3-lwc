@@ -277,7 +277,7 @@ describe("dataService", () => {
   describe("CHART_LIMITS", () => {
     it("defines limits for all chart types", () => {
       expect(CHART_LIMITS).toBeDefined();
-      expect(Object.keys(CHART_LIMITS)).toHaveLength(32);
+      expect(Object.keys(CHART_LIMITS)).toHaveLength(35);
     });
 
     it("has null limits for aggregation charts (server GROUP BY)", () => {

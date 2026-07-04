@@ -57,7 +57,11 @@ export const CHART_LIMITS = {
   LOLLIPOP: null, // Server GROUP BY, no raw record cap
   // New Charts wave 1
   STEP: 1000, // Time series, visual comprehension ceiling (matches LINE)
-  SLOPE: 500 // Per-entity connecting-line readability (matches WATERFALL)
+  SLOPE: 500, // Per-entity connecting-line readability (matches WATERFALL)
+  // New Charts wave 2
+  VARIABLE_COLOR_LINE: 1000, // Time series, visual comprehension ceiling (matches LINE)
+  BAND_CHART: 1000, // Time series, visual comprehension ceiling (matches AREA)
+  DIFFERENCE_CHART: 1000 // Time series, visual comprehension ceiling (matches AREA)
 };
 
 /**

@@ -1,0 +1,106 @@
+/* ABOUTME: Styles for the D3 Variable-Color Line Chart component. */
+/* ABOUTME: Covers chart container, axes, threshold-gradient line, points, and the Above/Below legend. */
+
+:host {
+  display: block;
+}
+
+.chart-container {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+}
+
+/* SVG Styles */
+.variable-color-line-svg {
+  font-family: "Salesforce Sans", Arial, sans-serif;
+}
+
+/* Axis Styles */
+.x-axis text,
+.y-axis text {
+  font-size: 12px;
+  fill: #706e6b;
+}
+
+.x-axis path,
+.x-axis line,
+.y-axis path,
+.y-axis line {
+  stroke: #dddbda;
+}
+
+/* Grid Styles */
+.grid line {
+  stroke: #e0e0e0;
+  stroke-opacity: 0.7;
+  shape-rendering: crispEdges;
+}
+
+.grid path {
+  stroke-width: 0;
+}
+
+/* Line Styles */
+.line {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Point Styles */
+.point {
+  transition: r 0.15s ease;
+}
+
+.point:hover {
+  filter: brightness(1.1);
+}
+
+/* Legend Styles */
+.legend-container {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.legend-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  margin-right: 6px;
+  flex-shrink: 0;
+}
+
+.legend-label {
+  font-size: 12px;
+  color: #706e6b;
+  white-space: nowrap;
+}
+
+/* Threshold reference line */
+.threshold-line {
+  pointer-events: none;
+}
+
+/* Responsive adjustments */
+@media (max-width: 480px) {
+  .legend-container {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .legend-item {
+    margin-bottom: 4px;
+  }
+}
