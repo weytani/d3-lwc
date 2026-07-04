@@ -768,16 +768,16 @@ describe("c-d3-heatmap", () => {
       expect(getSequentialRamp).toHaveBeenCalledWith("green", 9);
     });
 
-    it("a non-default theme takes precedence over an explicit config.rampHue", async () => {
-      // Documented trade-off: once a non-default theme is picked, it drives the
-      // ramp — config.rampHue is only consulted for the default theme.
+    it("an explicit config.rampHue takes precedence over a non-default theme", async () => {
+      // An explicit config.rampHue always wins; a non-default theme only
+      // supplies a ramp when config.rampHue is unset (see the test above).
       await createChart({
         theme: "Warm",
         advancedConfig: JSON.stringify({ rampHue: "green" })
       });
       await flushPromises();
 
-      expect(getSequentialRamp).toHaveBeenCalledWith("red", 9);
+      expect(getSequentialRamp).toHaveBeenCalledWith("green", 9);
     });
   });
 

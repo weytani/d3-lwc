@@ -114,7 +114,7 @@
         name="advancedConfig"
         type="String"
         label="Advanced Config (JSON)"
-        description='{"rampHue": "blue"} — overridden by a non-default Color Theme, which picks its own ramp'
+        description='{"rampHue": "blue"} — takes precedence over Color Theme; the theme ramp only applies when rampHue is unset'
       />
         </targetConfig>
     </targetConfigs>

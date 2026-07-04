@@ -464,13 +464,15 @@ export default class D3Heatmap extends NavigationMixin(LightningElement) {
       .range([0, height])
       .padding(0.05);
 
-    // Color ramp. The default theme preserves the historical hardcoded "blue"
-    // ramp (non-breaking for existing pages); a non-default theme picks its
-    // own ramp via getRampHueForTheme, taking precedence over config.rampHue.
+    // Color ramp. An explicit config.rampHue always wins (backward-compat with
+    // pages set up before theme wiring existed). When rampHue is unset, a
+    // non-default theme picks its own ramp via getRampHueForTheme; the default
+    // theme falls back to the historical hardcoded "blue" ramp.
     const rampHue =
-      this.theme && this.theme !== DEFAULT_THEME
+      this.config.rampHue ||
+      (this.theme && this.theme !== DEFAULT_THEME
         ? getRampHueForTheme(this.theme)
-        : this.config.rampHue || "blue";
+        : "blue");
     const rampColors = getSequentialRamp(rampHue, COLOR_STEPS);
 
     // Build a lookup map for cell values, filling gaps with 0

@@ -316,6 +316,13 @@ describe("d3StackedBarChart GraphQL path (Approach A)", () => {
       const query = queryStrings[queryStrings.length - 1];
       expect(query).toContain("uiapi { query {");
       expect(query).not.toContain("uiapi { aggregate {");
+
+      // Prove renderChart actually ran with the Count-derived record data.
+      expect(
+        mockD3.attr.mock.calls.some(
+          (c) => c[0] === "class" && c[1] === "stacked-bar"
+        )
+      ).toBe(true);
     });
   });
 
@@ -395,6 +402,13 @@ describe("d3StackedBarChart GraphQL path (Approach A)", () => {
       const queryStrings = gql.mock.results.map((r) => r.value);
       const query = queryStrings[queryStrings.length - 1];
       expect(query).toContain("uiapi { query {");
+
+      // Prove renderChart actually ran with the Count-derived record data.
+      expect(
+        mockD3.attr.mock.calls.some(
+          (c) => c[0] === "class" && c[1] === "stacked-bar"
+        )
+      ).toBe(true);
     });
 
     it("does not provision the wire when valueField is missing for Sum", async () => {
