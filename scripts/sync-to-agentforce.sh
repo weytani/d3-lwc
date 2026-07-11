@@ -68,6 +68,7 @@ SHARED_MODULES=(
     "chartUtils"
     "themeService"
     "d3Lib"
+    "graphqlService"
 )
 
 for mod in "${SHARED_MODULES[@]}"; do
@@ -113,6 +114,16 @@ CHART_COMPONENTS=(
     "d3BubbleChart"
     "d3ChordDiagram"
     "d3GanttChart"
+    "d3BandChart"
+    "d3DifferenceChart"
+    "d3DotPlot"
+    "d3IconArray"
+    "d3NormalizedBar"
+    "d3SlopeChart"
+    "d3SortedBarChart"
+    "d3StackedHorizontalBar"
+    "d3StepChart"
+    "d3VariableColorLine"
 )
 
 for comp in "${CHART_COMPONENTS[@]}"; do
