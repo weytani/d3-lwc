@@ -1,8 +1,8 @@
 {
   "name": "d3-lwc",
   "private": true,
-  "version": "2.0.0",
-  "description": "D3.js v7 chart component library for Salesforce Lightning Web Components — 30 charts for App Builder, Flows, and Experience Builder.",
+  "version": "2.1.0",
+  "description": "D3.js v7 chart component library for Salesforce Lightning Web Components — 40 charts for App Builder, Flows, and Experience Builder.",
   "scripts": {
     "lint": "eslint **/{aura,lwc}/**/*.js",
     "test": "npm run test:unit",

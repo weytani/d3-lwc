@@ -5,6 +5,87 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-07-11
+
+### Added
+
+#### Chart components (10 — library grows 30 → 40)
+
+- **Comparison & ranking** — `d3DotPlot` (Cleveland dot plot: one circle per
+  category on a horizontal value axis), `d3SortedBarChart` (vertical bars
+  re-sortable by label or value), `d3SlopeChart` (before/after comparison per
+  entity as a connecting line between two ranked axes).
+- **Composition** — `d3StackedHorizontalBar` (horizontal stacked or
+  100%-normalized bars with series legend), `d3NormalizedBar` (vertical
+  full-height bars whose segments show series composition as a percentage of
+  each category's total), `d3IconArray` (pictogram / unit chart filling a
+  100-glyph grid in proportion to each category).
+- **Trend** — `d3StepChart` (stepped line for discrete state changes,
+  multi-series), `d3VariableColorLine` (single series whose stroke color
+  switches at a configurable threshold via an SVG gradient with hard-edge
+  stops at each crossing), `d3BandChart` (time-series confidence interval /
+  acceptable range as a filled band between a lower and upper bound, with an
+  optional center line), `d3DifferenceChart` (two series — e.g. plan vs actual
+  — shaded green where the primary is above the secondary and red where below,
+  via the two-area clip-path technique).
+- All ten support drill-down where applicable and ship with GraphQL self-fetch
+  (see below).
+
+- **GraphQL self-fetch (`fetchMode`) on every chart.** The `fetchMode` property
+  (`auto` | `apex` | `graphql`, default `auto`) introduced for the bar chart in
+  1.1.0 now covers all charts. The 28 remaining Apex/`recordCollection` charts
+  gained the opt-in GraphQL path (declarative fetch through Salesforce's v2
+  `lightning/graphql` wire adapter, no `D3ChartController` Apex class required,
+  FLS/sharing enforced by the platform); the 10 new charts ship with it. `auto`
+  preserves existing behavior exactly — fully backward-compatible. The gantt
+  chart remains GraphQL-only (as of 2.0.0).
+- **`graphqlService` multi-group support** — `buildMultiGroupQuery` (two-field
+  grouped aggregate) and `normalizeMultiGroup`, enabling GraphQL self-fetch for
+  multi-series charts. Added alongside `themeService` ramp/semantic helpers
+  (`getRampHueForTheme`) and a shared SVG accessibility helper on `chartUtils`.
+- **v2.1 showcase page** — a Lightning app page (`d3_lwc_v2_1`), plus its tab
+  and custom application, demoing all 10 new charts against live Opportunity
+  data.
+
+### Changed
+
+- Consolidated redundant unit-test cases across existing chart suites; no
+  coverage loss (see the test count in Notes).
+- Aligned the donut chart bundle's `apiVersion` to 65.0, required for the
+  `@wire(graphql)` adapter.
+
+### Fixed
+
+- **Count via GraphQL on the bar and sorted-bar charts** — back-ported the
+  Count-aggregation branch (from `d3DotPlot`) so `operation="Count"` works
+  through the GraphQL path. GraphQL Count fetches raw rows up to the record
+  limit and counts client-side, unlike Sum/Average which aggregate
+  server-side; every Count-capable chart's `fetchMode` meta description now
+  documents this bound (`use apex/auto for exact counts on larger objects`).
+- **`d3ProgressBar`** — clamp `aria-valuenow` to `aria-valuemax` so an
+  over-target value no longer reports an out-of-range ARIA value.
+- **`d3SlopeChart`** — drop rows with non-numeric start/end values instead of
+  coercing them to `0`, which had distorted the slope.
+- **`d3StackedHorizontalBar`** — corrected a stale `ABOUTME` comment that
+  referenced a nonexistent series toggle.
+- Bugs surfaced and fixed during the GraphQL conversion: `d3Gauge` no longer
+  renders a false zero-gauge on empty data; `d3Sankey` no longer stays
+  permanently blank at zero container width; `d3BulletChart`'s unreachable
+  no-data branch; `d3BarChart`'s empty `renderLegend` stub replaced with a real
+  HTML legend; `d3Treemap` label-contrast bug; `d3Heatmap` now lets an explicit
+  `rampHue` win over the theme; `d3CalendarHeatmap` preserves its green default
+  ramp when the theme is unset.
+
+### Notes
+
+- **Tested** — 133 Jest suites / 3,384 tests, all green.
+- **Platform** — Salesforce API version 65.0; D3.js v7 served from the `d3`
+  static resource; Node.js v20 required for the Salesforce CLI / local dev
+  server.
+- The `fetchMode="graphql"` path covers UI API-queryable objects with structured
+  filters; for non-UI-API objects or arbitrary SOQL, use `auto`/`apex` — the
+  Apex escape hatch remains.
+
 ## [2.0.0] - 2026-07-01
 
 ### Changed

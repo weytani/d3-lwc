@@ -1,6 +1,6 @@
 # Salesforce D3.js Chart Component Library
 
-A complete suite of 30 Lightning Web Components (LWC) that wrap D3.js charts for use in Salesforce App Builder, Experience Builder, and Screen Flows. Components are drag-and-drop ready, capable of ingesting raw Salesforce record collections, and intelligently handle aggregation via server-side SOQL GROUP BY (preferred) or client-side JavaScript (fallback).
+A complete suite of 40 Lightning Web Components (LWC) that wrap D3.js charts for use in Salesforce App Builder, Experience Builder, and Screen Flows. Components are drag-and-drop ready, capable of ingesting raw Salesforce record collections, and intelligently handle aggregation via server-side SOQL GROUP BY (preferred) or client-side JavaScript (fallback).
 
 ## 🖼️ Gallery
 
@@ -26,17 +26,17 @@ _Gauge, Bar, Donut, Line, Scatter, Histogram, Treemap, Sankey, Force Graph, and 
 
 ## ✨ Features
 
-- **30 Chart Types**: Bar, Line, Donut, Gauge, Scatter, Histogram, Treemap, Sankey, Force Graph, Choropleth, Area, Stacked Bar, Funnel, Radar, Heatmap, Box Plot, Waterfall, Bullet, Calendar Heatmap, Sparkline Grid, Pie, Horizontal Bar, Lollipop, Progress Bar, Diverging Bar, Waffle, Sunburst, Bubble, Chord Diagram, Gantt
+- **40 Chart Types**: Bar, Line, Donut, Gauge, Scatter, Histogram, Treemap, Sankey, Force Graph, Choropleth, Area, Stacked Bar, Funnel, Radar, Heatmap, Box Plot, Waterfall, Bullet, Calendar Heatmap, Sparkline Grid, Pie, Horizontal Bar, Lollipop, Progress Bar, Diverging Bar, Waffle, Sunburst, Bubble, Chord Diagram, Gantt, Dot Plot, Sorted Bar, Step, Slope, Stacked Horizontal Bar, Icon Array, Normalized Bar, Variable-Color Line, Band, Difference
 - **Drag-and-Drop Ready**: Fully configurable in Lightning App Builder
 - **Server-Side Aggregation**: GROUP BY queries run in Apex, processing 50K+ records and sending pre-bucketed results to the browser
 - **Dual Data Path**: Server-preferred when `objectApiName` is configured; client-side fallback for `recordCollection` and `soqlQuery`-only usage
-- **GraphQL Self-Fetch** (bar chart): Opt-in `fetchMode="graphql"` fetches data declaratively via Salesforce's `lightning/graphql` wire adapter — no Apex controller required, FLS/sharing enforced by the platform
+- **GraphQL Self-Fetch** (all charts): Opt-in `fetchMode="graphql"` fetches data declaratively via Salesforce's `lightning/graphql` wire adapter — no Apex controller required, FLS/sharing enforced by the platform. `auto` (default) and `apex` preserve the existing data paths; the gantt chart is GraphQL-only
 - **Server-Side Analytics**: Statistics (mean, median, stdDev) and correlation (Pearson r, linear regression) computed in Apex
 - **Configurable Limits**: Per-chart `recordLimit` property in App Builder — set your own data ceiling or use smart defaults
 - **Responsive**: Uses ResizeObserver for adaptive reflow
 - **SLDS Styled**: Consistent with Salesforce Lightning Design System
 - **Theme Support**: 4 built-in palettes + custom colors via JSON config
-- **2,581 Tests**: Comprehensive Jest test coverage across 64 suites
+- **3,384 Tests**: Comprehensive Jest test coverage across 133 suites
 
 ## 📦 Components
 
@@ -84,6 +84,21 @@ _Gauge, Bar, Donut, Line, Scatter, Histogram, Treemap, Sankey, Force Graph, and 
 | `c-d3-bubble-chart`         | Three-variable       | X/Y position + area-scaled size, category color      |
 | `c-d3-chord-diagram`        | Relationship matrix  | Circular arcs, ribbons, bidirectional flow           |
 | `c-d3-gantt-chart`          | Project timeline     | Time axis, date-range bars, today marker, drill-down |
+
+### Phase 4
+
+| Component                     | Description             | Key Features                                               |
+| ----------------------------- | ----------------------- | ---------------------------------------------------------- |
+| `c-d3-dot-plot`               | Cleveland dot plot      | One dot per category, horizontal value axis, drill-down    |
+| `c-d3-sorted-bar-chart`       | Re-sortable bars        | Vertical bars, sort by label or value, drill-down          |
+| `c-d3-step-chart`             | Stepped time series     | Discrete state changes, multi-series, drill-down           |
+| `c-d3-slope-chart`            | Before/after comparison | Two ranked axes, connecting slope lines, drill-down        |
+| `c-d3-stacked-horizontal-bar` | Horizontal stacked bars | Stacked or 100%-normalized, series legend, drill-down      |
+| `c-d3-icon-array`             | Pictogram / unit chart  | 100-glyph grid, proportional fill, contrast-aware labels   |
+| `c-d3-normalized-bar`         | 100% stacked bars       | Full-height bars, percentage composition, drill-down       |
+| `c-d3-variable-color-line`    | Threshold-colored line  | Single series, color switches at threshold, gradient stops |
+| `c-d3-band-chart`             | Range / confidence band | Filled lower/upper bound, optional center line, time axis  |
+| `c-d3-difference-chart`       | Plan vs actual          | Two series, green/red above-below shading, clip-path fill  |
 
 ## 🚀 Quick Start
 
@@ -197,6 +212,12 @@ GraphQL (verified against a live org):
 Apex priority), `apex` (force the Apex path), or `graphql` (self-fetch). The GraphQL
 path covers UI API-queryable objects with structured filters; for non-UI-API objects
 or arbitrary SOQL, use `auto`/`apex` — the Apex escape hatch remains.
+
+Every chart supports `fetch-mode`; the bar chart is shown here as the reference
+example. The gantt chart is the one exception — it fetches exclusively via GraphQL
+(see below). For a `Count` operation, the GraphQL path fetches raw rows up to the
+`recordLimit` and counts client-side, so use `auto`/`apex` for exact counts on large
+objects.
 
 ### D3 Gantt Chart (GraphQL Self-Fetch — New in 2.0, BREAKING)
 
@@ -337,7 +358,7 @@ Custom colors via `advancedConfig`:
 │  └──────────────────────────┬───────────────────────────────┘  │
 │                             │                                   │
 │  ┌──────────────────────────▼───────────────────────────────┐  │
-│  │              30 CHART COMPONENTS (Phase 1–3)              │  │
+│  │              40 CHART COMPONENTS (Phase 1–4)              │  │
 │  │  ┌───────┐ ┌─────┐ ┌───────┐ ┌──────┐ ┌─────────┐        │  │
 │  │  │ Gauge │ │ Bar │ │ Donut │ │ Line │ │ Scatter │  ···   │  │
 │  │  └───────┘ └─────┘ └───────┘ └──────┘ └─────────┘        │  │
@@ -412,6 +433,7 @@ d3-lwc/
 │   │   ├── dataService/        # Data processing, limits, aggregation
 │   │   ├── themeService/       # Color palettes + sequential ramps
 │   │   ├── chartUtils/         # Shared utilities (tooltips, resize, formatting)
+│   │   ├── graphqlService/     # GraphQL query builders + result normalizers
 │   │   ├── d3Gauge/            # Phase 1
 │   │   ├── d3BarChart/
 │   │   ├── d3DonutChart/
@@ -441,7 +463,17 @@ d3-lwc/
 │   │   ├── d3SunburstChart/
 │   │   ├── d3BubbleChart/
 │   │   ├── d3ChordDiagram/
-│   │   └── d3GanttChart/
+│   │   ├── d3GanttChart/
+│   │   ├── d3DotPlot/          # Phase 4
+│   │   ├── d3SortedBarChart/
+│   │   ├── d3StepChart/
+│   │   ├── d3SlopeChart/
+│   │   ├── d3StackedHorizontalBar/
+│   │   ├── d3IconArray/
+│   │   ├── d3NormalizedBar/
+│   │   ├── d3VariableColorLine/
+│   │   ├── d3BandChart/
+│   │   └── d3DifferenceChart/
 │   └── staticresources/
 │       ├── d3                  # D3.js v7 (full build, no file extension)
 │       ├── d3Sankey.js         # Sankey layout plugin
@@ -463,7 +495,7 @@ npm test
 npm test -- --coverage
 ```
 
-**Test Coverage:** 2,561 tests across 61 suites (includes server-side aggregation path tests).
+**Test Coverage:** 3,384 tests across 133 suites (includes server-side aggregation and GraphQL self-fetch path tests).
 
 > Note: this Jest config runs the full suite — there is no per-component `--testPathPattern` narrowing flag. The pre-commit hook (husky + lint-staged) runs the relevant tests on staged files automatically.
 
