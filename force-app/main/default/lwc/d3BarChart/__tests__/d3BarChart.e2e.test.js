@@ -4,7 +4,7 @@
 import { createElement } from "lwc";
 import D3BarChart from "c/d3BarChart";
 import { loadD3 } from "../d3Loader";
-import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
+import { graphql } from "lightning/graphql";
 
 // ═══════════════════════════════════════════════════════════════
 // MOCKS — only external boundaries are mocked
@@ -14,14 +14,6 @@ import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
 jest.mock("../d3Loader", () => ({
   loadD3: jest.fn()
 }));
-
-jest.mock(
-  "@salesforce/apex/D3ChartController.executeQuery",
-  () => ({
-    default: jest.fn()
-  }),
-  { virtual: true }
-);
 
 // NavigationMixin mock — matches the Symbol.for pattern used by LWC internals
 jest.mock("lightning/navigation", () => {
@@ -164,7 +156,6 @@ describe("c-d3-bar-chart e2e", () => {
     jest.clearAllMocks();
     mockD3 = createMockD3();
     loadD3.mockResolvedValue(mockD3);
-    executeQuery.mockResolvedValue([]);
 
     consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
 
@@ -203,9 +194,6 @@ describe("c-d3-bar-chart e2e", () => {
 
       // D3 was loaded through the mock
       expect(loadD3).toHaveBeenCalled();
-
-      // Apex should NOT have been called — data came from recordCollection
-      expect(executeQuery).not.toHaveBeenCalled();
 
       // D3 select was called on the chart container to build the SVG
       expect(mockD3.select).toHaveBeenCalled();
@@ -328,23 +316,48 @@ describe("c-d3-bar-chart e2e", () => {
       expect(container).toBeFalsy();
     });
 
-    it("SOQL fetch path: no recordCollection -> Apex returns data -> full pipeline", async () => {
-      const soqlData = [
-        { StageName: "Discovery", Amount: 400 },
-        { StageName: "Discovery", Amount: 100 },
-        { StageName: "Proposal", Amount: 300 }
-      ];
-      executeQuery.mockResolvedValue(soqlData);
-
-      const element = await createChart({
-        recordCollection: [],
-        soqlQuery: "SELECT StageName, Amount FROM Opportunity"
+    it("GraphQL fetch path: no recordCollection -> wire emits -> full pipeline", async () => {
+      const element = createElement("c-d3-bar-chart", { is: D3BarChart });
+      Object.assign(element, {
+        groupByField: "StageName",
+        valueField: "Amount",
+        operation: "Sum",
+        height: 300,
+        objectApiName: "Opportunity",
+        recordCollection: []
       });
+      document.body.appendChild(element);
+      await flushPromises();
 
-      // Apex was called with the correct query
-      expect(executeQuery).toHaveBeenCalledWith({
-        queryString: "SELECT StageName, Amount FROM Opportunity"
+      // Grouped-aggregate wire result for the structured Sum path
+      graphql.emit({
+        uiapi: {
+          aggregate: {
+            Opportunity: {
+              edges: [
+                {
+                  node: {
+                    aggregate: {
+                      StageName: { value: "Discovery" },
+                      Amount: { sum: { value: 500 } }
+                    }
+                  }
+                },
+                {
+                  node: {
+                    aggregate: {
+                      StageName: { value: "Proposal" },
+                      Amount: { sum: { value: 300 } }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
       });
+      await flushPromises();
+      await flushPromises();
 
       // D3 loaded
       expect(loadD3).toHaveBeenCalled();

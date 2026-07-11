@@ -1,5 +1,5 @@
-// ABOUTME: Tests the additive GraphQL self-fetch path on d3BarChart (Approach A).
-// ABOUTME: Uses the real HTML selectors: .chart-container (chart) and .slds-text-color_error (error).
+// ABOUTME: Tests the GraphQL self-fetch path on the standalone d3BarChart bundle.
+// ABOUTME: Covers the structured builders and the free-text graphqlQuery admin override.
 import { createElement } from "lwc";
 import D3BarChart from "c/d3BarChart";
 import { graphql, gql } from "lightning/graphql";
@@ -68,11 +68,42 @@ const RECORD_RESPONSE = {
   }
 };
 
+// A record-query response an admin's free-text graphqlQuery would return.
+// The chart aggregates these rows client-side by groupByField/valueField.
+const FREE_TEXT_RESPONSE = {
+  uiapi: {
+    query: {
+      Opportunity: {
+        edges: [
+          {
+            node: {
+              StageName: { value: "Prospecting" },
+              Amount: { value: 100 }
+            }
+          },
+          {
+            node: {
+              StageName: { value: "Prospecting" },
+              Amount: { value: 200 }
+            }
+          },
+          {
+            node: { StageName: { value: "Closed Won" }, Amount: { value: 500 } }
+          }
+        ]
+      }
+    }
+  }
+};
+
+const FREE_TEXT_QUERY =
+  "query { uiapi { query { Opportunity { edges { node { StageName { value } Amount { value } } } } } } }";
+
 async function flushPromises() {
   return Promise.resolve();
 }
 
-describe("d3BarChart GraphQL path (Approach A)", () => {
+describe("d3BarChart GraphQL path", () => {
   beforeEach(() => {
     loadD3.mockResolvedValue(makeD3Stub());
 
@@ -102,7 +133,6 @@ describe("d3BarChart GraphQL path (Approach A)", () => {
 
   it("renders the chart container when GraphQL aggregate data arrives", async () => {
     const element = createElement("c-d3-bar-chart", { is: D3BarChart });
-    element.fetchMode = "graphql";
     element.objectApiName = "Opportunity";
     element.groupByField = "StageName";
     element.valueField = "Amount";
@@ -122,7 +152,6 @@ describe("d3BarChart GraphQL path (Approach A)", () => {
 
   it("shows an error when the GraphQL wire emits errors", async () => {
     const element = createElement("c-d3-bar-chart", { is: D3BarChart });
-    element.fetchMode = "graphql";
     element.objectApiName = "Opportunity";
     element.groupByField = "StageName";
     element.valueField = "Amount";
@@ -156,7 +185,6 @@ describe("d3BarChart GraphQL path (Approach A)", () => {
     loadD3.mockResolvedValue(chain);
 
     const element = createElement("c-d3-bar-chart", { is: D3BarChart });
-    element.fetchMode = "graphql";
     element.objectApiName = "Opportunity";
     element.groupByField = "StageName";
     element.operation = "Count";
@@ -181,7 +209,6 @@ describe("d3BarChart GraphQL path (Approach A)", () => {
 
   it("bounds the Count-path query with the same first: value as the aggregate path", async () => {
     const element = createElement("c-d3-bar-chart", { is: D3BarChart });
-    element.fetchMode = "graphql";
     element.objectApiName = "Opportunity";
     element.groupByField = "StageName";
     element.operation = "Count";
@@ -191,5 +218,68 @@ describe("d3BarChart GraphQL path (Approach A)", () => {
 
     const queryStrings = gql.mock.results.map((r) => r.value);
     expect(queryStrings.some((q) => q.includes("first: 2000"))).toBe(true);
+  });
+
+  it("uses a free-text graphqlQuery verbatim and aggregates the rows client-side", async () => {
+    const element = createElement("c-d3-bar-chart", { is: D3BarChart });
+    element.graphqlQuery = FREE_TEXT_QUERY;
+    element.objectApiName = "Opportunity";
+    element.groupByField = "StageName";
+    element.valueField = "Amount";
+    element.operation = "Sum";
+    document.body.appendChild(element);
+
+    await flushPromises();
+    graphql.emit(FREE_TEXT_RESPONSE);
+    await flushPromises();
+    await flushPromises();
+
+    expect(element.shadowRoot.querySelector(".chart-container")).not.toBeNull();
+    expect(
+      element.shadowRoot.querySelector(".slds-text-color_error")
+    ).toBeNull();
+
+    // The admin's document is passed to gql verbatim; the structured aggregate
+    // builder (which emits a groupBy clause) is never used.
+    const queryStrings = gql.mock.results.map((r) => r.value);
+    expect(queryStrings.some((q) => q.includes(FREE_TEXT_QUERY))).toBe(true);
+    expect(queryStrings.every((q) => !q.includes("groupBy"))).toBe(true);
+  });
+
+  it("surfaces wire errors from a free-text graphqlQuery in the error state", async () => {
+    const element = createElement("c-d3-bar-chart", { is: D3BarChart });
+    element.graphqlQuery = FREE_TEXT_QUERY;
+    element.objectApiName = "Opportunity";
+    element.groupByField = "StageName";
+    element.valueField = "Amount";
+    element.operation = "Sum";
+    document.body.appendChild(element);
+
+    await flushPromises();
+    graphql.emitErrors([{ message: "bad free-text query" }]);
+    await flushPromises();
+
+    expect(
+      element.shadowRoot.querySelector(".slds-text-color_error")
+    ).not.toBeNull();
+  });
+
+  it("ignores a blank graphqlQuery and falls through to the structured builder", async () => {
+    const element = createElement("c-d3-bar-chart", { is: D3BarChart });
+    element.graphqlQuery = "   ";
+    element.objectApiName = "Opportunity";
+    element.groupByField = "StageName";
+    element.valueField = "Amount";
+    element.operation = "Sum";
+    document.body.appendChild(element);
+
+    await flushPromises();
+    graphql.emit(AGG_RESPONSE);
+    await flushPromises();
+    await flushPromises();
+
+    expect(element.shadowRoot.querySelector(".chart-container")).not.toBeNull();
+    const queryStrings = gql.mock.results.map((r) => r.value);
+    expect(queryStrings.some((q) => q.includes("groupBy"))).toBe(true);
   });
 });

@@ -14,15 +14,6 @@
         <targetConfig
       targets="lightning__AppPage,lightning__RecordPage,lightning__HomePage"
     >
-            <!-- Data Source -->
-            <property
-        name="soqlQuery"
-        type="String"
-        label="SOQL Query"
-        description="SOQL query to fetch data"
-        placeholder="SELECT StageName, Amount FROM Opportunity"
-      />
-            
             <!-- Field Mapping -->
             <property
         name="groupByField"
@@ -72,8 +63,8 @@
             <property
         name="objectApiName"
         type="String"
-        label="Drill-Down Object"
-        description="Object API name for navigation on bar click"
+        label="Object API Name"
+        description="Object to query. When set (and no records are passed in), the chart self-fetches this object via GraphQL. Also used for drill-down navigation on bar click."
         placeholder="Opportunity"
       />
             <property
@@ -92,14 +83,12 @@
         max="10000"
       />
 
-            <!-- GraphQL Self-Fetch -->
+            <!-- GraphQL Query Override -->
             <property
-        name="fetchMode"
+        name="graphqlQuery"
         type="String"
-        label="Data Source"
-        default="auto"
-        datasource="auto,apex,graphql"
-        description="How to fetch data: auto (existing priority order), apex (Apex-backed SOQL), or graphql (UI API GraphQL). GraphQL Count is bounded to the first Record Limit rows (default 2000) — use apex/auto for exact counts on larger objects."
+        label="GraphQL Query"
+        description="Optional UI API GraphQL document (a record query) that overrides the query built from the fields above. UI-API-queryable objects only; returns at most 2,000 records; GraphQL syntax. The returned rows are aggregated client-side by Group By Field / Value Field / Aggregation. Leave blank to build the query automatically. Count is bounded to the first Record Limit rows (default 2000)."
       />
 
             <!-- Advanced -->

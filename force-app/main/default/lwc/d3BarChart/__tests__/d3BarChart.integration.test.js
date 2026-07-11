@@ -1,10 +1,9 @@
-// ABOUTME: Integration tests for d3BarChart verifying real service pipelines (dataService, themeService, chartUtils).
-// ABOUTME: Only D3, Apex, NavigationMixin, and ShowToastEvent are mocked; all utility services use real implementations.
+// ABOUTME: Integration tests for d3BarChart verifying real bundle-local pipelines (data, theme, utils, graphql).
+// ABOUTME: Only D3, GraphQL, NavigationMixin, and ShowToastEvent are mocked; the bundle-local modules run for real.
 
 import { createElement } from "lwc";
 import D3BarChart from "c/d3BarChart";
 import { loadD3 } from "../d3Loader";
-import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
 // ShowToastEvent is imported by the component; we mock it below
 
 // ═══════════════════════════════════════════════════════════════
@@ -15,12 +14,6 @@ import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
 jest.mock("../d3Loader", () => ({
   loadD3: jest.fn()
 }));
-
-jest.mock(
-  "@salesforce/apex/D3ChartController.executeQuery",
-  () => ({ default: jest.fn() }),
-  { virtual: true }
-);
 
 // ShowToastEvent mock must produce real Event instances so dispatchEvent() accepts them.
 // The factory is self-contained to work with jest.mock hoisting.
@@ -135,7 +128,6 @@ describe("c-d3-bar-chart integration", () => {
 
     mockD3 = createMockD3();
     loadD3.mockResolvedValue(mockD3);
-    executeQuery.mockResolvedValue(SAMPLE_DATA);
 
     consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
     consoleWarnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
@@ -280,25 +272,35 @@ describe("c-d3-bar-chart integration", () => {
       expect(passedData[2].value).toBe(150);
     });
 
-    it("passes SOQL query results through same pipeline", async () => {
-      const soqlResults = [
-        { StageName: "Negotiation", Amount: 400 },
-        { StageName: "Negotiation", Amount: 100 },
-        { StageName: "Closed Lost", Amount: 250 }
-      ];
-      executeQuery.mockResolvedValue(soqlResults);
+    it("aggregates a GraphQL-fetched record set through the same pipeline", async () => {
+      // The GraphQL Count path normalizes wire rows into records, then runs the
+      // same real aggregate pipeline as recordCollection.
+      const { graphql } = require("lightning/graphql");
 
-      await createChart({
-        recordCollection: [],
-        soqlQuery: "SELECT StageName, Amount FROM Opportunity",
-        operation: "Sum",
+      element = createElement("c-d3-bar-chart", { is: D3BarChart });
+      Object.assign(element, {
+        objectApiName: "Opportunity",
         groupByField: "StageName",
-        valueField: "Amount"
+        operation: "Count"
       });
+      document.body.appendChild(element);
 
-      expect(executeQuery).toHaveBeenCalledWith({
-        queryString: "SELECT StageName, Amount FROM Opportunity"
+      await flushPromises();
+      graphql.emit({
+        uiapi: {
+          query: {
+            Opportunity: {
+              edges: [
+                { node: { StageName: { value: "Negotiation" } } },
+                { node: { StageName: { value: "Negotiation" } } },
+                { node: { StageName: { value: "Closed Lost" } } }
+              ]
+            }
+          }
+        }
       });
+      await flushPromises();
+      await flushPromises();
 
       const dataCalls = mockD3.data.mock.calls;
       const chartDataCall = dataCalls.find(
@@ -308,10 +310,10 @@ describe("c-d3-bar-chart integration", () => {
       expect(chartDataCall).toBeTruthy();
 
       const passedData = chartDataCall[0];
-      // Sum: Negotiation=500, Closed Lost=250 (sorted desc)
+      // Count: Negotiation=2, Closed Lost=1 (sorted desc)
       expect(passedData).toEqual([
-        { label: "Negotiation", value: 500 },
-        { label: "Closed Lost", value: 250 }
+        { label: "Negotiation", value: 2 },
+        { label: "Closed Lost", value: 1 }
       ]);
     });
   });
@@ -501,19 +503,22 @@ describe("c-d3-bar-chart integration", () => {
       expect(errorElement.textContent).toContain("Missing required fields");
     });
 
-    it("shows error when data is empty array", async () => {
+    it("shows the no-data state when recordCollection is empty and nothing else is configured", async () => {
       await createChart({
         recordCollection: [],
-        soqlQuery: ""
+        objectApiName: ""
       });
 
       await flushPromises();
 
-      // Component should display error state for no data source
+      // Empty recordCollection with no provisioned GraphQL query is the empty
+      // state, not an error.
       const errorElement = element.shadowRoot.querySelector(
         ".slds-text-color_error"
       );
-      expect(errorElement).toBeTruthy();
+      expect(errorElement).toBeFalsy();
+      const container = element.shadowRoot.querySelector(".chart-container");
+      expect(container).toBeFalsy();
     });
   });
 
