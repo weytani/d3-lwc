@@ -3,14 +3,9 @@
  * ABOUTME: Displays aggregated data as vertical bars with drill-down support.
  */
 import { LightningElement, api, track, wire } from "lwc";
-import { loadD3 } from "c/d3Lib";
-import {
-  prepareData,
-  aggregateData,
-  OPERATIONS,
-  MAX_RECORDS
-} from "c/dataService";
-import { getColors, DEFAULT_THEME } from "c/themeService";
+import { loadD3 } from "./d3Loader";
+import { prepareData, aggregateData, OPERATIONS, MAX_RECORDS } from "./data";
+import { getColors, DEFAULT_THEME } from "./theme";
 import {
   formatNumber,
   truncateLabel,
@@ -19,7 +14,7 @@ import {
   buildTooltipContent,
   createLayoutRetry,
   applySvgA11y
-} from "c/chartUtils";
+} from "./utils";
 import { NavigationMixin } from "lightning/navigation";
 import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
 import getAggregatedData from "@salesforce/apex/D3ChartController.getAggregatedData";
@@ -28,8 +23,8 @@ import {
   buildAggregateQuery,
   buildRecordQuery,
   normalizeAggregate,
-  normalizeRecords
-} from "c/graphqlService";
+  normalizeRecordsGeneric
+} from "./graphql";
 
 export default class D3BarChart extends NavigationMixin(LightningElement) {
   // ═══════════════════════════════════════════════════════════════
@@ -223,13 +218,11 @@ export default class D3BarChart extends NavigationMixin(LightningElement) {
     try {
       let normalized;
       if (this.operation === OPERATIONS.COUNT) {
-        const records = normalizeRecords(data, {
+        const records = normalizeRecordsGeneric(data, {
           objectApiName: this.objectApiName,
-          labelField: this.groupByField
+          fields: [this.groupByField]
         });
-        normalized = this._aggregateRawData(
-          records.map((r) => ({ [this.groupByField]: r.label }))
-        );
+        normalized = this._aggregateRawData(records);
       } else {
         normalized = normalizeAggregate(data, {
           objectApiName: this.objectApiName,

@@ -3,16 +3,16 @@
 
 import { createElement } from "lwc";
 import D3BarChart from "c/d3BarChart";
-import { loadD3 } from "c/d3Lib";
+import { loadD3 } from "../d3Loader";
 import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
 // ShowToastEvent is imported by the component; we mock it below
 
 // ═══════════════════════════════════════════════════════════════
 // MOCKS — Only external dependencies that cannot run in JSDOM
-// Real services (dataService, themeService, chartUtils) are NOT mocked
+// Real bundle-local services (data, theme, utils, graphql) are NOT mocked
 // ═══════════════════════════════════════════════════════════════
 
-jest.mock("c/d3Lib", () => ({
+jest.mock("../d3Loader", () => ({
   loadD3: jest.fn()
 }));
 
