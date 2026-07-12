@@ -29,20 +29,32 @@ everything. No `c/d3Lib`, `c/dataService`, `c/themeService`, `c/chartUtils`,
 
 ## 1. Commit shape (what worked)
 
-Two code commits + one docs commit, in this order:
+Wave 1 produced three divergent-but-green interpretations of this split; the
+shape below is the **one blessed shape**. Two code commits + one docs commit, in
+this order:
 
 1. `refactor(<chart>): inline shared-module subsets as bundle-local files`
-   — create the bundle-local modules, switch the component to relative imports,
-   switch the test mocks from `c/d3Lib` to `../d3Loader`. **No public API change.**
-   Full suite stays green. This isolates and de-risks the mechanical inlining and
-   proves relative-module mocking resolves.
+   — **purely ADDITIVE: create the bundle-local module files only.** No component
+   edits, no import swaps, no test changes. Nothing references the new files yet,
+   so the full suite is **trivially green** and the diff is reviewable as a single
+   question: "is the inlining a faithful subset of the shared modules?"
 2. `feat(<chart>): GraphQL-only self-fetch with graphqlQuery override`
-   — TDD: rewrite the test tiers to the end state (RED), then remove Apex +
-   `soqlQuery` + `fetchMode`, add `graphqlQuery`, edit `.js-meta.xml`. GREEN.
+   — everything behavioral, riding together: the import swap (component `c/*` →
+   `./*`, test mocks `c/d3Lib` → `../d3Loader`; §3), the §4.3 render-orchestration
+   hardening, the TDD GraphQL-only conversion (§4.1 RED → §4.2 GREEN — remove Apex
+   - `soqlQuery` + `fetchMode`, add `graphqlQuery`), and the `.js-meta.xml` edit
+     (§5). GREEN at the end.
 3. `docs(...)` — recipe/CHANGELOG updates as needed.
 
-Splitting (1) from (2) matters: the inlining touches every import line and is
-noise in a behavior diff; keeping it separate makes the feat commit reviewable.
+**Why the import swap cannot ride in commit 1.** The inlined `utils.js` omits
+`createLayoutRetry` (§2.2 — it carries the §4.3 render-orchestration defect). The
+moment the component switches from `c/chartUtils` to `./utils`, its
+`createLayoutRetry` import and call sites dangle and the suite goes red — until
+the §4.3 hardening removes them. So the import swap and the §4.3 hardening are
+**coupled** and must land together in commit 2; there is no way to swap imports in
+commit 1 and stay green. Keeping commit 1 additive-only (new files, zero
+references) is exactly what makes it independently green — do not try to swap
+imports there.
 
 ---
 
@@ -135,7 +147,13 @@ export function normalizeRecordsGeneric(data, { objectApiName, fields } = {}) {
 
 ---
 
-## 3. Switch imports + test mocks (commit 1)
+## 3. Switch imports + test mocks (commit 2 — opening moves)
+
+This is the first move **inside commit 2**, and it rides with the §4.3 hardening —
+the two are coupled (§1). Do **not** expect an independently-green checkpoint
+after the bare import swap: once the component imports from `./utils`, its dangling
+`createLayoutRetry` reference reddens the suite until §4.3 removes it. Green is
+confirmed only after §4.3 has landed.
 
 - Component: `c/d3Lib` → `./d3Loader`, `c/dataService` → `./data`, etc.
 - **The one non-obvious move:** the tests mock the loader. Change
@@ -144,12 +162,14 @@ export function normalizeRecordsGeneric(data, { objectApiName, fields } = {}) {
   **A `jest.mock` of a bundle-relative path works**: jest keys the module
   registry by resolved absolute filename, so the test's `../d3Loader` and the
   component's `./d3Loader` are the same module and the mock applies to both.
-  Verified in Wave 0 (full suite stayed green after the swap).
-- The bar Count path also switched `normalizeRecords` → `normalizeRecordsGeneric`
-  in commit 1, because I chose not to inline the gantt-specific `normalizeRecords`.
-  Output is identical (`[{ [groupByField]: value }, …]`), so tests stayed green.
+  Verified in Wave 0 (full suite stayed green once the swap + §4.3 rode in).
+- If the chart uses the gantt-specific `normalizeRecords` and you chose not to
+  inline it, switch its Count path to `normalizeRecordsGeneric` in this same
+  commit. Output is identical (`[{ [groupByField]: value }, …]`), so tests stay
+  green.
 
-Run `npx jest --silent` → must be green before committing.
+Run `npx jest --silent` **after §4.3 has landed** → must be green before
+committing commit 2.
 
 ---
 
@@ -172,6 +192,15 @@ Per tier:
   `graphqlQuery` used verbatim + aggregated client-side, (b) free-text wire
   errors surface, (c) a blank/whitespace `graphqlQuery` falls through to the
   structured builder, (d) `recordCollection` beats a set `graphqlQuery`.
+- **Precondition — confirm the chart ships `.e2e`/`.integration` tiers.** The
+  happy-path conversion below has nowhere to live in a chart that only ships two
+  tiers (`.test.js` + `.graphql.test.js`). If the base bundle lacks the
+  `.e2e`/`.integration` tiers, **do NOT silently skip this step** — flag it in
+  your DONE report as a backfill/waiver item, because a 2-tier conversion cannot
+  perform §4.1's happy-path test conversion. (Wave 1 hit this on
+  `d3StackedBarChart`, which shipped only `.test.js` + `.graphql.test.js`; its
+  e2e/integration happy-path conversion was deferred to an explicit backfill
+  task rather than dropped.)
 - Convert one happy-path fetch test in `.e2e`/`.integration` from the old
   Apex/SOQL path to a `graphql.emit(...)` wire path so a real self-fetch scenario
   still runs end to end.
@@ -325,11 +354,15 @@ no error). Two silent failure modes cause it:
    original `initializeChart` the ResizeObserver was never even installed at
    width 0, so a later growth is never caught.
 2. **Sub-margin `renderChart` bail after the tooltip.** `initializeChart`'s gate
-   was `width === 0`, so a transient small width (e.g. 40px) passes, creates the
-   tooltip, then `renderChart` computes `width = containerWidth - (left+right
-margin)` ≤ 0 and returns **before appending the svg** — while
-   `initializeChart` returns `true`, latching `chartRendered`. Tooltip present,
-   no svg, never retried. (This is the exact state observed live.)
+   was `width === 0`, so a transient width **smaller than the chart's own
+   horizontal margins** passes the gate, creates the tooltip, then `renderChart`
+   computes `width = containerWidth - (left + right margin)` ≤ 0 and returns
+   **before appending the svg** — while `initializeChart` returns `true`,
+   latching `chartRendered`. Tooltip present, no svg, never retried. (This is the
+   exact state observed live.) The trigger width is **chart-specific**: bar's
+   margins sum to ~80px (a 40px container fires it), but `d3HorizontalBarChart`'s
+   are `left 160 + right 30 = 190px`. Compute the threshold from the chart in
+   front of you, not from bar's numbers.
 
 **Fix — bundle-local `utils.js` + component; do NOT touch shared chartUtils:**
 
@@ -374,7 +407,12 @@ _safeRenderChart(containerWidth) {
 Tests (unit tier): (a) container 0-width, capture the RO callback, fire it with a
 measurable width → chart renders (**RED** against old code, which installs no
 observer at width 0); (b) a render exception → error state visible; (c) disconnect
-disconnects the observer; (d) exactly one observer across the lifecycle.
+disconnects the observer; (d) exactly one observer across the lifecycle. The
+sub-margin fixture width in (a)/(b) is **chart-specific** — feed a width below the
+chart's own `left + right` margin sum (bar ~80px so 40px works;
+`d3HorizontalBarChart` needs a width under 190px). Copying bar's "40px" onto a
+wide-margin chart silently tests nothing, because 40px already clears that chart's
+zero-width gate the old way.
 
 **Why this matters more now:** with `recordCollection` the parent usually sizes
 the container before data arrives; with GraphQL-by-default the chart boots and
@@ -456,9 +494,13 @@ deploy-verified in Wave 0 since deploys are out of scope):
 </targetConfig>
 ```
 
-Expose the config properties a given chart actually reads (field mappings,
-operation, height, theme, `advancedConfig` where applicable). Omit
-`graphqlQuery`/`objectApiName` unless a chart already treats them as
+**The XML above is bar's list — an EXAMPLE, not a template.** Expose the
+render-config properties _the chart in front of you actually reads_, including its
+chart-specific knobs: `sortBy`/`sortDirection` on `d3SortedBarChart`,
+`seriesField` on the stacked/matrix charts, and so on. Keep the always-present
+ones (field mappings, `operation`, `height`, `theme`, and `advancedConfig` where
+the chart parses it). Omit the self-fetch knobs (`graphqlQuery`, `objectApiName`)
+and the drill-down/limit knobs unless a chart already treats them as
 flow-relevant. jest does not parse the meta, so the Flow config is not covered by
 the suite — verify it at deploy time in the release step.
 
@@ -517,6 +559,17 @@ conversion (SCOPE excludes deploys here).
   via `moduleNameMapper` (the pinned sfdx-lwc-jest only ships the v1 stub). It
   provides `graphql.emit(data)`, `graphql.emitErrors(errs)`, and a `gql` that
   reconstructs the interpolated string. It is **not** part of any bundle — leave it.
+- **The shared mock D3 cannot observe summation.** The hand-rolled mock D3 that
+  the unit/`.graphql` tiers reuse hard-codes `max: jest.fn(() => 500)` — a
+  constant, so it is blind to whether the client-side aggregation actually summed
+  anything. A test that must prove summation (e.g. the free-text path sums
+  duplicate `(category, series)` keys — §9.3(b)) needs a **dedicated real-max
+  mock**: `max: (arr, acc) => Math.max(...arr.map(acc ?? ((d) => d)))` plus a
+  `scaleLinear().domain` stub that **captures every domain call** into an array.
+  The test then finds the numeric `[0, max]` y-scale domain call and divides out
+  the axis headroom to recover the summed total (e.g.
+  `Math.round(domain[1] / 1.1) === 350`). Pattern: `d3StackedBarChart`'s
+  `createSummationMockD3` in its `.graphql.test.js`.
 - **Whole-string `gql` interpolation (`` gql`${queryString}` ``) is undocumented**
   but is the same mechanism the structured builders already ship; live-verified per
   the design. Wave 0 confirms the jest-level mechanism (the mock reconstructs and
@@ -583,26 +636,95 @@ bubble), then feed the chart's **existing record-shaping** step (date parsing,
 sorting, sampling) — there is **no client-side group-by**. Inline whichever
 record normalizer the chart uses.
 
-### 9.3 Matrix / hierarchy charts (stackedBar, stackedHorizontalBar, heatmap, chord, sunburst, treemap)
+### 9.3 Matrix / hierarchy + stacked-bar families
 
-Structured path: `buildMultiGroupQuery` + `normalizeMultiGroup` (two-field
-group), or `buildMatrix` / `buildHierarchy` (from dataService) fed from
-grouped rows. **Free-text:** the pasted document returns **flat `uiapi.query`
-records** — one row per source record, un-summed. So you MUST pivot+sum
-client-side before feeding `buildMatrix`/`buildHierarchy`, or the numbers will
-not match the structured aggregate path (which sums server-side). Concretely:
+Wave 1 converted three stacked-bar members and found the original single section
+conflated two genuinely different data paths. It splits into two sub-families that
+do **not** share a client-side shaping step — pick the one your chart belongs to.
 
-1. `normalizeRecordsGeneric` with `[groupByField, seriesField, valueField]`
-   (matrix) or the hierarchy field list.
+#### 9.3(a) True matrix / hierarchy charts (heatmap, chord, sunburst, treemap)
+
+Structured path: grouped rows → `buildMatrix` / `buildHierarchy` (from
+dataService) → the chart's D3 shape. **Free-text:** the pasted document returns
+**flat `uiapi.query` records** — one row per source record, un-summed. So you MUST
+pivot+sum client-side before feeding `buildMatrix`/`buildHierarchy`, or the
+numbers will not match the structured aggregate path (which sums server-side):
+
+1. `normalizeRecordsGeneric` with the matrix/hierarchy field list.
 2. Group rows by the composite key (`groupByField|seriesField`, or the full
    hierarchy path) into a Map, **summing `valueField`** per key with the chart's
-   `operation` (Sum/Count/Average) — reuse `aggregateSeriesData` (inline it) for
-   the matrix case, or a small reducer for hierarchy.
+   `operation` — a small reducer for hierarchy, or `aggregateSeriesData` for a
+   two-field matrix.
 3. Feed the summed rows to `buildMatrix` / `buildHierarchy` (both accept flat
    rows) → the chart's D3 shape.
 
-Document in the meta help text that the free-text query selects the two group
-fields + the value field as top-level node fields.
+#### 9.3(b) Stacked-bar family (stackedBar, stackedHorizontalBar, normalizedBar)
+
+These members converted in Wave 1. They **never touch `buildMatrix` /
+`buildHierarchy`** — inlining or reaching for those here is **dead surface**.
+Their pipeline is:
+
+- **Structured, series set:** `buildMultiGroupQuery` + `normalizeMultiGroup`
+  (two-field group). The wire result arrives **pre-summed by the server — do NOT
+  re-sum on this branch.**
+- **Free-text:** `normalizeRecordsGeneric([groupByField, seriesField, valueField])`
+  → `aggregateSeriesData` (pivot + SUM of duplicate `(category, series)` keys) →
+  the chart's **existing in-render pivot + `d3.stack()`**. The flat rows arrive
+  un-summed, so this branch MUST sum them or free-text numbers diverge from the
+  pre-summed structured path.
+- **Count** (either path) projects `[groupByField, seriesField]` — **no
+  `valueField`**, matching the structured Count record query — and counts
+  client-side through `aggregateSeriesData`.
+
+**Mandatory-vs-optional series decision rule (decide per member).** This governs
+which aggregators the bundle imports, and it is the difference between a clean
+conversion and shipping dead surface:
+
+- **Mandatory series — `d3NormalizedBar`.** A 100%-composition chart is
+  meaningless without a composition dimension; its `_aggregateRawData` _throws_
+  when `seriesField` is blank. So **drop the single-field trio** `aggregateData` /
+  `buildAggregateQuery` / `normalizeAggregate` — there is no no-series path for
+  them to serve, and importing them is dead surface (hygiene check 3). Route
+  **Count** through `aggregateSeriesData` (it supports Count via `group.count`),
+  fed by a `buildRecordQuery` raw fetch.
+- **Optional series — `d3StackedBarChart`, `d3StackedHorizontalBar`** (default
+  `@api seriesField = ""`). **Keep both aggregator sets.** `seriesField` present →
+  `buildMultiGroupQuery` / `normalizeMultiGroup` + `aggregateSeriesData`;
+  `seriesField` blank → the single-field `buildAggregateQuery` /
+  `normalizeAggregate` + `aggregateData` no-series path. Removing the single-field
+  trio here would cut a live path.
+
+**Field-projection dedup (blessed, all Count/free-text projections).** Build every
+projected field list as `[...new Set([groupByField, seriesField, valueField].filter(Boolean))]`.
+The `.filter(Boolean)` drops a blank `seriesField` or an omitted `valueField`
+(Count); the `Set` guards against a collision when two mappings name the same
+field (e.g. `groupByField === seriesField`), which would otherwise malform the
+query. This echoes the repo CLAUDE.md SOQL field-set dedup lesson — apply it in
+every family's Count and free-text projection, not only here.
+
+**Canonical matrix-module wording (keep siblings byte-identical).** Adopt
+`d3NormalizedBar`'s `buildMultiGroupQuery` error string as canonical for the
+matrix builders — when an operation has no GraphQL aggregate function, throw:
+
+```
+`Aggregate operation not supported on the GraphQL aggregate path: ${operation} (Count fetches bounded raw records and counts client-side)`
+```
+
+The parenthetical tells the reader _why_ Count is absent from `AGG_FN`, which the
+terser bar-era wording did not. The `graphql.js` JSDoc for `buildMultiGroupQuery`,
+`normalizeMultiGroup`, and `normalizeRecordsGeneric` should be **copied verbatim
+between the matrix siblings** — they are the same functions, and wording drift
+between bundles is pure review noise.
+
+**Prove the summation with a real-max mock.** The client-side pivot+sum above is
+invisible to the shared `max: () => 500` mock D3, so a passing test proves
+nothing. Use the dedicated real-max / domain-capture mock (§8,
+`createSummationMockD3` pattern): emit a free-text response with a duplicated
+`(category, series)` key and assert the recovered stacked total is the **summed**
+value, not last-wins.
+
+**Meta help text:** state that the free-text query selects the two group fields +
+the value field as top-level node fields.
 
 ### 9.4 Date / time-domain charts (gantt, calendarHeatmap, time-series line/area)
 
@@ -648,6 +770,10 @@ to guarantee.
 - **objectApiName label:** widen to "Object API Name" + self-fetch note only when
   the chart has drill-down to disambiguate; otherwise just name it the query
   object (§5).
+- **Field-set dedup:** every Count/free-text projection uses the blessed
+  `[...new Set([...fields].filter(Boolean))]` form (§9.3(b)) — a field collision
+  or a blank/omitted mapping otherwise malforms the query. Applies to the bar
+  (§9.1) and raw-record (§9.2) families too, not just the stacked family.
 
 ---
 
