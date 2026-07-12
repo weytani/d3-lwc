@@ -227,9 +227,8 @@
             <!-- Normalized Bar Chart: Amount composition by Stage and Type (Wave 2, CHART-INDEX #11) -->
             <componentInstance>
                 <componentInstanceProperties>
-                    <name>soqlQuery</name>
-                    <value
-          >SELECT StageName, Type, Amount FROM Opportunity WHERE Amount != null AND Type != null</value>
+                    <name>objectApiName</name>
+                    <value>Opportunity</value>
                 </componentInstanceProperties>
                 <componentInstanceProperties>
                     <name>groupByField</name>
