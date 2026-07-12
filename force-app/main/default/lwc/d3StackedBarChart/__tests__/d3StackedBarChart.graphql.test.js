@@ -262,6 +262,41 @@ const FREE_TEXT_DUP_RESPONSE = {
   }
 };
 
+// Free-text raw rows whose per-key sums (New: 60+40=100, Existing: 200) exactly
+// match the pre-summed MULTI_GROUP_RESPONSE totals, so both paths must produce
+// identical d3.stack inputs.
+const FREE_TEXT_EQUIV_RESPONSE = {
+  uiapi: {
+    query: {
+      Opportunity: {
+        edges: [
+          {
+            node: {
+              StageName: { value: "Prospecting" },
+              Type: { value: "New" },
+              Amount: { value: 60 }
+            }
+          },
+          {
+            node: {
+              StageName: { value: "Prospecting" },
+              Type: { value: "New" },
+              Amount: { value: 40 }
+            }
+          },
+          {
+            node: {
+              StageName: { value: "Prospecting" },
+              Type: { value: "Existing" },
+              Amount: { value: 200 }
+            }
+          }
+        ]
+      }
+    }
+  }
+};
+
 const FREE_TEXT_QUERY =
   "query { uiapi { query { Opportunity { edges { node { StageName { value } Type { value } Amount { value } } } } } } }";
 
@@ -682,6 +717,68 @@ describe("d3StackedBarChart GraphQL path", () => {
       ).not.toBeNull();
       const queryStrings = gql.mock.results.map((r) => r.value);
       expect(queryStrings.some((q) => q.includes("groupBy"))).toBe(true);
+    });
+  });
+
+  describe("free-text ⇄ structured stack-input equivalence", () => {
+    it("free-text (un-summed rows) and structured (pre-summed) feed d3.stack identical keys and pivot rows", async () => {
+      // Two D3 mocks so each path's stack-generator calls are captured
+      // independently. The wire adapter's emit fans out to every mounted
+      // instance, so the structured chart is unmounted before the free-text
+      // response is emitted.
+      const mockStructured = createMockD3();
+      const mockFreeText = createMockD3();
+      loadD3
+        .mockResolvedValueOnce(mockStructured)
+        .mockResolvedValueOnce(mockFreeText);
+
+      // Structured path: server pre-summed New=100, Existing=200.
+      const structured = createElement("c-d3-stacked-bar-chart", {
+        is: D3StackedBarChart
+      });
+      structured.objectApiName = "Opportunity";
+      structured.groupByField = "StageName";
+      structured.seriesField = "Type";
+      structured.valueField = "Amount";
+      structured.operation = "Sum";
+      document.body.appendChild(structured);
+      await flushPromises();
+      graphql.emit(MULTI_GROUP_RESPONSE);
+      await flushPromises();
+      await flushPromises();
+
+      const structuredKeys = mockStructured._mockStack.keys.mock.calls[0][0];
+      const structuredPivot = mockStructured._mockStack.mock.calls[0][0];
+
+      document.body.removeChild(structured);
+
+      // Free-text path: raw un-summed rows (New 60+40=100, Existing 200).
+      const freeText = createElement("c-d3-stacked-bar-chart", {
+        is: D3StackedBarChart
+      });
+      freeText.graphqlQuery = FREE_TEXT_QUERY;
+      freeText.objectApiName = "Opportunity";
+      freeText.groupByField = "StageName";
+      freeText.seriesField = "Type";
+      freeText.valueField = "Amount";
+      freeText.operation = "Sum";
+      document.body.appendChild(freeText);
+      await flushPromises();
+      graphql.emit(FREE_TEXT_EQUIV_RESPONSE);
+      await flushPromises();
+      await flushPromises();
+
+      const freeTextKeys = mockFreeText._mockStack.keys.mock.calls[0][0];
+      const freeTextPivot = mockFreeText._mockStack.mock.calls[0][0];
+
+      // Both paths must hand d3.stack() the same series keys and the same
+      // pivoted rows — the client-side pivot+sum reproduces the server aggregate.
+      expect(freeTextKeys).toEqual(structuredKeys);
+      expect(freeTextKeys).toEqual(["New", "Existing"]);
+      expect(freeTextPivot).toEqual(structuredPivot);
+      expect(freeTextPivot).toEqual([
+        { label: "Prospecting", New: 100, Existing: 200 }
+      ]);
     });
   });
 });
