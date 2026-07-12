@@ -193,14 +193,16 @@ Per tier:
   errors surface, (c) a blank/whitespace `graphqlQuery` falls through to the
   structured builder, (d) `recordCollection` beats a set `graphqlQuery`.
 - **Precondition — confirm the chart ships `.e2e`/`.integration` tiers.** The
-  happy-path conversion below has nowhere to live in a chart that only ships two
-  tiers (`.test.js` + `.graphql.test.js`). If the base bundle lacks the
-  `.e2e`/`.integration` tiers, **do NOT silently skip this step** — flag it in
-  your DONE report as a backfill/waiver item, because a 2-tier conversion cannot
-  perform §4.1's happy-path test conversion. (Wave 1 hit this on
-  `d3StackedBarChart`, which shipped only `.test.js` + `.graphql.test.js`; its
-  e2e/integration happy-path conversion was deferred to an explicit backfill
-  task rather than dropped.)
+  happy-path conversion below has nowhere obvious to live in a chart that only ships
+  two tiers (`.test.js` + `.graphql.test.js`). If the base bundle lacks the
+  `.e2e`/`.integration` tiers, **do NOT silently skip this step** — instead place
+  the converted happy-path wire test in the `.graphql.test.js` tier (so a real
+  self-fetch scenario still runs end to end), AND flag the absent
+  `.e2e`/`.integration` tiers in your DONE report as a backfill/waiver item. (Wave 1
+  hit this on `d3StackedBarChart` (task #38); Wave 2 on `d3LineChart` /
+  `d3AreaChart` / `d3SparklineGrid` (task #47) — all ship only `.test.js` +
+  `.graphql.test.js`. Their e2e/integration happy-path conversion was deferred to
+  an explicit backfill task rather than dropped.)
 - Convert one happy-path fetch test in `.e2e`/`.integration` from the old
   Apex/SOQL path to a `graphql.emit(...)` wire path so a real self-fetch scenario
   still runs end to end.
@@ -360,9 +362,12 @@ no error). Two silent failure modes cause it:
    **before appending the svg** — while `initializeChart` returns `true`,
    latching `chartRendered`. Tooltip present, no svg, never retried. (This is the
    exact state observed live.) The trigger width is **chart-specific**: bar's
-   margins sum to ~80px (a 40px container fires it), but `d3HorizontalBarChart`'s
-   are `left 160 + right 30 = 190px`. Compute the threshold from the chart in
-   front of you, not from bar's numbers.
+   margins sum to ~80px (a 40px container fires it), `d3HorizontalBarChart`'s are
+   `left 160 + right 30 = 190px`, and the time-series line-family
+   (line/area/step/variableColorLine) all use `left 60 + right 30 = 90px`.
+   sparklineGrid is different in kind — its bail threshold is **grid chrome**, not
+   a plotting margin: `labelWidth 120 + valueWidth 80 + 40 = 240px`. Compute the
+   threshold from the chart in front of you, not from bar's numbers.
 
 **Fix — bundle-local `utils.js` + component; do NOT touch shared chartUtils:**
 
@@ -406,13 +411,16 @@ _safeRenderChart(containerWidth) {
 
 Tests (unit tier): (a) container 0-width, capture the RO callback, fire it with a
 measurable width → chart renders (**RED** against old code, which installs no
-observer at width 0); (b) a render exception → error state visible; (c) disconnect
-disconnects the observer; (d) exactly one observer across the lifecycle. The
-sub-margin fixture width in (a)/(b) is **chart-specific** — feed a width below the
-chart's own `left + right` margin sum (bar ~80px so 40px works;
-`d3HorizontalBarChart` needs a width under 190px). Copying bar's "40px" onto a
-wide-margin chart silently tests nothing, because 40px already clears that chart's
-zero-width gate the old way.
+observer at width 0); (b) a render exception → error state visible (see §8's
+mockD3-leak trap — a **module-level shared-const `mockD3`** used to force the throw
+must be restored in a `finally`, or the mutation reddens later describes); (c)
+disconnect disconnects the observer; (d) exactly one observer across the lifecycle.
+The sub-margin fixture width in (a)/(b) is **chart-specific** — feed a width below
+the chart's own `left + right` margin sum (bar ~80px so 40px works;
+`d3HorizontalBarChart` needs a width under 190px; the line-family's is 90px so use
+50–80; sparklineGrid bails on **grid chrome** at 240px, so go under that). Copying
+bar's "40px" onto a wide-margin chart silently tests nothing, because 40px already
+clears that chart's zero-width gate the old way.
 
 **Why this matters more now:** with `recordCollection` the parent usually sizes
 the container before data arrives; with GraphQL-by-default the chart boots and
@@ -458,7 +466,11 @@ often. Every converted chart needs the fix in its inlined `utils.js`.
 ### 5.1 Flow screen target (F1 — every converted chart, uniformly)
 
 Add `lightning__FlowScreen` to `<targets>` and a **second** `<targetConfig>` for
-it. Flow passes a record collection in, so expose `recordCollection` (as a
+it. **Adopt-and-keep, never strip:** if the chart already declares
+`lightningCommunity__Default`/`lightningCommunity__Page` targets (several Wave-2
+time-series charts do), **preserve** them — you are adding FlowScreen, not
+replacing the target list (mirrors the meta-merge sync principle, source side).
+Flow passes a record collection in, so expose `recordCollection` (as a
 **generic sObject collection**) plus the render config — **not** the self-fetch
 knobs (`graphqlQuery`, `objectApiName`) and not drill-down/limit knobs. The
 generic sObject collection uses a `<propertyType extends="SObject">` type
@@ -570,6 +582,16 @@ conversion (SCOPE excludes deploys here).
   the axis headroom to recover the summed total (e.g.
   `Math.round(domain[1] / 1.1) === 350`). Pattern: `d3StackedBarChart`'s
   `createSummationMockD3` in its `.graphql.test.js`.
+- **Module-level shared-const `mockD3` leaks a forced throw across describes.** The
+  §4.3 render-exception test forces `renderChart` to throw by mutating the mock D3
+  (e.g. making `mockD3.select` throw). If the bundle's tests share **one
+  module-level `const mockD3`** instead of a per-test `createMockD3()` factory, that
+  mutation persists into later `describe` blocks and reddens unrelated tests
+  (wave2-`d3StepChart` lost 6 tests to exactly this before adding a guard). Fixes,
+  in order of preference: (1) use the chart's per-test `createMockD3()` factory if
+  it has one; (2) swap in a separate `throwingD3` loader return for just that test
+  (`d3LineChart`'s approach); (3) failing both, save `mockD3.select` before the
+  forced throw and restore it in a `try`/`finally` inside that single test.
 - **Whole-string `gql` interpolation (`` gql`${queryString}` ``) is undocumented**
   but is the same mechanism the structured builders already ship; live-verified per
   the design. Wave 0 confirms the jest-level mechanism (the mock reconstructs and
@@ -626,15 +648,80 @@ The bar baseline. Structured path: `buildAggregateQuery`/`normalizeAggregate`
 existing client-side `aggregateData` (`_aggregateRawData`). Numbers match the
 aggregate path because the client-side group-by sums duplicate keys.
 
-### 9.2 Raw-record charts, no aggregation (line, area, step, difference, slope, variableColorLine, scatter, bubble, dotPlot, sparklineGrid)
+### 9.2 Raw-record charts, no aggregation — incl. date X-axis (line, area, step, difference, slope, variableColorLine, scatter, bubble, dotPlot, sparklineGrid)
 
-These already self-fetch raw records via `buildRecordQuery` + a record
-normalizer, not `buildAggregateQuery`. Their `gqlQuery` has **no aggregate
-branch**. **Free-text:** normalize with `normalizeRecordsGeneric` projecting the
-chart's field set (e.g. `[xField, yField]`, or `[xField, yField, sizeField]` for
-bubble), then feed the chart's **existing record-shaping** step (date parsing,
-sorting, sampling) — there is **no client-side group-by**. Inline whichever
-record normalizer the chart uses.
+These self-fetch raw records via `buildRecordQuery` + `normalizeRecordsGeneric`,
+**not** `buildAggregateQuery`. Their structured path fetches raw, un-summed rows
+(same contract as `recordCollection`) and hands them straight to the component's
+own record-shaping step — there is **no server-side pre-aggregation** and **no
+aggregate branch** in `gqlQuery`. The **date-axis members (line, area, step,
+variableColorLine)** belong here, **NOT** in the gantt §9.4 path: each already
+imports `normalizeRecordsGeneric` (not the gantt `normalizeRecords`) and shapes
+dates through its **own** `getDateParser()` / `processTimeSeriesData()` — never
+`chartUtils.parseDate`. Inlining the gantt `normalizeRecords` or
+`chartUtils.parseDate` on these charts is **dead surface**.
+
+**One normalizer, both paths.** Use the single auto-detecting
+`normalizeRecordsGeneric` (§2.3) for **both** the structured and the free-text
+path — it auto-detects the object key, so a blank `objectApiName` still works.
+`graphql.js` inlines only `buildRecordQuery` + `normalizeRecordsGeneric` +
+`buildWhere`/`formatValue`/`OPERATORS` (no aggregate builder, no aggregate
+normalizer). Keep **all** date/record shaping in the component's existing
+`getDateParser` / `processTimeSeriesData` (or `processEntityData` for the grid);
+`graphql.js` does no date work.
+
+**Parity invariant = "free-text feeds the same shaping step as structured," NOT
+§9.3(b) summation.** Because the structured path fetches raw records and never
+pre-sums, the free-text path already matches it once both run through the same
+`processTimeSeriesData` / `processEntityData`. **Do NOT add a client-side
+summation to the free-text branch** — that would INTRODUCE a divergence the
+structured path does not have. (Contrast §9.3(b): stacked-bar's _structured_ path
+arrives server-pre-summed, so there the free-text branch MUST sum to catch up —
+reasoning specific to the pre-summed families that does **not** transfer here.)
+Prove parity, not summation: a multi-series free-text response renders N paths; an
+area/stacked response routes through the same `d3.stack()`/pivot as structured.
+
+**Unified-wire handler — the recommended shape for a new raw-record conversion.**
+Prefer a **single** `@wire` handler that runs `normalizeRecordsGeneric` →
+`processTimeSeriesData`/`processEntityData` on **every** emission, with the
+free-text branch adding **only** the empty-record record-query hint (§4.2). All
+four Wave-2 line-family charts used this shape; it is cleaner than bar's §4.2
+two-branch template and structurally eliminates the path-parity divergence — there
+is exactly one shaping path, so free-text cannot drift from structured. Bar's
+two-branch template stays fine for aggregation charts; for raw-record charts,
+reach for the unified handler.
+
+**sparklineGrid is the one member that genuinely buckets/sums** — it has an
+`operation` @api and groups by `entityField`, so `processEntityData` sums
+duplicate `(entity, month)` keys. But it sums **identically on both paths** (the
+same `processEntityData` bucket runs for structured and free-text), so there is
+**still no free-text-only summation step** and the unified-wire invariant holds.
+Its sub-margin `renderChart` bail threshold (§4.3) is **grid chrome**, not a
+plotting margin — `labelWidth 120 + valueWidth 80 + 40 = 240px`.
+
+**Per-chart JSDoc, not verbatim.** The §9.3(b) "copy `graphql.js` JSDoc verbatim
+between siblings" rule is **matrix-family-scoped**. On raw-record charts the
+`normalizeRecordsGeneric` docblock legitimately differs per chart — each names its
+own field projection (`[xField, yField]`, `[xField, yField, sizeField]` for
+bubble, the date + value pair for the time-series members) — so do **not** force
+byte-identical docblocks here.
+
+**Field projection:** normalize with `normalizeRecordsGeneric` projecting the
+chart's field set (`[xField, yField]`; `[xField, yField, sizeField]` for bubble;
+the date + value fields for the time-series members), then feed the chart's
+existing record-shaping (date parsing, sorting, sampling). Use the §9.3(b) blessed
+`[...new Set([...].filter(Boolean))]` dedup form.
+
+**Go-forward — record-limit constant convention.** Declare the per-chart record
+cap as a single-key object `const CHART_LIMITS = { <CHART_KEY>: n };`
+(line/step/variableColorLine/sparklineGrid shipped this shape; area shipped a bare
+scalar). Use the object shape for future raw-record conversions. _Convention for
+new work only — do NOT rewrite already-converted bundles to match._
+
+**Go-forward cleanup nit (log, do not fix mid-conversion):** `d3LineChart`'s
+`.js-meta.xml` `dateField` default is `"CreatedDate"` while its JS `@api dateField`
+default is `"CloseDate"`. Reconcile in a dedicated cleanup pass, not inside a
+conversion.
 
 ### 9.3 Matrix / hierarchy + stacked-bar families
 
@@ -714,7 +801,10 @@ The parenthetical tells the reader _why_ Count is absent from `AGG_FN`, which th
 terser bar-era wording did not. The `graphql.js` JSDoc for `buildMultiGroupQuery`,
 `normalizeMultiGroup`, and `normalizeRecordsGeneric` should be **copied verbatim
 between the matrix siblings** — they are the same functions, and wording drift
-between bundles is pure review noise.
+between bundles is pure review noise. **This verbatim rule is
+matrix-family-scoped:** on §9.2 raw-record charts the `normalizeRecordsGeneric`
+docblock legitimately differs per chart (each names its own field projection), so
+do **not** force byte-identical docblocks there.
 
 **Prove the summation with a real-max mock.** The client-side pivot+sum above is
 invisible to the shared `max: () => 500` mock D3, so a passing test proves
@@ -726,20 +816,31 @@ value, not last-wins.
 **Meta help text:** state that the free-text query selects the two group fields +
 the value field as top-level node fields.
 
-### 9.4 Date / time-domain charts (gantt, calendarHeatmap, time-series line/area)
+### 9.4 Date / time-domain charts — gantt + calendarHeatmap ONLY
 
-Structured path uses `normalizeRecords` (gantt-specific `{label,start,end}`)
-and/or `parseDate` / `computeDateExtent` from chartUtils. **Free-text:** map the
-generic records to the chart's shape explicitly —
+**Scope:** this path is for **gantt and calendarHeatmap only.** The time-series
+line-family (**line, area, step, variableColorLine**) does **NOT** live here —
+those are §9.2 raw-record charts with a date X-axis (component-owned
+`getDateParser`/`processTimeSeriesData`, single auto-detecting
+`normalizeRecordsGeneric`). Routing a line-family chart through the gantt
+`normalizeRecords` + `chartUtils.parseDate` path is exactly the dead-surface
+mistake §9.2 warns against. What distinguishes the two §9.4 charts is that their
+**structured render depends on a fixed record shape** the generic normalizer does
+not produce.
+
+gantt/calendarHeatmap's structured path uses the gantt-specific `normalizeRecords`
+(fixed `{label,start,end}` shape) and/or `parseDate` / `computeDateExtent` from
+chartUtils. **Free-text:** map the generic records to the chart's shape
+explicitly —
 `normalizeRecordsGeneric(data, { fields: [labelField, startField, endField] })`
 then `rows.map(r => ({ label: r[labelField], start: r[startField], end: r[endField] }))`,
-running each date through the inlined `parseDate`. **Critical:** the shared
+running each date through the inlined `parseDate`. **Critical:** the gantt
 `normalizeRecords` indexes strictly by `objectApiName`, so it returns `[]` for a
 free-text query when `objectApiName` is blank; the free-text path must use the
-auto-detecting `normalizeRecordsGeneric` (§2.3) instead. Do **not** blindly
-substitute `normalizeRecordsGeneric` where the structured path depends on the
-fixed `{label,start,end}` shape — keep both: `normalizeRecords` for the
-structured wire, `normalizeRecordsGeneric` for free-text.
+auto-detecting `normalizeRecordsGeneric` (§2.3) instead. Here — unlike the §9.2
+line-family — you **keep both**: `normalizeRecords` for the structured wire (the
+render depends on its fixed `{label,start,end}` shape), `normalizeRecordsGeneric`
+for free-text. Do **not** blindly substitute one for the other.
 
 ### 9.5 Distribution / server-statistic charts (histogram, boxPlot, scatter)
 
