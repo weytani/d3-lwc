@@ -5,6 +5,24 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.0] - 2026-07-12
+
+### Changed
+
+- **BREAKING: `d3SortedBarChart` is now a standalone GraphQL-only bundle**,
+  converted per the v3 recipe (see 3.0.0): GraphQL wire self-fetch only,
+  bundle-local support modules, no shared `c/` imports, no Apex. `soqlQuery`
+  and `fetchMode` removed; `graphqlQuery` free-text record queries and the
+  `lightning__FlowScreen` target (with `sortBy`/`sortDirection` in the Flow
+  config) added; render-orchestration hardening applied. Sorting behaves
+  identically across recordCollection, structured, and free-text data paths;
+  Count fetches raw rows bounded by Record Limit. Live-verified on-org.
+
+### Migration
+
+- Same pattern as 3.0.0: detach placed `d3SortedBarChart` instances before
+  deploying, then reconfigure with structured properties or `graphqlQuery`.
+
 ## [3.0.0] - 2026-07-12
 
 First release of the v3 line: every chart becomes a fully standalone,
