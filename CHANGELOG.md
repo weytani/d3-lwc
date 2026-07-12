@@ -5,6 +5,29 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.0] - 2026-07-12
+
+### Changed
+
+- **BREAKING: `d3HorizontalBarChart` is now a standalone GraphQL-only
+  bundle**, converted per the v3 recipe (see 3.0.0): GraphQL wire self-fetch
+  only, bundle-local support modules, no shared `c/` imports, no Apex.
+  `soqlQuery` and `fetchMode` removed; `graphqlQuery` free-text record
+  queries and the `lightning__FlowScreen` target added; render-orchestration
+  hardening applied with the chart's own horizontal margins (190px) guarding
+  the sub-margin bail. Live-verified on-org.
+- The conversion recipe (`docs/conversion-recipe.md`) folds in the Wave 1
+  lessons: the §9.3 matrix-family split (stacked-bar charts pivot via
+  `aggregateSeriesData` + `d3.stack()`, never `buildMatrix`), a single
+  blessed two-commit shape, chart-specific sub-margin guards, the
+  field-projection dedup idiom, and the summation-capable mock-D3 pattern.
+
+### Migration
+
+- Same pattern as 3.0.0: detach placed `d3HorizontalBarChart` instances
+  before deploying, then reconfigure with structured properties or
+  `graphqlQuery`.
+
 ## [3.1.0] - 2026-07-12
 
 ### Changed
