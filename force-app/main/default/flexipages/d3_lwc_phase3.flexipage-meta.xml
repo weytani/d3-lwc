@@ -41,9 +41,8 @@
             <!-- Horizontal Bar Chart: Amount by Stage -->
             <componentInstance>
                 <componentInstanceProperties>
-                    <name>soqlQuery</name>
-                    <value
-          >SELECT StageName, Amount FROM Opportunity WHERE Amount != null</value>
+                    <name>objectApiName</name>
+                    <value>Opportunity</value>
                 </componentInstanceProperties>
                 <componentInstanceProperties>
                     <name>groupByField</name>
