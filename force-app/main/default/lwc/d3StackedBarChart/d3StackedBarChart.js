@@ -1,28 +1,24 @@
 // ABOUTME: D3 Stacked Bar Chart Lightning Web Component.
 // ABOUTME: Displays multi-dimensional data as stacked, grouped, or normalized bars with series legend and drill-down.
 import { LightningElement, api, track, wire } from "lwc";
-import { loadD3 } from "c/d3Lib";
+import { loadD3 } from "./d3Loader";
 import {
   prepareData,
   aggregateData,
   aggregateSeriesData,
   OPERATIONS,
   MAX_RECORDS
-} from "c/dataService";
-import { getColors, DEFAULT_THEME } from "c/themeService";
+} from "./data";
+import { getColors, DEFAULT_THEME } from "./theme";
 import {
   formatNumber,
   truncateLabel,
   createTooltip,
   createResizeHandler,
   buildTooltipContent,
-  createLayoutRetry,
   applySvgA11y
-} from "c/chartUtils";
+} from "./utils";
 import { NavigationMixin } from "lightning/navigation";
-import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
-import getAggregatedData from "@salesforce/apex/D3ChartController.getAggregatedData";
-import getMultiGroupData from "@salesforce/apex/D3ChartController.getMultiGroupData";
 import { gql, graphql } from "lightning/graphql";
 import {
   buildRecordQuery,
@@ -31,7 +27,7 @@ import {
   normalizeAggregate,
   buildMultiGroupQuery,
   normalizeMultiGroup
-} from "c/graphqlService";
+} from "./graphql";
 
 export default class D3StackedBarChart extends NavigationMixin(
   LightningElement
@@ -42,9 +38,6 @@ export default class D3StackedBarChart extends NavigationMixin(
 
   /** Data collection from Flow or parent component */
   @api recordCollection = [];
-
-  /** SOQL query string (used if recordCollection is empty) */
-  @api soqlQuery = "SELECT StageName, Type, Amount FROM Opportunity";
 
   /** Field to group by (category axis) */
   @api groupByField = "StageName";
@@ -67,20 +60,23 @@ export default class D3StackedBarChart extends NavigationMixin(
   /** Advanced configuration JSON */
   @api advancedConfig = "{}";
 
-  /** Object API name for drill-down navigation */
+  /** Maximum records to process (overrides default limit) */
+  @api recordLimit;
+
+  /** Object API name for drill-down navigation and structured GraphQL query building */
   @api objectApiName = "";
 
   /** Filter field for drill-down (usually same as groupByField) */
   @api filterField = "";
 
-  /** Optional WHERE clause fragment for server-side aggregation */
-  @api filterClause = "";
-
-  /** Maximum records to process (overrides default limit) */
-  @api recordLimit;
-
-  /** Fetch-mode selector: "auto" (default, existing priority order), "apex", or "graphql". */
-  @api fetchMode = "auto";
+  /**
+   * Free-text UI API GraphQL document. When non-blank it overrides the
+   * structured query builder as the wire's data source; the returned records
+   * are pivoted and aggregated client-side by groupByField/seriesField/
+   * valueField/operation (duplicate label+series keys are summed) so the
+   * numbers match the structured two-field aggregate path.
+   */
+  @api graphqlQuery = "";
 
   /** Structured filter for the GraphQL path: { field, operator, value }. */
   @api graphqlFilter;
@@ -101,7 +97,6 @@ export default class D3StackedBarChart extends NavigationMixin(
   tooltip = null;
   resizeHandler = null;
   chartRendered = false;
-  _layoutRetry = null;
   _config = {};
 
   // ═══════════════════════════════════════════════════════════════
@@ -137,21 +132,37 @@ export default class D3StackedBarChart extends NavigationMixin(
   }
 
   // ═══════════════════════════════════════════════════════════════
-  // GRAPHQL SELF-FETCH PATH (Approach A — additive)
+  // GRAPHQL SELF-FETCH PATH
   // ═══════════════════════════════════════════════════════════════
 
+  /** True when an admin has supplied a non-blank free-text GraphQL document. */
+  get hasFreeTextQuery() {
+    return !!(this.graphqlQuery && this.graphqlQuery.trim());
+  }
+
   /**
-   * Reactive GraphQL query for the self-fetch path. Returns undefined (so the wire
-   * is skipped) unless fetchMode is "graphql" and objectApiName/groupByField/operation
-   * are set. Mirrors the existing server-side branch: seriesField present -> two-field
-   * grouped aggregate (CT-MG, via buildMultiGroupQuery, same as getMultiGroupData);
-   * seriesField empty -> single-field aggregate (CT-AGG, via buildAggregateQuery, same
-   * as getAggregatedData). Count has no server aggregate on either branch, so it
-   * fetches bounded raw records instead (fed through the existing _aggregateRawData
-   * path, which already handles Count client-side).
+   * Reactive GraphQL query for the self-fetch path. Returns undefined (so the
+   * wire is skipped) when recordCollection is the source or required config is
+   * missing. A non-blank graphqlQuery overrides the structured builder.
+   *
+   * Structured branch: seriesField present -> two-field grouped aggregate
+   * (buildMultiGroupQuery); seriesField empty -> single-field aggregate
+   * (buildAggregateQuery). Count has no server aggregate on either branch, so it
+   * fetches bounded raw records instead (fed through _aggregateRawData, which
+   * counts client-side).
    */
   get gqlQuery() {
-    if (this.fetchMode !== "graphql") return undefined;
+    // recordCollection wins: skip the wire so it is never the data source.
+    if (this.recordCollection && this.recordCollection.length > 0) {
+      return undefined;
+    }
+    // Admin free-text override: pass the document straight to the wire.
+    if (this.hasFreeTextQuery) {
+      return gql`
+        ${this.graphqlQuery}
+      `;
+    }
+    // Structured builder path.
     if (!this.objectApiName || !this.groupByField || !this.operation) {
       return undefined;
     }
@@ -168,6 +179,7 @@ export default class D3StackedBarChart extends NavigationMixin(
           first: this.recordLimit || 2000
         });
       } else {
+        // valueField is required for the Sum/Average aggregate builders.
         if (!this.valueField) return undefined;
         if (this.seriesField) {
           queryString = buildMultiGroupQuery({
@@ -201,7 +213,8 @@ export default class D3StackedBarChart extends NavigationMixin(
 
   @wire(graphql, { query: "$gqlQuery" })
   wiredAggregate({ data, errors }) {
-    if (this.fetchMode !== "graphql") return;
+    // recordCollection is handled synchronously in loadData; ignore the wire.
+    if (this.recordCollection && this.recordCollection.length > 0) return;
     if (errors) {
       this.error = this._formatGqlErrors(errors);
       this.isLoading = false;
@@ -210,7 +223,30 @@ export default class D3StackedBarChart extends NavigationMixin(
     if (!data) return; // initial undefined emission
     try {
       let normalized;
-      if (this.operation === OPERATIONS.COUNT) {
+      if (this.hasFreeTextQuery) {
+        // Free-text override: treat the response as a flat record query and
+        // pivot+aggregate client-side by the field mappings. _aggregateRawData
+        // sums duplicate (label, series) keys, matching the structured
+        // two-field aggregate path (which sums server-side).
+        const fields = [this.groupByField];
+        if (this.seriesField) fields.push(this.seriesField);
+        if (this.operation !== OPERATIONS.COUNT && this.valueField) {
+          fields.push(this.valueField);
+        }
+        const records = normalizeRecordsGeneric(data, {
+          objectApiName: this.objectApiName,
+          fields: [...new Set(fields)]
+        });
+        if (!records.length) {
+          // No rows normalized: the pasted document must be a UI API record
+          // query (uiapi.query), not an aggregate query.
+          this.error =
+            "The GraphQL Query returned no records. It must be a UI API record query (uiapi.query).";
+          this.isLoading = false;
+          return;
+        }
+        normalized = this._aggregateRawData(records);
+      } else if (this.operation === OPERATIONS.COUNT) {
         const fields = this.seriesField
           ? [this.groupByField, this.seriesField]
           : [this.groupByField];
@@ -270,32 +306,27 @@ export default class D3StackedBarChart extends NavigationMixin(
       this.error = e.message || "Failed to initialize chart";
       console.error("D3StackedBarChart initialization error:", e);
     } finally {
-      this.isLoading = false;
+      // Keep the spinner up while a GraphQL query is provisioned but has not yet
+      // emitted data or an error — the wire handler clears isLoading on arrival.
+      // This avoids a no-data flash on the self-fetch path. When no wire is
+      // provisioned (recordCollection resolved it, or nothing is configured) we
+      // stop loading here.
+      if (this.hasData || this.error || !this.gqlQuery) {
+        this.isLoading = false;
+      }
     }
   }
 
   renderedCallback() {
     if (this.showChart && !this.chartRendered) {
+      // initializeChart installs a lifetime ResizeObserver that draws the chart
+      // on the first measurable width and re-draws on resize — so it is safe to
+      // mark initialization done even if the container is not measurable yet.
       this.chartRendered = this.initializeChart();
-      if (!this.chartRendered && !this._layoutRetry) {
-        const container = this.template.querySelector(".chart-container");
-        if (container) {
-          this._layoutRetry = createLayoutRetry(container, () => {
-            this._layoutRetry = null;
-            if (!this.chartRendered) {
-              this.chartRendered = this.initializeChart();
-            }
-          });
-        }
-      }
     }
   }
 
   disconnectedCallback() {
-    if (this._layoutRetry) {
-      this._layoutRetry.cancel();
-      this._layoutRetry = null;
-    }
     this.cleanup();
   }
 
@@ -304,74 +335,12 @@ export default class D3StackedBarChart extends NavigationMixin(
   // ═══════════════════════════════════════════════════════════════
 
   async loadData() {
-    // GraphQL path is handled reactively by the @wire(graphql) — nothing to do here.
-    if (this.fetchMode === "graphql") {
-      return;
-    }
-
-    // Priority 1: Use recordCollection if provided (client-side aggregation)
+    // recordCollection is aggregated client-side here. Otherwise the GraphQL
+    // wire (structured builder or a free-text graphqlQuery) provides the data
+    // reactively and there is nothing to fetch synchronously.
     if (this.recordCollection && this.recordCollection.length > 0) {
       this.chartData = this._aggregateRawData([...this.recordCollection]);
-      return;
     }
-
-    // Priority 2: Server-side aggregation when all required fields are set
-    if (
-      this.objectApiName &&
-      this.groupByField &&
-      this.valueField &&
-      this.operation
-    ) {
-      try {
-        // Use getMultiGroupData when seriesField is specified
-        if (this.seriesField) {
-          const result = await getMultiGroupData({
-            objectName: this.objectApiName,
-            groupByField: this.groupByField,
-            seriesField: this.seriesField,
-            valueField: this.valueField,
-            operation: this.operation,
-            filterClause: this.filterClause || null
-          });
-          // Server returns [{label, series, value}, ...] — same shape as aggregateSeriesData()
-          this.chartData = result;
-        } else {
-          // Fall back to single-dimension aggregation when no seriesField
-          const result = await getAggregatedData({
-            objectName: this.objectApiName,
-            groupByField: this.groupByField,
-            valueField: this.valueField,
-            operation: this.operation,
-            filterClause: this.filterClause || null
-          });
-          // Server returns [{label, value}, ...] — wrap as single-series
-          this.chartData = result;
-        }
-      } catch (e) {
-        throw new Error(`Aggregation Error: ${e.body?.message || e.message}`);
-      }
-
-      if (!this.chartData || this.chartData.length === 0) {
-        throw new Error("No data after aggregation");
-      }
-      return;
-    }
-
-    // Priority 3: Fall back to SOQL query with client-side aggregation
-    if (this.soqlQuery) {
-      let rawData = [];
-      try {
-        rawData = await executeQuery({ queryString: this.soqlQuery });
-      } catch (e) {
-        throw new Error(`SOQL Error: ${e.body?.message || e.message}`);
-      }
-      this.chartData = this._aggregateRawData(rawData);
-      return;
-    }
-
-    throw new Error(
-      "No data source provided. Set recordCollection or soqlQuery."
-    );
   }
 
   /**
@@ -429,33 +398,56 @@ export default class D3StackedBarChart extends NavigationMixin(
   // ═══════════════════════════════════════════════════════════════
 
   /**
-   * Initializes the chart SVG, tooltip, and resize observer.
-   * @returns {boolean} true if the chart was successfully initialized
+   * Initializes the tooltip and a single lifetime ResizeObserver, then attempts
+   * an immediate render. The observer drives both the first render (whenever the
+   * container becomes measurable — there is no fixed give-up window) and every
+   * subsequent resize, so a container that is unmeasurable or narrower than the
+   * chart margins at boot still renders the moment it gains usable width.
+   * @returns {boolean} true once the tooltip + observer are installed
    */
   initializeChart() {
     const container = this.template.querySelector(".chart-container");
     if (!container) return false;
 
-    const { width } = container.getBoundingClientRect();
-    if (width === 0) return false;
+    // Create the tooltip once.
+    if (!this.tooltip) {
+      this.tooltip = createTooltip(container);
+    }
 
-    // Create tooltip
-    this.tooltip = createTooltip(container);
-
-    // Render chart
-    this.renderChart(width);
-
-    // Setup resize observer
-    this.resizeHandler = createResizeHandler(
-      container,
-      ({ width: newWidth }) => {
-        if (newWidth > 0) {
-          this.renderChart(newWidth);
+    // Install the single observer once; it renders on every measurable width.
+    if (!this.resizeHandler) {
+      this.resizeHandler = createResizeHandler(
+        container,
+        ({ width: newWidth }) => {
+          if (newWidth > 0) {
+            this._safeRenderChart(newWidth);
+          }
         }
-      }
-    );
-    this.resizeHandler.observe();
+      );
+      this.resizeHandler.observe();
+    }
+
+    // Render immediately when the container is already measured (the common,
+    // warm-cache path); otherwise the observer renders once it has a width.
+    const { width } = container.getBoundingClientRect();
+    if (width > 0) {
+      this._safeRenderChart(width);
+    }
+
     return true;
+  }
+
+  /**
+   * Renders the chart, surfacing any unexpected exception to the component error
+   * state instead of dying silently mid-render.
+   */
+  _safeRenderChart(containerWidth) {
+    try {
+      this.renderChart(containerWidth);
+    } catch (e) {
+      this.error = e.message || "Failed to render chart";
+      this.isLoading = false;
+    }
   }
 
   renderChart(containerWidth) {
