@@ -5,6 +5,31 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.5.0] - 2026-07-12
+
+### Changed
+
+- **BREAKING: `d3NormalizedBar` is now a standalone GraphQL-only bundle**,
+  converted per the v3 recipe (see 3.0.0): GraphQL wire self-fetch only
+  (two-field grouped aggregates), bundle-local support modules, no shared
+  `c/` imports, no Apex. As a mandatory-series composition chart it drops the
+  single-field aggregators as dead surface and routes Count through the
+  two-field pivot. `soqlQuery` and `fetchMode` removed; `graphqlQuery`
+  free-text record queries (flat rows pivoted and summed client-side, then
+  normalized to 100% — proven identical to the structured path by test) and
+  the `lightning__FlowScreen` target added; render-orchestration hardening
+  applied. Live-verified on-org (10 categories × 3 series).
+
+This completes Wave 1 of the v3 line: the entire bar family
+(`d3BarChart`, `d3SortedBarChart`, `d3HorizontalBarChart`,
+`d3StackedBarChart`, `d3StackedHorizontalBar`, `d3NormalizedBar`) is now
+standalone and GraphQL-only.
+
+### Migration
+
+- Same pattern as 3.0.0: detach placed `d3NormalizedBar` instances before
+  deploying, then reconfigure with structured properties or `graphqlQuery`.
+
 ## [3.4.0] - 2026-07-12
 
 ### Changed
