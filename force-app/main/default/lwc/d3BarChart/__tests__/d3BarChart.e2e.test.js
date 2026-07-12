@@ -286,35 +286,6 @@ describe("c-d3-bar-chart e2e", () => {
       // it would need explicit handleDataChange logic. Verify no crash occurred.
       expect(consoleErrorSpy).not.toHaveBeenCalled();
     });
-  });
-
-  // ═══════════════════════════════════════════════════════════════
-  // 2. ERROR RECOVERY
-  // ═══════════════════════════════════════════════════════════════
-
-  describe("error recovery", () => {
-    it("D3 load failure -> error state -> component shows error", async () => {
-      loadD3.mockRejectedValue(new Error("CDN unreachable"));
-
-      const element = await createChart({
-        recordCollection: [{ StageName: "Prospecting", Amount: 100 }]
-      });
-
-      // Error state should be visible
-      const errorEl = element.shadowRoot.querySelector(
-        ".slds-text-color_error"
-      );
-      expect(errorEl).toBeTruthy();
-      expect(errorEl.textContent).toContain("CDN unreachable");
-
-      // Spinner is gone (isLoading = false in finally block)
-      const spinner = element.shadowRoot.querySelector("lightning-spinner");
-      expect(spinner).toBeFalsy();
-
-      // Chart container should NOT be rendered
-      const container = element.shadowRoot.querySelector(".chart-container");
-      expect(container).toBeFalsy();
-    });
 
     it("GraphQL fetch path: no recordCollection -> wire emits -> full pipeline", async () => {
       const element = createElement("c-d3-bar-chart", { is: D3BarChart });
@@ -380,6 +351,35 @@ describe("c-d3-bar-chart e2e", () => {
         ".slds-text-color_error"
       );
       expect(errorEl).toBeFalsy();
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════
+  // 2. ERROR RECOVERY
+  // ═══════════════════════════════════════════════════════════════
+
+  describe("error recovery", () => {
+    it("D3 load failure -> error state -> component shows error", async () => {
+      loadD3.mockRejectedValue(new Error("CDN unreachable"));
+
+      const element = await createChart({
+        recordCollection: [{ StageName: "Prospecting", Amount: 100 }]
+      });
+
+      // Error state should be visible
+      const errorEl = element.shadowRoot.querySelector(
+        ".slds-text-color_error"
+      );
+      expect(errorEl).toBeTruthy();
+      expect(errorEl.textContent).toContain("CDN unreachable");
+
+      // Spinner is gone (isLoading = false in finally block)
+      const spinner = element.shadowRoot.querySelector("lightning-spinner");
+      expect(spinner).toBeFalsy();
+
+      // Chart container should NOT be rendered
+      const container = element.shadowRoot.querySelector(".chart-container");
+      expect(container).toBeFalsy();
     });
   });
 

@@ -316,6 +316,123 @@ describe("c-d3-bar-chart integration", () => {
         { label: "Closed Lost", value: 1 }
       ]);
     });
+
+    it("free-text graphqlQuery Sum aggregates the wire rows to the correct values", async () => {
+      const { graphql } = require("lightning/graphql");
+
+      element = createElement("c-d3-bar-chart", { is: D3BarChart });
+      Object.assign(element, {
+        graphqlQuery:
+          "query { uiapi { query { Opportunity { edges { node { StageName { value } Amount { value } } } } } } }",
+        objectApiName: "Opportunity",
+        groupByField: "StageName",
+        valueField: "Amount",
+        operation: "Sum"
+      });
+      document.body.appendChild(element);
+
+      await flushPromises();
+      graphql.emit({
+        uiapi: {
+          query: {
+            Opportunity: {
+              edges: [
+                {
+                  node: {
+                    StageName: { value: "Prospecting" },
+                    Amount: { value: 100 }
+                  }
+                },
+                {
+                  node: {
+                    StageName: { value: "Prospecting" },
+                    Amount: { value: 200 }
+                  }
+                },
+                {
+                  node: {
+                    StageName: { value: "Closed Won" },
+                    Amount: { value: 500 }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      });
+      await flushPromises();
+      await flushPromises();
+
+      const dataCalls = mockD3.data.mock.calls;
+      const chartDataCall = dataCalls.find(
+        (call) =>
+          Array.isArray(call[0]) && call[0].length > 0 && call[0][0].label
+      );
+      expect(chartDataCall).toBeTruthy();
+      // Sum: Closed Won=500, Prospecting=300 (sorted desc)
+      expect(chartDataCall[0]).toEqual([
+        { label: "Closed Won", value: 500 },
+        { label: "Prospecting", value: 300 }
+      ]);
+    });
+
+    it("free-text graphqlQuery with a blank objectApiName auto-detects the object key", async () => {
+      const { graphql } = require("lightning/graphql");
+
+      element = createElement("c-d3-bar-chart", { is: D3BarChart });
+      Object.assign(element, {
+        graphqlQuery:
+          "query { uiapi { query { Opportunity { edges { node { StageName { value } Amount { value } } } } } } }",
+        objectApiName: "", // blank — the record normalizer must still find the object
+        groupByField: "StageName",
+        valueField: "Amount",
+        operation: "Sum"
+      });
+      document.body.appendChild(element);
+
+      await flushPromises();
+      graphql.emit({
+        uiapi: {
+          query: {
+            Opportunity: {
+              edges: [
+                {
+                  node: {
+                    StageName: { value: "Prospecting" },
+                    Amount: { value: 100 }
+                  }
+                },
+                {
+                  node: {
+                    StageName: { value: "Closed Won" },
+                    Amount: { value: 400 }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      });
+      await flushPromises();
+      await flushPromises();
+
+      const errorEl = element.shadowRoot.querySelector(
+        ".slds-text-color_error"
+      );
+      expect(errorEl).toBeFalsy();
+
+      const dataCalls = mockD3.data.mock.calls;
+      const chartDataCall = dataCalls.find(
+        (call) =>
+          Array.isArray(call[0]) && call[0].length > 0 && call[0][0].label
+      );
+      expect(chartDataCall).toBeTruthy();
+      // Auto-detected "Opportunity" key; Sum: Closed Won=400, Prospecting=100
+      expect(chartDataCall[0]).toEqual([
+        { label: "Closed Won", value: 400 },
+        { label: "Prospecting", value: 100 }
+      ]);
+    });
   });
 
   // ═══════════════════════════════════════════════════════════════

@@ -241,6 +241,14 @@ export default class D3BarChart extends NavigationMixin(LightningElement) {
           objectApiName: this.objectApiName,
           fields
         });
+        if (!records.length) {
+          // No rows normalized: the pasted document must be a UI API record
+          // query (uiapi.query), not an aggregate query.
+          this.error =
+            "The GraphQL Query returned no records. It must be a UI API record query (uiapi.query).";
+          this.isLoading = false;
+          return;
+        }
         normalized = this._aggregateRawData(records);
       } else if (this.operation === OPERATIONS.COUNT) {
         const records = normalizeRecordsGeneric(data, {
@@ -291,7 +299,14 @@ export default class D3BarChart extends NavigationMixin(LightningElement) {
       this.error = e.message || "Failed to initialize chart";
       console.error("D3BarChart initialization error:", e);
     } finally {
-      this.isLoading = false;
+      // Keep the spinner up while a GraphQL query is provisioned but has not yet
+      // emitted data or an error — the wire handler clears isLoading on arrival.
+      // This avoids a no-data flash on the self-fetch path. When no wire is
+      // provisioned (recordCollection resolved it, or nothing is configured) we
+      // stop loading here.
+      if (this.hasData || this.error || !this.gqlQuery) {
+        this.isLoading = false;
+      }
     }
   }
 

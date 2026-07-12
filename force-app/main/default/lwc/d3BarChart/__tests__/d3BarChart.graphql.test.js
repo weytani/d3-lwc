@@ -150,6 +150,34 @@ describe("d3BarChart GraphQL path", () => {
     ).toBeNull();
   });
 
+  it("keeps the loading spinner up while the wire is provisioned and awaiting its first emission", async () => {
+    const element = createElement("c-d3-bar-chart", { is: D3BarChart });
+    element.objectApiName = "Opportunity";
+    element.groupByField = "StageName";
+    element.valueField = "Amount";
+    element.operation = "Sum";
+    document.body.appendChild(element);
+
+    await flushPromises();
+    // Provisioned wire, no emission yet: spinner shows, no chart, no error —
+    // i.e. no no-data flash on the self-fetch path.
+    expect(
+      element.shadowRoot.querySelector("lightning-spinner")
+    ).not.toBeNull();
+    expect(element.shadowRoot.querySelector(".chart-container")).toBeNull();
+    expect(
+      element.shadowRoot.querySelector(".slds-text-color_error")
+    ).toBeNull();
+
+    graphql.emit(AGG_RESPONSE);
+    await flushPromises();
+    await flushPromises();
+
+    // Emission clears the spinner and shows the chart.
+    expect(element.shadowRoot.querySelector("lightning-spinner")).toBeNull();
+    expect(element.shadowRoot.querySelector(".chart-container")).not.toBeNull();
+  });
+
   it("shows an error when the GraphQL wire emits errors", async () => {
     const element = createElement("c-d3-bar-chart", { is: D3BarChart });
     element.objectApiName = "Opportunity";
@@ -262,6 +290,26 @@ describe("d3BarChart GraphQL path", () => {
     expect(
       element.shadowRoot.querySelector(".slds-text-color_error")
     ).not.toBeNull();
+  });
+
+  it("hints record-query-only when a free-text graphqlQuery yields no records", async () => {
+    // An aggregate-shaped payload has no uiapi.query, so the record normalizer
+    // finds nothing — the error should point the admin at the record-query contract.
+    const element = createElement("c-d3-bar-chart", { is: D3BarChart });
+    element.graphqlQuery = FREE_TEXT_QUERY;
+    element.objectApiName = "Opportunity";
+    element.groupByField = "StageName";
+    element.valueField = "Amount";
+    element.operation = "Sum";
+    document.body.appendChild(element);
+
+    await flushPromises();
+    graphql.emit({ uiapi: { aggregate: { Opportunity: { edges: [] } } } });
+    await flushPromises();
+
+    const err = element.shadowRoot.querySelector(".slds-text-color_error");
+    expect(err).not.toBeNull();
+    expect(err.textContent).toMatch(/record query/i);
   });
 
   it("ignores a blank graphqlQuery and falls through to the structured builder", async () => {
