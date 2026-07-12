@@ -3,15 +3,15 @@
 
 import { createElement } from "lwc";
 import D3HorizontalBarChart from "c/d3HorizontalBarChart";
-import { loadD3 } from "c/d3Lib";
+import { loadD3 } from "../d3Loader";
 import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
 
 // ═══════════════════════════════════════════════════════════════
 // MOCKS — only external boundaries are mocked
-// c/dataService, c/themeService, c/chartUtils use REAL implementations
+// Bundle-local data, theme, and utils modules use REAL implementations
 // ═══════════════════════════════════════════════════════════════
 
-jest.mock("c/d3Lib", () => ({
+jest.mock("../d3Loader", () => ({
   loadD3: jest.fn()
 }));
 

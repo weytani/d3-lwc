@@ -3,7 +3,7 @@
 
 import { createElement } from "lwc";
 import D3HorizontalBarChart from "c/d3HorizontalBarChart";
-import { loadD3 } from "c/d3Lib";
+import { loadD3 } from "../d3Loader";
 import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
 // ShowToastEvent is imported by the component; we mock it below
 
@@ -12,7 +12,7 @@ import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
 // Real services (dataService, themeService, chartUtils) are NOT mocked
 // ═══════════════════════════════════════════════════════════════
 
-jest.mock("c/d3Lib", () => ({
+jest.mock("../d3Loader", () => ({
   loadD3: jest.fn()
 }));
 

@@ -3,9 +3,9 @@
 import { createElement } from "lwc";
 import D3HorizontalBarChart from "c/d3HorizontalBarChart";
 import { graphql, gql } from "lightning/graphql";
-import { loadD3 } from "c/d3Lib";
+import { loadD3 } from "../d3Loader";
 
-jest.mock("c/d3Lib", () => ({ loadD3: jest.fn() }));
+jest.mock("../d3Loader", () => ({ loadD3: jest.fn() }));
 
 // Minimal chainable D3 stub: every call returns the same chainable object,
 // except max(), which renderChart uses synchronously (xMax * 1.1) before any
