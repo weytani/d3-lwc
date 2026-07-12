@@ -109,9 +109,8 @@
             <!-- Area Chart: Amount Over Time by Type -->
             <componentInstance>
                 <componentInstanceProperties>
-                    <name>soqlQuery</name>
-                    <value
-          >SELECT CloseDate, Amount, Type FROM Opportunity WHERE Amount != null AND CloseDate != null ORDER BY CloseDate</value>
+                    <name>objectApiName</name>
+                    <value>Opportunity</value>
                 </componentInstanceProperties>
                 <componentInstanceProperties>
                     <name>dateField</name>
