@@ -8,9 +8,9 @@
 import { createElement } from "lwc";
 import D3StackedBarChart from "c/d3StackedBarChart";
 import { graphql, gql } from "lightning/graphql";
-import { loadD3 } from "c/d3Lib";
+import { loadD3 } from "../d3Loader";
 
-jest.mock("c/d3Lib", () => ({ loadD3: jest.fn() }));
+jest.mock("../d3Loader", () => ({ loadD3: jest.fn() }));
 
 // Hand-rolled mock D3 (mirrors d3StackedBarChart.test.js): max is a real
 // jest.fn() implementation returning a fixed number, not a naive Proxy, so

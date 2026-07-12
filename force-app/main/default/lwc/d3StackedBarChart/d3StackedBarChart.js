@@ -1,24 +1,23 @@
 // ABOUTME: D3 Stacked Bar Chart Lightning Web Component.
 // ABOUTME: Displays multi-dimensional data as stacked, grouped, or normalized bars with series legend and drill-down.
 import { LightningElement, api, track, wire } from "lwc";
-import { loadD3 } from "c/d3Lib";
+import { loadD3 } from "./d3Loader";
 import {
   prepareData,
   aggregateData,
   aggregateSeriesData,
   OPERATIONS,
   MAX_RECORDS
-} from "c/dataService";
-import { getColors, DEFAULT_THEME } from "c/themeService";
+} from "./data";
+import { getColors, DEFAULT_THEME } from "./theme";
 import {
   formatNumber,
   truncateLabel,
   createTooltip,
   createResizeHandler,
   buildTooltipContent,
-  createLayoutRetry,
   applySvgA11y
-} from "c/chartUtils";
+} from "./utils";
 import { NavigationMixin } from "lightning/navigation";
 import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
 import getAggregatedData from "@salesforce/apex/D3ChartController.getAggregatedData";
@@ -31,7 +30,7 @@ import {
   normalizeAggregate,
   buildMultiGroupQuery,
   normalizeMultiGroup
-} from "c/graphqlService";
+} from "./graphql";
 
 export default class D3StackedBarChart extends NavigationMixin(
   LightningElement
@@ -101,7 +100,6 @@ export default class D3StackedBarChart extends NavigationMixin(
   tooltip = null;
   resizeHandler = null;
   chartRendered = false;
-  _layoutRetry = null;
   _config = {};
 
   // ═══════════════════════════════════════════════════════════════
@@ -276,26 +274,14 @@ export default class D3StackedBarChart extends NavigationMixin(
 
   renderedCallback() {
     if (this.showChart && !this.chartRendered) {
+      // initializeChart installs a lifetime ResizeObserver that draws the chart
+      // on the first measurable width and re-draws on resize — so it is safe to
+      // mark initialization done even if the container is not measurable yet.
       this.chartRendered = this.initializeChart();
-      if (!this.chartRendered && !this._layoutRetry) {
-        const container = this.template.querySelector(".chart-container");
-        if (container) {
-          this._layoutRetry = createLayoutRetry(container, () => {
-            this._layoutRetry = null;
-            if (!this.chartRendered) {
-              this.chartRendered = this.initializeChart();
-            }
-          });
-        }
-      }
     }
   }
 
   disconnectedCallback() {
-    if (this._layoutRetry) {
-      this._layoutRetry.cancel();
-      this._layoutRetry = null;
-    }
     this.cleanup();
   }
 
@@ -429,33 +415,56 @@ export default class D3StackedBarChart extends NavigationMixin(
   // ═══════════════════════════════════════════════════════════════
 
   /**
-   * Initializes the chart SVG, tooltip, and resize observer.
-   * @returns {boolean} true if the chart was successfully initialized
+   * Initializes the tooltip and a single lifetime ResizeObserver, then attempts
+   * an immediate render. The observer drives both the first render (whenever the
+   * container becomes measurable — there is no fixed give-up window) and every
+   * subsequent resize, so a container that is unmeasurable or narrower than the
+   * chart margins at boot still renders the moment it gains usable width.
+   * @returns {boolean} true once the tooltip + observer are installed
    */
   initializeChart() {
     const container = this.template.querySelector(".chart-container");
     if (!container) return false;
 
-    const { width } = container.getBoundingClientRect();
-    if (width === 0) return false;
+    // Create the tooltip once.
+    if (!this.tooltip) {
+      this.tooltip = createTooltip(container);
+    }
 
-    // Create tooltip
-    this.tooltip = createTooltip(container);
-
-    // Render chart
-    this.renderChart(width);
-
-    // Setup resize observer
-    this.resizeHandler = createResizeHandler(
-      container,
-      ({ width: newWidth }) => {
-        if (newWidth > 0) {
-          this.renderChart(newWidth);
+    // Install the single observer once; it renders on every measurable width.
+    if (!this.resizeHandler) {
+      this.resizeHandler = createResizeHandler(
+        container,
+        ({ width: newWidth }) => {
+          if (newWidth > 0) {
+            this._safeRenderChart(newWidth);
+          }
         }
-      }
-    );
-    this.resizeHandler.observe();
+      );
+      this.resizeHandler.observe();
+    }
+
+    // Render immediately when the container is already measured (the common,
+    // warm-cache path); otherwise the observer renders once it has a width.
+    const { width } = container.getBoundingClientRect();
+    if (width > 0) {
+      this._safeRenderChart(width);
+    }
+
     return true;
+  }
+
+  /**
+   * Renders the chart, surfacing any unexpected exception to the component error
+   * state instead of dying silently mid-render.
+   */
+  _safeRenderChart(containerWidth) {
+    try {
+      this.renderChart(containerWidth);
+    } catch (e) {
+      this.error = e.message || "Failed to render chart";
+      this.isLoading = false;
+    }
   }
 
   renderChart(containerWidth) {
