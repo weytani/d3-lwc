@@ -3,20 +3,12 @@
 
 import { createElement } from "lwc";
 import D3StepChart from "c/d3StepChart";
-import { loadD3 } from "c/d3Lib";
-import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
+import { graphql } from "lightning/graphql";
+import { loadD3 } from "../d3Loader";
 
-jest.mock("c/d3Lib", () => ({
+jest.mock("../d3Loader", () => ({
   loadD3: jest.fn()
 }));
-
-jest.mock(
-  "@salesforce/apex/D3ChartController.executeQuery",
-  () => ({
-    default: jest.fn()
-  }),
-  { virtual: true }
-);
 
 jest.mock("lightning/navigation", () => {
   const Navigate = Symbol.for("Navigate");
@@ -145,7 +137,6 @@ describe("c-d3-step-chart e2e", () => {
     jest.clearAllMocks();
     mockD3 = createMockD3();
     loadD3.mockResolvedValue(mockD3);
-    executeQuery.mockResolvedValue([]);
 
     consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
 
@@ -175,7 +166,6 @@ describe("c-d3-step-chart e2e", () => {
       const element = await createChart({ recordCollection: LIFECYCLE_DATA });
 
       expect(loadD3).toHaveBeenCalled();
-      expect(executeQuery).not.toHaveBeenCalled();
       expect(mockD3.select).toHaveBeenCalled();
 
       const appendCalls = mockD3.append.mock.calls;
@@ -188,6 +178,55 @@ describe("c-d3-step-chart e2e", () => {
       const container = element.shadowRoot.querySelector(".chart-container");
       expect(container).toBeTruthy();
 
+      const errorEl = element.shadowRoot.querySelector(
+        ".slds-text-color_error"
+      );
+      expect(errorEl).toBeFalsy();
+    });
+
+    it("GraphQL self-fetch: no recordCollection -> wire emits records -> full pipeline renders the step line", async () => {
+      const RECORD_RESPONSE = {
+        uiapi: {
+          query: {
+            Opportunity: {
+              edges: [
+                {
+                  node: {
+                    CloseDate: { value: "2024-01-01" },
+                    Amount: { value: 400 }
+                  }
+                },
+                {
+                  node: {
+                    CloseDate: { value: "2024-02-01" },
+                    Amount: { value: 300 }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      };
+
+      const element = await createChart({
+        recordCollection: [],
+        objectApiName: "Opportunity"
+      });
+
+      // No recordCollection: the GraphQL wire is the data source. Emit records.
+      graphql.emit(RECORD_RESPONSE);
+      await flushPromises();
+      await flushPromises();
+
+      const appendCalls = mockD3.append.mock.calls;
+      expect(appendCalls.some((call) => call[0] === "svg")).toBe(true);
+      expect(appendCalls.some((call) => call[0] === "path")).toBe(true);
+
+      const lineInstance = mockD3.line.mock.results[0].value;
+      expect(lineInstance.curve).toHaveBeenCalledWith("curveStepAfter");
+
+      const container = element.shadowRoot.querySelector(".chart-container");
+      expect(container).toBeTruthy();
       const errorEl = element.shadowRoot.querySelector(
         ".slds-text-color_error"
       );
@@ -223,26 +262,6 @@ describe("c-d3-step-chart e2e", () => {
       );
       expect(errorEl).toBeTruthy();
       expect(errorEl.textContent).toContain("CDN unreachable");
-    });
-
-    it("SOQL fetch path: no recordCollection -> Apex returns data -> full pipeline", async () => {
-      const soqlData = [
-        { CloseDate: "2024-01-01", Amount: 400 },
-        { CloseDate: "2024-02-01", Amount: 300 }
-      ];
-      executeQuery.mockResolvedValue(soqlData);
-
-      const element = await createChart({
-        recordCollection: [],
-        soqlQuery: "SELECT CloseDate, Amount FROM Opportunity"
-      });
-
-      expect(executeQuery).toHaveBeenCalledWith({
-        queryString: "SELECT CloseDate, Amount FROM Opportunity"
-      });
-
-      const container = element.shadowRoot.querySelector(".chart-container");
-      expect(container).toBeTruthy();
     });
   });
 
