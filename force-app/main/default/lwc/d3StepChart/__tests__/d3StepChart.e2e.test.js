@@ -262,6 +262,7 @@ describe("c-d3-step-chart e2e", () => {
       );
       expect(errorEl).toBeTruthy();
       expect(errorEl.textContent).toContain("CDN unreachable");
+      expect(consoleErrorSpy).toHaveBeenCalled();
     });
   });
 
