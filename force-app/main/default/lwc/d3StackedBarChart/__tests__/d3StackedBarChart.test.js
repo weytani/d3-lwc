@@ -4,39 +4,12 @@
 import { createElement } from "lwc";
 import D3StackedBarChart from "c/d3StackedBarChart";
 import { loadD3 } from "../d3Loader";
-import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
-import getAggregatedData from "@salesforce/apex/D3ChartController.getAggregatedData";
-import getMultiGroupData from "@salesforce/apex/D3ChartController.getMultiGroupData";
+import { aggregateSeriesData } from "../data";
 
 // Mock the bundle-local D3 loader
 jest.mock("../d3Loader", () => ({
   loadD3: jest.fn()
 }));
-
-// Mock Apex
-jest.mock(
-  "@salesforce/apex/D3ChartController.executeQuery",
-  () => ({
-    default: jest.fn()
-  }),
-  { virtual: true }
-);
-
-jest.mock(
-  "@salesforce/apex/D3ChartController.getAggregatedData",
-  () => ({
-    default: jest.fn()
-  }),
-  { virtual: true }
-);
-
-jest.mock(
-  "@salesforce/apex/D3ChartController.getMultiGroupData",
-  () => ({
-    default: jest.fn()
-  }),
-  { virtual: true }
-);
 
 // ═══════════════════════════════════════════════════════════════
 // MOCK D3 FACTORY
@@ -119,13 +92,6 @@ const SINGLE_SERIES_DATA = [
   { StageName: "Prospecting", Type: "New", Amount: 100 }
 ];
 
-const SERVER_MULTI_GROUP_RESULT = [
-  { label: "Prospecting", series: "New", value: 100 },
-  { label: "Prospecting", series: "Existing", value: 200 },
-  { label: "Qualification", series: "New", value: 150 },
-  { label: "Qualification", series: "Existing", value: 250 }
-];
-
 const NEGATIVE_SERIES_DATA = [
   { StageName: "Loss", Type: "A", Amount: -100 },
   { StageName: "Gain", Type: "B", Amount: 200 }
@@ -155,13 +121,6 @@ describe("c-d3-stacked-bar-chart", () => {
     jest.clearAllMocks();
     mockD3 = createMockD3();
     loadD3.mockResolvedValue(mockD3);
-    executeQuery.mockResolvedValue(SERIES_DATA);
-    getAggregatedData.mockResolvedValue([
-      { label: "Prospecting", value: 300 },
-      { label: "Qualification", value: 400 },
-      { label: "Closed Won", value: 800 }
-    ]);
-    getMultiGroupData.mockResolvedValue(SERVER_MULTI_GROUP_RESULT);
 
     // Spy on console to ensure pristine output
     consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
@@ -269,56 +228,53 @@ describe("c-d3-stacked-bar-chart", () => {
   // ═══════════════════════════════════════════════════════════════
 
   describe("data handling", () => {
-    it("uses recordCollection when provided", async () => {
+    it("renders from recordCollection when provided", async () => {
       await createChart({
         recordCollection: SERIES_DATA
       });
 
-      expect(executeQuery).not.toHaveBeenCalled();
-      expect(getMultiGroupData).not.toHaveBeenCalled();
+      const container = element.shadowRoot.querySelector(".chart-container");
+      expect(container).toBeTruthy();
+      const errorElement = element.shadowRoot.querySelector(
+        ".slds-text-color_error"
+      );
+      expect(errorElement).toBeFalsy();
     });
 
-    it("executes SOQL when recordCollection is empty", async () => {
+    it("shows the no-data state when no source is configured", async () => {
       await createChart({
         recordCollection: [],
-        soqlQuery: "SELECT StageName, Type, Amount FROM Opportunity"
-      });
-
-      expect(executeQuery).toHaveBeenCalledWith({
-        queryString: "SELECT StageName, Type, Amount FROM Opportunity"
-      });
-    });
-
-    it("shows error when no data source provided", async () => {
-      await createChart({
-        recordCollection: [],
-        soqlQuery: ""
+        objectApiName: "",
+        graphqlQuery: ""
       });
 
       await flushPromises();
 
+      // No recordCollection and no provisioned GraphQL query: neither an error
+      // nor a chart, just the empty state.
       const errorElement = element.shadowRoot.querySelector(
         ".slds-text-color_error"
       );
-      expect(errorElement).toBeTruthy();
+      expect(errorElement).toBeFalsy();
+      const container = element.shadowRoot.querySelector(".chart-container");
+      expect(container).toBeFalsy();
     });
 
-    it("shows error when SOQL query fails", async () => {
-      executeQuery.mockRejectedValue({
-        body: { message: "Query error" }
-      });
-
+    it("recordCollection takes priority over a free-text graphqlQuery", async () => {
       await createChart({
-        recordCollection: [],
-        soqlQuery: "SELECT Invalid FROM Opportunity"
+        recordCollection: SERIES_DATA,
+        graphqlQuery:
+          "query { uiapi { query { Opportunity { edges { node { StageName { value } Type { value } Amount { value } } } } } } }"
       });
 
-      await flushPromises();
-
+      // recordCollection wins: the chart renders from it and the un-emitted
+      // free-text wire never becomes the data source (no error state).
+      const container = element.shadowRoot.querySelector(".chart-container");
+      expect(container).toBeTruthy();
       const errorElement = element.shadowRoot.querySelector(
         ".slds-text-color_error"
       );
-      expect(errorElement).toBeTruthy();
+      expect(errorElement).toBeFalsy();
     });
   });
 
@@ -1101,36 +1057,20 @@ describe("c-d3-stacked-bar-chart", () => {
   // ═══════════════════════════════════════════════════════════════
 
   describe("error recovery", () => {
-    it("shows error from SOQL body.message", async () => {
-      executeQuery.mockRejectedValue({
-        body: { message: "Specific SOQL error" }
+    it("surfaces an exception thrown during renderChart to the error state", async () => {
+      // Force renderChart to throw mid-flight; it must not die silently.
+      mockD3.select = jest.fn(() => {
+        throw new Error("render boom");
       });
 
-      await createChart({
-        recordCollection: [],
-        soqlQuery: "SELECT Bad FROM Object"
-      });
+      await createChart();
       await flushPromises();
 
       const errorElement = element.shadowRoot.querySelector(
         ".slds-text-color_error"
       );
       expect(errorElement).toBeTruthy();
-    });
-
-    it("falls back to e.message when body is missing", async () => {
-      executeQuery.mockRejectedValue(new Error("Network error"));
-
-      await createChart({
-        recordCollection: [],
-        soqlQuery: "SELECT Id FROM Account"
-      });
-      await flushPromises();
-
-      const errorElement = element.shadowRoot.querySelector(
-        ".slds-text-color_error"
-      );
-      expect(errorElement).toBeTruthy();
+      expect(errorElement.textContent).toContain("render boom");
     });
 
     it("shows error when D3 fails to load", async () => {
@@ -1269,183 +1209,73 @@ describe("c-d3-stacked-bar-chart", () => {
   });
 
   // ═══════════════════════════════════════════════════════════════
-  // SERVER AGGREGATION TESTS
+  // SERIES AGGREGATION (CLIENT-SIDE PIVOT + SUM)
   // ═══════════════════════════════════════════════════════════════
 
-  describe("server aggregation", () => {
-    it("calls getMultiGroupData when objectApiName + seriesField set", async () => {
-      await createChart({
-        recordCollection: [],
-        soqlQuery: "",
-        objectApiName: "Opportunity",
-        groupByField: "StageName",
-        seriesField: "Type",
-        valueField: "Amount",
-        operation: "Sum"
-      });
+  describe("series aggregation (client-side pivot + sum)", () => {
+    it("sums duplicate (label, series) keys into one bucket", () => {
+      // Two Prospecting/New rows (100 + 50) must collapse to a single
+      // { Prospecting, New, 150 } bucket. This is the pivot+sum the free-text
+      // GraphQL path relies on to match the server-side two-field aggregate,
+      // which sums duplicate keys server-side.
+      const rows = [
+        { StageName: "Prospecting", Type: "New", Amount: 100 },
+        { StageName: "Prospecting", Type: "New", Amount: 50 },
+        { StageName: "Prospecting", Type: "Existing", Amount: 200 }
+      ];
 
-      await flushPromises();
-
-      expect(getMultiGroupData).toHaveBeenCalledWith({
-        objectName: "Opportunity",
-        groupByField: "StageName",
-        seriesField: "Type",
-        valueField: "Amount",
-        operation: "Sum",
-        filterClause: null
-      });
-      expect(getAggregatedData).not.toHaveBeenCalled();
-      expect(executeQuery).not.toHaveBeenCalled();
-    });
-
-    it("passes filterClause to getMultiGroupData when set", async () => {
-      await createChart({
-        recordCollection: [],
-        soqlQuery: "",
-        objectApiName: "Opportunity",
-        groupByField: "StageName",
-        seriesField: "Type",
-        valueField: "Amount",
-        operation: "Sum",
-        filterClause: "Amount > 1000"
-      });
-
-      await flushPromises();
-
-      expect(getMultiGroupData).toHaveBeenCalledWith({
-        objectName: "Opportunity",
-        groupByField: "StageName",
-        seriesField: "Type",
-        valueField: "Amount",
-        operation: "Sum",
-        filterClause: "Amount > 1000"
-      });
-    });
-
-    it("falls back to getAggregatedData when seriesField is empty", async () => {
-      await createChart({
-        recordCollection: [],
-        soqlQuery: "",
-        objectApiName: "Opportunity",
-        groupByField: "StageName",
-        seriesField: "",
-        valueField: "Amount",
-        operation: "Sum"
-      });
-
-      await flushPromises();
-
-      expect(getMultiGroupData).not.toHaveBeenCalled();
-      expect(getAggregatedData).toHaveBeenCalledWith({
-        objectName: "Opportunity",
-        groupByField: "StageName",
-        valueField: "Amount",
-        operation: "Sum",
-        filterClause: null
-      });
-    });
-
-    it("falls back to soqlQuery with client aggregation when objectApiName is not set", async () => {
-      await createChart({
-        recordCollection: [],
-        soqlQuery: "SELECT StageName, Type, Amount FROM Opportunity",
-        objectApiName: "",
-        groupByField: "StageName",
-        seriesField: "Type",
-        valueField: "Amount",
-        operation: "Sum"
-      });
-
-      await flushPromises();
-
-      expect(getMultiGroupData).not.toHaveBeenCalled();
-      expect(getAggregatedData).not.toHaveBeenCalled();
-      expect(executeQuery).toHaveBeenCalledWith({
-        queryString: "SELECT StageName, Type, Amount FROM Opportunity"
-      });
-    });
-
-    it("renders chart from server multi-group data", async () => {
-      await createChart({
-        recordCollection: [],
-        soqlQuery: "",
-        objectApiName: "Opportunity",
-        groupByField: "StageName",
-        seriesField: "Type",
-        valueField: "Amount",
-        operation: "Sum"
-      });
-
-      await flushPromises();
-      await flushPromises();
-
-      const container = element.shadowRoot.querySelector(".chart-container");
-      expect(container).toBeTruthy();
-      const errorElement = element.shadowRoot.querySelector(
-        ".slds-text-color_error"
+      const result = aggregateSeriesData(
+        rows,
+        "StageName",
+        "Type",
+        "Amount",
+        "Sum"
       );
-      expect(errorElement).toBeFalsy();
+
+      expect(result).toEqual([
+        { label: "Prospecting", series: "New", value: 150 },
+        { label: "Prospecting", series: "Existing", value: 200 }
+      ]);
     });
 
-    it("shows error when getMultiGroupData fails", async () => {
-      getMultiGroupData.mockRejectedValue({
-        body: { message: "Multi-group aggregation failed" }
-      });
+    it("counts rows per (label, series) key for the Count operation", () => {
+      const rows = [
+        { StageName: "Prospecting", Type: "New" },
+        { StageName: "Prospecting", Type: "New" },
+        { StageName: "Prospecting", Type: "Existing" }
+      ];
 
-      await createChart({
-        recordCollection: [],
-        soqlQuery: "",
-        objectApiName: "Opportunity",
-        groupByField: "StageName",
-        seriesField: "Type",
-        valueField: "Amount",
-        operation: "Sum"
-      });
-
-      await flushPromises();
-
-      const errorElement = element.shadowRoot.querySelector(
-        ".slds-text-color_error"
+      const result = aggregateSeriesData(
+        rows,
+        "StageName",
+        "Type",
+        "",
+        "Count"
       );
-      expect(errorElement).toBeTruthy();
+
+      expect(result).toEqual([
+        { label: "Prospecting", series: "New", value: 2 },
+        { label: "Prospecting", series: "Existing", value: 1 }
+      ]);
     });
 
-    it("shows error when getMultiGroupData returns empty array", async () => {
-      getMultiGroupData.mockResolvedValue([]);
+    it("averages the value per (label, series) key for the Average operation", () => {
+      const rows = [
+        { StageName: "Prospecting", Type: "New", Amount: 100 },
+        { StageName: "Prospecting", Type: "New", Amount: 50 }
+      ];
 
-      await createChart({
-        recordCollection: [],
-        soqlQuery: "",
-        objectApiName: "Opportunity",
-        groupByField: "StageName",
-        seriesField: "Type",
-        valueField: "Amount",
-        operation: "Sum"
-      });
-
-      await flushPromises();
-
-      const errorElement = element.shadowRoot.querySelector(
-        ".slds-text-color_error"
+      const result = aggregateSeriesData(
+        rows,
+        "StageName",
+        "Type",
+        "Amount",
+        "Average"
       );
-      expect(errorElement).toBeTruthy();
-    });
 
-    it("prefers recordCollection over server aggregation", async () => {
-      await createChart({
-        recordCollection: SERIES_DATA,
-        objectApiName: "Opportunity",
-        groupByField: "StageName",
-        seriesField: "Type",
-        valueField: "Amount",
-        operation: "Sum"
-      });
-
-      await flushPromises();
-
-      expect(getMultiGroupData).not.toHaveBeenCalled();
-      expect(getAggregatedData).not.toHaveBeenCalled();
-      expect(executeQuery).not.toHaveBeenCalled();
+      expect(result).toEqual([
+        { label: "Prospecting", series: "New", value: 75 }
+      ]);
     });
   });
 
