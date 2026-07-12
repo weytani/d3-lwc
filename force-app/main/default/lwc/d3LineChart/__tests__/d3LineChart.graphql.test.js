@@ -1,13 +1,11 @@
-// ABOUTME: Tests the additive GraphQL self-fetch path on d3LineChart (Approach A, CT-REC).
-// ABOUTME: Line has no server-side aggregate — the graphql path always fetches raw
-// ABOUTME: dateField/valueField/seriesField records and feeds the existing
-// ABOUTME: processTimeSeriesData path, same as recordCollection/soqlQuery.
+// ABOUTME: Tests the GraphQL self-fetch path on the standalone d3LineChart bundle.
+// ABOUTME: Covers the structured record-query builder and the free-text graphqlQuery admin override.
 import { createElement } from "lwc";
 import D3LineChart from "c/d3LineChart";
 import { graphql, gql } from "lightning/graphql";
-import { loadD3 } from "c/d3Lib";
+import { loadD3 } from "../d3Loader";
 
-jest.mock("c/d3Lib", () => ({ loadD3: jest.fn() }));
+jest.mock("../d3Loader", () => ({ loadD3: jest.fn() }));
 
 // Value-axis chart: renderChart calls d3.max/min/extent to build scales, so the
 // stub must compute those for real (a naive always-chain stub crashes the jest
@@ -70,11 +68,16 @@ const RECORD_RESPONSE = {
   }
 };
 
+// A record-query response an admin's free-text graphqlQuery would return. The
+// chart shapes these rows into time-series points client-side.
+const FREE_TEXT_QUERY =
+  "query { uiapi { query { Opportunity { edges { node { CloseDate { value } Amount { value } } } } } } }";
+
 async function flushPromises() {
   return Promise.resolve();
 }
 
-describe("d3LineChart GraphQL path (Approach A, CT-REC)", () => {
+describe("d3LineChart GraphQL self-fetch path", () => {
   let d3Calls;
 
   beforeEach(() => {
@@ -104,80 +107,239 @@ describe("d3LineChart GraphQL path (Approach A, CT-REC)", () => {
     jest.clearAllMocks();
   });
 
-  it("renders the chart container and actually draws the line when GraphQL record data arrives", async () => {
-    const element = createElement("c-d3-line-chart", { is: D3LineChart });
-    element.fetchMode = "graphql";
-    element.objectApiName = "Opportunity";
-    element.dateField = "CloseDate";
-    element.valueField = "Amount";
-    document.body.appendChild(element);
+  describe("structured record-query path", () => {
+    it("renders the chart container and draws the line when GraphQL record data arrives", async () => {
+      const element = createElement("c-d3-line-chart", { is: D3LineChart });
+      element.objectApiName = "Opportunity";
+      element.dateField = "CloseDate";
+      element.valueField = "Amount";
+      document.body.appendChild(element);
 
-    await flushPromises(); // connectedCallback (loadD3 + loadData early-return)
-    graphql.emit(RECORD_RESPONSE);
-    await flushPromises();
-    await flushPromises();
+      await flushPromises(); // connectedCallback (loadD3 + loadData early-return)
+      graphql.emit(RECORD_RESPONSE);
+      await flushPromises();
+      await flushPromises();
 
-    expect(element.shadowRoot.querySelector(".chart-container")).not.toBeNull();
-    expect(
-      element.shadowRoot.querySelector(".slds-text-color_error")
-    ).toBeNull();
+      expect(
+        element.shadowRoot.querySelector(".chart-container")
+      ).not.toBeNull();
+      expect(
+        element.shadowRoot.querySelector(".slds-text-color_error")
+      ).toBeNull();
 
-    // Prove renderChart actually ran (not just that the wire populated data):
-    // a "line" path must have been appended with a "d" attribute.
-    expect(
-      d3Calls.some(
-        (c) => c[0] === "attr" && c[1] === "class" && c[2] === "line"
-      )
-    ).toBe(true);
+      // Prove renderChart actually ran: a "line" path was appended with a "d" attr.
+      expect(
+        d3Calls.some(
+          (c) => c[0] === "attr" && c[1] === "class" && c[2] === "line"
+        )
+      ).toBe(true);
+    });
+
+    it("keeps the loading spinner up while the wire is provisioned and awaiting its first emission", async () => {
+      const element = createElement("c-d3-line-chart", { is: D3LineChart });
+      element.objectApiName = "Opportunity";
+      element.dateField = "CloseDate";
+      element.valueField = "Amount";
+      document.body.appendChild(element);
+
+      await flushPromises();
+      // Provisioned wire, no emission yet: spinner shows, no chart, no error —
+      // i.e. no no-data flash on the self-fetch path.
+      expect(
+        element.shadowRoot.querySelector("lightning-spinner")
+      ).not.toBeNull();
+      expect(element.shadowRoot.querySelector(".chart-container")).toBeNull();
+      expect(
+        element.shadowRoot.querySelector(".slds-text-color_error")
+      ).toBeNull();
+
+      graphql.emit(RECORD_RESPONSE);
+      await flushPromises();
+      await flushPromises();
+
+      expect(element.shadowRoot.querySelector("lightning-spinner")).toBeNull();
+      expect(
+        element.shadowRoot.querySelector(".chart-container")
+      ).not.toBeNull();
+    });
+
+    it("shows an error when the GraphQL wire emits errors", async () => {
+      const element = createElement("c-d3-line-chart", { is: D3LineChart });
+      element.objectApiName = "Opportunity";
+      element.dateField = "CloseDate";
+      element.valueField = "Amount";
+      document.body.appendChild(element);
+
+      await flushPromises();
+      graphql.emitErrors([{ message: "boom" }]);
+      await flushPromises();
+
+      expect(
+        element.shadowRoot.querySelector(".slds-text-color_error")
+      ).not.toBeNull();
+    });
+
+    it("bounds the query with first: 2000", async () => {
+      const element = createElement("c-d3-line-chart", { is: D3LineChart });
+      element.objectApiName = "Opportunity";
+      element.dateField = "CloseDate";
+      element.valueField = "Amount";
+      document.body.appendChild(element);
+
+      await flushPromises();
+
+      const queryStrings = gql.mock.results.map((r) => r.value);
+      expect(queryStrings.some((q) => q.includes("first: 2000"))).toBe(true);
+    });
+
+    it("requests dateField, valueField, and seriesField, deduped", async () => {
+      const element = createElement("c-d3-line-chart", { is: D3LineChart });
+      element.objectApiName = "Opportunity";
+      element.dateField = "CloseDate";
+      element.valueField = "Amount";
+      // seriesField repeats dateField on purpose to prove deduping.
+      element.seriesField = "CloseDate";
+      document.body.appendChild(element);
+
+      await flushPromises();
+
+      const queryStrings = gql.mock.results.map((r) => r.value);
+      const query = queryStrings[queryStrings.length - 1];
+      expect(query).toContain("CloseDate {");
+      expect(query).toContain("Amount {");
+      expect(query.match(/CloseDate \{/g).length).toBe(1);
+    });
   });
 
-  it("shows an error when the GraphQL wire emits errors", async () => {
-    const element = createElement("c-d3-line-chart", { is: D3LineChart });
-    element.fetchMode = "graphql";
-    element.objectApiName = "Opportunity";
-    element.dateField = "CloseDate";
-    element.valueField = "Amount";
-    document.body.appendChild(element);
+  describe("free-text graphqlQuery override", () => {
+    it("uses a free-text graphqlQuery verbatim and shapes the rows client-side", async () => {
+      const element = createElement("c-d3-line-chart", { is: D3LineChart });
+      element.graphqlQuery = FREE_TEXT_QUERY;
+      element.objectApiName = "Opportunity";
+      element.dateField = "CloseDate";
+      element.valueField = "Amount";
+      document.body.appendChild(element);
 
-    await flushPromises();
-    graphql.emitErrors([{ message: "boom" }]);
-    await flushPromises();
+      await flushPromises();
+      graphql.emit(RECORD_RESPONSE);
+      await flushPromises();
+      await flushPromises();
 
-    expect(
-      element.shadowRoot.querySelector(".slds-text-color_error")
-    ).not.toBeNull();
-  });
+      expect(
+        element.shadowRoot.querySelector(".chart-container")
+      ).not.toBeNull();
+      expect(
+        element.shadowRoot.querySelector(".slds-text-color_error")
+      ).toBeNull();
 
-  it("bounds the query with the same first: value as other CT-REC charts", async () => {
-    const element = createElement("c-d3-line-chart", { is: D3LineChart });
-    element.fetchMode = "graphql";
-    element.objectApiName = "Opportunity";
-    element.dateField = "CloseDate";
-    element.valueField = "Amount";
-    document.body.appendChild(element);
+      // The admin's document is passed to gql verbatim; the structured builder
+      // (which bounds the query with first: 2000) is never used.
+      const queryStrings = gql.mock.results.map((r) => r.value);
+      expect(queryStrings.some((q) => q.includes(FREE_TEXT_QUERY))).toBe(true);
+      expect(queryStrings.every((q) => !q.includes("first: 2000"))).toBe(true);
+    });
 
-    await flushPromises();
+    it("auto-detects the object key when objectApiName is blank (real admin case)", async () => {
+      const element = createElement("c-d3-line-chart", { is: D3LineChart });
+      element.graphqlQuery = FREE_TEXT_QUERY;
+      // objectApiName intentionally left blank — the admin pasted a query.
+      element.dateField = "CloseDate";
+      element.valueField = "Amount";
+      document.body.appendChild(element);
 
-    const queryStrings = gql.mock.results.map((r) => r.value);
-    expect(queryStrings.some((q) => q.includes("first: 2000"))).toBe(true);
-  });
+      await flushPromises();
+      graphql.emit(RECORD_RESPONSE);
+      await flushPromises();
+      await flushPromises();
 
-  it("requests dateField, valueField, and seriesField, deduped", async () => {
-    const element = createElement("c-d3-line-chart", { is: D3LineChart });
-    element.fetchMode = "graphql";
-    element.objectApiName = "Opportunity";
-    element.dateField = "CloseDate";
-    element.valueField = "Amount";
-    // seriesField repeats dateField on purpose to prove deduping.
-    element.seriesField = "CloseDate";
-    document.body.appendChild(element);
+      expect(
+        element.shadowRoot.querySelector(".chart-container")
+      ).not.toBeNull();
+      expect(
+        element.shadowRoot.querySelector(".slds-text-color_error")
+      ).toBeNull();
+      expect(
+        d3Calls.some(
+          (c) => c[0] === "attr" && c[1] === "class" && c[2] === "line"
+        )
+      ).toBe(true);
+    });
 
-    await flushPromises();
+    it("surfaces wire errors from a free-text graphqlQuery in the error state", async () => {
+      const element = createElement("c-d3-line-chart", { is: D3LineChart });
+      element.graphqlQuery = FREE_TEXT_QUERY;
+      element.dateField = "CloseDate";
+      element.valueField = "Amount";
+      document.body.appendChild(element);
 
-    const queryStrings = gql.mock.results.map((r) => r.value);
-    const query = queryStrings[queryStrings.length - 1];
-    expect(query).toContain("CloseDate {");
-    expect(query).toContain("Amount {");
-    expect(query.match(/CloseDate \{/g).length).toBe(1);
+      await flushPromises();
+      graphql.emitErrors([{ message: "bad free-text query" }]);
+      await flushPromises();
+
+      expect(
+        element.shadowRoot.querySelector(".slds-text-color_error")
+      ).not.toBeNull();
+    });
+
+    it("hints record-query-only when a free-text graphqlQuery yields no records", async () => {
+      // An aggregate-shaped payload has no uiapi.query, so the record normalizer
+      // finds nothing — the error should point the admin at the record-query contract.
+      const element = createElement("c-d3-line-chart", { is: D3LineChart });
+      element.graphqlQuery = FREE_TEXT_QUERY;
+      element.dateField = "CloseDate";
+      element.valueField = "Amount";
+      document.body.appendChild(element);
+
+      await flushPromises();
+      graphql.emit({ uiapi: { aggregate: { Opportunity: { edges: [] } } } });
+      await flushPromises();
+
+      const err = element.shadowRoot.querySelector(".slds-text-color_error");
+      expect(err).not.toBeNull();
+      expect(err.textContent).toMatch(/record query/i);
+    });
+
+    it("ignores a blank graphqlQuery and falls through to the structured builder", async () => {
+      const element = createElement("c-d3-line-chart", { is: D3LineChart });
+      element.graphqlQuery = "   ";
+      element.objectApiName = "Opportunity";
+      element.dateField = "CloseDate";
+      element.valueField = "Amount";
+      document.body.appendChild(element);
+
+      await flushPromises();
+      graphql.emit(RECORD_RESPONSE);
+      await flushPromises();
+      await flushPromises();
+
+      expect(
+        element.shadowRoot.querySelector(".chart-container")
+      ).not.toBeNull();
+      const queryStrings = gql.mock.results.map((r) => r.value);
+      expect(queryStrings.some((q) => q.includes("first: 2000"))).toBe(true);
+    });
+
+    it("lets recordCollection beat a set graphqlQuery (wire skipped)", async () => {
+      const element = createElement("c-d3-line-chart", { is: D3LineChart });
+      element.graphqlQuery = FREE_TEXT_QUERY;
+      element.recordCollection = [
+        { CloseDate: "2024-01-01", Amount: 100 },
+        { CloseDate: "2024-02-01", Amount: 200 }
+      ];
+      element.dateField = "CloseDate";
+      element.valueField = "Amount";
+      document.body.appendChild(element);
+
+      await flushPromises();
+      await flushPromises();
+
+      // recordCollection wins: the chart renders without the wire ever being
+      // provisioned with the free-text document.
+      expect(
+        element.shadowRoot.querySelector(".chart-container")
+      ).not.toBeNull();
+      const queryStrings = gql.mock.results.map((r) => r.value);
+      expect(queryStrings.some((q) => q.includes(FREE_TEXT_QUERY))).toBe(false);
+    });
   });
 });
