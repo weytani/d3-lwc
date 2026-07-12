@@ -1,0 +1,593 @@
+# Per-Chart GraphQL-Standalone Conversion Recipe
+
+Hardened in Wave 0 on **d3BarChart** (branch `v3/d3BarChart-standalone`). This is
+the reproducible procedure for converting one chart bundle into a fully
+standalone, GraphQL-only bundle for waves 1–N. It is written from what the bar
+conversion actually required, not from what the design predicted. Read the
+approved design first: `docs/superpowers/specs/2026-07-11-graphql-standalone-design.md`.
+
+The end state per chart: the bundle folder + the `d3` static resource is
+everything. No `c/d3Lib`, `c/dataService`, `c/themeService`, `c/chartUtils`,
+`c/graphqlService` imports; no `@salesforce/apex/*` imports; no `soqlQuery` or
+`fetchMode`; a new `graphqlQuery` free-text admin override.
+
+---
+
+## 0. Prerequisites
+
+- A worktree + branch off the v3 integration branch (do **not** work in the main
+  checkout). Example used in Wave 0:
+  `git worktree add ../d3-lwc.worktrees/<chart> v3/<chart>-standalone`
+- `node -v` → v20 (jest ran under Node 26 here fine, but SF CLI needs 20).
+- `npx jest --silent` green from the start (full suite; ~2.4s / 3,377 tests). The
+  suite always runs whole — there is **no per-component narrowing flag**
+  (`--testPathPattern` does nothing here). To watch just your bundle while
+  iterating, pass a path: `npx jest force-app/main/default/lwc/<chart>`.
+- Know your chart's shared-module usage before you start (step 2).
+
+---
+
+## 1. Commit shape (what worked)
+
+Two code commits + one docs commit, in this order:
+
+1. `refactor(<chart>): inline shared-module subsets as bundle-local files`
+   — create the bundle-local modules, switch the component to relative imports,
+   switch the test mocks from `c/d3Lib` to `../d3Loader`. **No public API change.**
+   Full suite stays green. This isolates and de-risks the mechanical inlining and
+   proves relative-module mocking resolves.
+2. `feat(<chart>): GraphQL-only self-fetch with graphqlQuery override`
+   — TDD: rewrite the test tiers to the end state (RED), then remove Apex +
+   `soqlQuery` + `fetchMode`, add `graphqlQuery`, edit `.js-meta.xml`. GREEN.
+3. `docs(...)` — recipe/CHANGELOG updates as needed.
+
+Splitting (1) from (2) matters: the inlining touches every import line and is
+noise in a behavior diff; keeping it separate makes the feat commit reviewable.
+
+---
+
+## 2. Inline the used-subset modules
+
+### 2.1 Decision procedure (how to trace what to copy)
+
+1. Open the component and list its `c/*` imports. For bar:
+   `loadD3` (d3Lib); `prepareData, aggregateData, OPERATIONS, MAX_RECORDS`
+   (dataService); `getColors, DEFAULT_THEME` (themeService);
+   `formatNumber, truncateLabel, createTooltip, createResizeHandler,
+buildTooltipContent, createLayoutRetry, applySvgA11y` (chartUtils);
+   `buildAggregateQuery, buildRecordQuery, normalizeAggregate, normalizeRecords`
+   (graphqlService).
+2. For **each** imported symbol, open the shared module and trace its transitive
+   closure — every helper and module-level constant it calls. Copy the closure,
+   not just the named export. Bar examples:
+   - `prepareData` pulls in `validateData`, `validateFields`, `truncateData`,
+     `MAX_RECORDS`.
+   - `aggregateData` pulls in `OPERATIONS`.
+   - `getColors` pulls in `extendColors`, `PALETTES`, `DEFAULT_THEME`.
+   - `buildTooltipContent` defaults its formatter to `formatNumber`, so
+     `formatNumber` comes too.
+   - `buildAggregateQuery`/`buildRecordQuery` pull in `buildWhere` → `formatValue`,
+     `OPERATORS`, and `AGG_FN`.
+3. **Do NOT copy** exports the chart never touches. Dropped from the bar inlines:
+   `getD3`/`resetD3`; `CHART_LIMITS`, `sampleData`, `aggregateSeriesData`,
+   `computeQuartiles`, `computeRunningTotal`, `buildMatrix`, `buildHierarchy`,
+   `applyFilterClause`; `THEMES`, `createColorScale`, `getSequentialRamp`,
+   `SEMANTIC_*`; `formatCurrency`, `formatPercent`, `getContrastColor`,
+   `parseDate`, `computeDateExtent`, `calculateDimensions`; `buildMultiGroupQuery`,
+   `normalizeMultiGroup`.
+4. Rewrite any inlined comment that is now **actively false** in a standalone
+   bundle (CLAUDE.md permits removing only false comments). The dataService and
+   graphqlService docstrings referenced "prefer server-side getAggregatedData
+   Apex" and `(use dataSource="apex")` — those were rewritten to describe the
+   client-side / record-query reality. Do not add temporal "copied from X" notes;
+   ABOUTMEs must be evergreen ("Bundle-local … for the d3<Chart> bundle").
+
+### 2.2 File layout (design's suggested names — kept verbatim)
+
+```
+<chart>/
+  d3Loader.js   # loadD3 singleton + CSP fetch/eval fallback
+  theme.js      # PALETTES, DEFAULT_THEME, extendColors, getColors
+  data.js       # MAX_RECORDS, OPERATIONS, validate/truncate/prepare/aggregate
+  utils.js      # formatters, tooltip, resize, layout-retry, applySvgA11y
+  graphql.js    # buildWhere/buildRecordQuery/buildAggregateQuery/normalizers
+```
+
+Every inlined file starts with a 2-line `// ABOUTME:` header. `graphql.js` (a
+bundle-local module) coexists with the platform `lightning/graphql` import — the
+compiler distinguishes `./graphql` (relative) from `lightning/graphql` (bare) so
+there is no collision; jest's `moduleNameMapper` for `^lightning/graphql$` does
+not match the relative path either.
+
+Bar inlined line counts: d3Loader 79, theme 99, data 173, utils 278, graphql 141.
+
+### 2.3 The canonical free-text normalizer
+
+Pin this adapted `normalizeRecordsGeneric` in every bundle's `graphql.js`. It
+extends the shared version with **object-key auto-detection** (so a free-text
+query targeting any object is accepted) and a **project-all fallback** (project
+every node field when `fields` is omitted). Both are needed for the admin
+override; the shared version required an explicit object + field list.
+
+```js
+export function normalizeRecordsGeneric(data, { objectApiName, fields } = {}) {
+  const queryRoot = data?.uiapi?.query;
+  if (!queryRoot) return [];
+  const key =
+    objectApiName && queryRoot[objectApiName]
+      ? objectApiName
+      : Object.keys(queryRoot)[0];
+  if (!key) return [];
+  const edges = queryRoot[key]?.edges ?? [];
+  return edges.map((e) => {
+    const node = e.node ?? {};
+    const record = {};
+    (fields ?? Object.keys(node)).forEach((f) => {
+      record[f] = node[f]?.value ?? null;
+    });
+    return record;
+  });
+}
+```
+
+---
+
+## 3. Switch imports + test mocks (commit 1)
+
+- Component: `c/d3Lib` → `./d3Loader`, `c/dataService` → `./data`, etc.
+- **The one non-obvious move:** the tests mock the loader. Change
+  `jest.mock("c/d3Lib", …)` + `import { loadD3 } from "c/d3Lib"` to
+  `jest.mock("../d3Loader", …)` + `import { loadD3 } from "../d3Loader"`.
+  **A `jest.mock` of a bundle-relative path works**: jest keys the module
+  registry by resolved absolute filename, so the test's `../d3Loader` and the
+  component's `./d3Loader` are the same module and the mock applies to both.
+  Verified in Wave 0 (full suite stayed green after the swap).
+- The bar Count path also switched `normalizeRecords` → `normalizeRecordsGeneric`
+  in commit 1, because I chose not to inline the gantt-specific `normalizeRecords`.
+  Output is identical (`[{ [groupByField]: value }, …]`), so tests stayed green.
+
+Run `npx jest --silent` → must be green before committing.
+
+---
+
+## 4. Component conversion (commit 2, TDD)
+
+### 4.1 Rewrite tests first (RED)
+
+Per tier:
+
+- Delete `@salesforce/apex/*` imports + `jest.mock(...apex..., { virtual: true })`
+  and the `mockResolvedValue` lines in `beforeEach`.
+- Delete every test that asserts on `executeQuery`/`getAggregatedData`/`soqlQuery`
+  behavior or sets `fetchMode`. **Grep for leftovers** — a lingering
+  `expect(executeQuery)...` in a test you kept becomes a `ReferenceError` once
+  the import is gone. Command:
+  `grep -nE 'executeQuery|getAggregatedData|soqlQuery|fetchMode|@salesforce/apex' __tests__/*.js`
+- The old "no data source → error" expectation becomes a **no-data state**
+  (neither error nor chart), because an un-provisioned wire is not an error.
+- Add override coverage to the `.graphql.test.js` tier: (a) free-text
+  `graphqlQuery` used verbatim + aggregated client-side, (b) free-text wire
+  errors surface, (c) a blank/whitespace `graphqlQuery` falls through to the
+  structured builder, (d) `recordCollection` beats a set `graphqlQuery`.
+- Convert one happy-path fetch test in `.e2e`/`.integration` from the old
+  Apex/SOQL path to a `graphql.emit(...)` wire path so a real self-fetch scenario
+  still runs end to end.
+- **Place that converted happy-path wire test in a happy-path/lifecycle
+  `describe` block**, never wherever the donor Apex/SOQL test happened to sit. In
+  Wave 0 the old SOQL test lived under `describe("error recovery")`; a successful
+  self-fetch does not belong there. Describe-block accuracy is mandatory — hygiene
+  check 4 (test name ↔ behavior) extends to the block name.
+
+Run `npx jest force-app/main/default/lwc/<chart>` → confirm RED is exactly the
+structured-wire tests (now un-gated) + the new override tests. If anything else
+is red, it is test cruft, not the feature — fix the test.
+
+### 4.2 Implement (GREEN)
+
+Remove the Apex imports and the `soqlQuery`/`fetchMode`/`filterClause` `@api`
+properties. `filterClause` was only read by the removed Apex path — dropping it
+is a dead-surface removal (hygiene check 3), not a feature cut. Add:
+
+```js
+/**
+ * Free-text UI API GraphQL document. When non-blank it overrides the
+ * structured query builder as the wire's data source; the returned records
+ * are aggregated client-side by groupByField/valueField/operation.
+ */
+@api graphqlQuery = "";
+
+get hasFreeTextQuery() {
+  return !!(this.graphqlQuery && this.graphqlQuery.trim());
+}
+```
+
+**`gqlQuery` getter** — recordCollection wins, then free-text, then structured:
+
+```js
+get gqlQuery() {
+  // recordCollection wins: skip the wire so it is never the data source.
+  if (this.recordCollection && this.recordCollection.length > 0) {
+    return undefined;
+  }
+  // Admin free-text override: pass the document straight to the wire.
+  if (this.hasFreeTextQuery) {
+    return gql`
+      ${this.graphqlQuery}
+    `;
+  }
+  // Structured builder path.
+  if (!this.objectApiName || !this.groupByField || !this.operation) {
+    return undefined;
+  }
+  if (this.operation !== OPERATIONS.COUNT && !this.valueField) {
+    return undefined;
+  }
+  let queryString;
+  try {
+    queryString =
+      this.operation === OPERATIONS.COUNT
+        ? buildRecordQuery({ objectApiName: this.objectApiName,
+            fields: [this.groupByField], filter: this.graphqlFilter,
+            first: this.recordLimit || 2000 })
+        : buildAggregateQuery({ objectApiName: this.objectApiName,
+            groupByField: this.groupByField, valueField: this.valueField,
+            operation: this.operation, filter: this.graphqlFilter,
+            first: this.recordLimit || 2000 });
+  } catch {
+    return undefined; // leave the wire un-provisioned; error surfaces below
+  }
+  return gql`
+    ${queryString}
+  `;
+}
+```
+
+**Wire handler** — drop the `fetchMode` gate; guard recordCollection; branch
+free-text → generic-normalize + client-aggregate, else the chart's normal path:
+
+```js
+@wire(graphql, { query: "$gqlQuery" })
+wiredAggregate({ data, errors }) {
+  if (this.recordCollection && this.recordCollection.length > 0) return;
+  if (errors) { this.error = this._formatGqlErrors(errors); this.isLoading = false; return; }
+  if (!data) return; // initial undefined emission
+  try {
+    let normalized;
+    if (this.hasFreeTextQuery) {
+      const fields = this.operation === OPERATIONS.COUNT
+        ? [this.groupByField]
+        : [this.groupByField, this.valueField];
+      const records = normalizeRecordsGeneric(data, { objectApiName: this.objectApiName, fields });
+      if (!records.length) {
+        // Hint the record-query contract, not the generic "empty" message.
+        this.error = "The GraphQL Query returned no records. It must be a UI API record query (uiapi.query).";
+        this.isLoading = false; return;
+      }
+      normalized = this._aggregateRawData(records);
+    } else if (this.operation === OPERATIONS.COUNT) {
+      const records = normalizeRecordsGeneric(data, { objectApiName: this.objectApiName, fields: [this.groupByField] });
+      normalized = this._aggregateRawData(records);
+    } else {
+      normalized = normalizeAggregate(data, { objectApiName: this.objectApiName,
+        groupByField: this.groupByField, valueField: this.valueField, operation: this.operation });
+    }
+    if (!normalized.length) this.error = "No data after aggregation";
+    else { this.chartData = normalized; this.error = null; this.chartRendered = false; }
+  } catch (e) { this.error = e.message; }
+  this.isLoading = false;
+}
+```
+
+**`loadData`** collapses to recordCollection-only (avoid a trailing `return;` —
+ESLint `no-useless-return` fails the lint-staged hook):
+
+```js
+async loadData() {
+  if (this.recordCollection && this.recordCollection.length > 0) {
+    this.chartData = this._aggregateRawData([...this.recordCollection]);
+  }
+}
+```
+
+**Loading state — every conversion must carry this.** The old
+`finally { this.isLoading = false }` clears the spinner before the wire emits,
+producing a no-data flash on the self-fetch path. Gate it on whether a wire is
+provisioned and still pending:
+
+```js
+} finally {
+  // Keep the spinner up while a GraphQL query is provisioned but has not yet
+  // emitted data or an error; the wire handler clears isLoading on arrival.
+  if (this.hasData || this.error || !this.gqlQuery) {
+    this.isLoading = false;
+  }
+}
+```
+
+TDD it: with a provisioned wire and no emission yet, the spinner shows (no chart,
+no error); the first `graphql.emit(...)` clears it. When no wire is provisioned
+(recordCollection resolved it, or nothing is configured) the spinner clears
+immediately — the no-data state is then correct, not a flash.
+
+---
+
+## 5. `.js-meta.xml` diff template
+
+- **Remove** the `soqlQuery` `<property>` (and its "Data Source" comment) and the
+  `fetchMode` `<property>`.
+- **Add** the `graphqlQuery` property. **Keep the free-text contract and the
+  structured-Count bound in separate descriptions** — they are different concerns:
+  - The **structured-Count bound** ("Count is bounded to the first Record Limit
+    rows, default 2000") lives on the `operation` (Aggregation) property, since it
+    describes the built Count query, not the free-text one.
+  - The **free-text contract** lives on `graphqlQuery`: it must be a **record
+    query** (`uiapi.query`) whose node selects the Group By and Value fields as
+    top-level fields, and it carries the accepted footgun (see §Judgment).
+
+```xml
+<property name="operation" type="String" label="Aggregation" default="Sum"
+  datasource="Sum,Count,Average"
+  description="How to aggregate the values. On the GraphQL self-fetch path, Count is bounded to the first Record Limit rows (default 2000)."/>
+
+<!-- GraphQL Query Override -->
+<property name="graphqlQuery" type="String" label="GraphQL Query"
+  description="Optional override of the built query. Must be a UI API record query (uiapi.query) whose node selects the Group By Field and Value Field as top-level fields; the returned rows are aggregated client-side by <the chart's field mappings>. UI-API-queryable objects only; at most 2,000 records; GraphQL syntax. Footgun: if the Value Field is missing from the query, bars aggregate to zero rather than erroring. Leave blank to build the query automatically."/>
+```
+
+- **Broaden `objectApiName` only when the chart has drill-down.** It now also
+  drives the self-fetch, so if the label/description said only "Drill-Down
+  Object", widen it (bar became label "Object API Name", description "Object to
+  query. When set (and no records are passed in), the chart self-fetches this
+  object via GraphQL. Also used for drill-down navigation…"). For a chart with no
+  drill-down, just label it "Object API Name" and describe it as the query object
+  — do not imply navigation.
+- Keep `apiVersion` at **65.0** (floor for dynamic `gql` string interpolation).
+- Update `<description>` only if it names SOQL/Apex (bar's did not).
+
+### 5.1 Flow screen target (F1 — every converted chart, uniformly)
+
+Add `lightning__FlowScreen` to `<targets>` and a **second** `<targetConfig>` for
+it. Flow passes a record collection in, so expose `recordCollection` (as a
+**generic sObject collection**) plus the render config — **not** the self-fetch
+knobs (`graphqlQuery`, `objectApiName`) and not drill-down/limit knobs. The
+generic sObject collection uses a `<propertyType extends="SObject">` type
+parameter with `type="{T[]}"` (verified against the Salesforce LWC docs; not
+deploy-verified in Wave 0 since deploys are out of scope):
+
+```xml
+<targets>
+  <target>lightning__AppPage</target>
+  <target>lightning__RecordPage</target>
+  <target>lightning__HomePage</target>
+  <target>lightning__FlowScreen</target>
+</targets>
+...
+<targetConfig targets="lightning__FlowScreen">
+  <propertyType name="T" extends="SObject" label="Record Type"
+    description="Generic sObject type of the input record collection"/>
+  <property name="recordCollection" type="{T[]}" label="Records" role="inputOnly"
+    description="Collection of records to chart, from the flow"/>
+  <property name="groupByField" type="String" label="Group By Field"
+    description="API name of the category field"/>
+  <property name="valueField" type="String" label="Value Field"
+    description="API name of the numeric field to aggregate (not required for Count)"/>
+  <property name="operation" type="String" label="Aggregation"
+    datasource="Sum,Count,Average" description="How to aggregate the values"/>
+  <property name="height" type="Integer" label="Height (px)"
+    description="Chart height in pixels"/>
+  <property name="theme" type="String" label="Color Theme"
+    datasource="Salesforce Standard,Warm,Cool,Vibrant"
+    description="Color palette for the chart"/>
+  <property name="advancedConfig" type="String" label="Advanced Config (JSON)"
+    description='{"showGrid": true, "showLegend": false, ...}'/>
+</targetConfig>
+```
+
+Expose the config properties a given chart actually reads (field mappings,
+operation, height, theme, `advancedConfig` where applicable). Omit
+`graphqlQuery`/`objectApiName` unless a chart already treats them as
+flow-relevant. jest does not parse the meta, so the Flow config is not covered by
+the suite — verify it at deploy time in the release step.
+
+---
+
+## 6. Chart-clone hygiene scan (run before reporting DONE)
+
+Donor here is the **pre-conversion** chart; the leak is Apex/SOQL/fetchMode
+strings. Run and report all four:
+
+```bash
+# 1. Stale donor strings (source + tests). Expect zero, or an intentional survivor.
+cd force-app/main/default/lwc/<chart>
+grep -niE 'soql|apex|fetchmode|executequery|getaggregateddata|filterclause|D3ChartController' \
+  <chart>.js d3Loader.js data.js theme.js utils.js graphql.js <chart>.js-meta.xml <chart>.html <chart>.css __tests__/*.js
+# 2. Stale config keys: confirm every advancedConfig key the tests set is one renderChart reads.
+# 3. Dead surface: every @api property AND every <property> in the meta is read by the component.
+# 4. Test-name ↔ behavior: each renamed it() asserts what its description claims.
+# Import ban:
+grep -nE 'from "c/(d3Lib|dataService|themeService|chartUtils|graphqlService)"|@salesforce/apex' \
+  <chart>.js d3Loader.js data.js theme.js utils.js graphql.js __tests__/*.js
+```
+
+(The repo hook blocks Bash `grep -r`; the commands above are non-recursive on an
+explicit file list, which is allowed.) In Wave 0 the only survivor was one
+integration-test ABOUTME that still said "Apex … are mocked" — corrected.
+
+---
+
+## 7. Verification gate
+
+```bash
+npx jest --silent                                   # FULL suite green (the other charts still use shared modules)
+npx eslint force-app/main/default/lwc/<chart>       # exit 0 (do NOT run repo-wide `npm run lint` — stale aura glob)
+npx prettier --write <only files you touched>       # never `npm run prettier` (reformats whole repo)
+```
+
+Commit; the husky + lint-staged pre-commit hook re-runs prettier/eslint/related
+jest on staged files. Never `--no-verify`. Live-org render verification + the
+detach/reattach deploy sequencing belong to the **release** step, not the
+conversion (SCOPE excludes deploys here).
+
+---
+
+## 8. Known traps
+
+- **`@api` names cannot start with `data` or `on`** (LWC1107) — they collide with
+  `data-*` attributes / `on*` handlers. `graphqlQuery` is safe; watch chart props
+  like `dataField` in other bundles.
+- **Aggregate envelope has a double `aggregate` wrapper:**
+  `data.uiapi.aggregate.<Object>.edges[].node.aggregate.<Field>.{value | <fn>.value}`.
+  The record envelope does not: `data.uiapi.query.<Object>.edges[].node.<Field>.value`.
+  The free-text override targets the **record** envelope (`uiapi.query`) — an admin
+  who pastes an aggregate query gets no rows.
+- **`lightning/graphql` v2 jest mock is repo-shared** at `__mocks__/lightning/graphql.js`
+  via `moduleNameMapper` (the pinned sfdx-lwc-jest only ships the v1 stub). It
+  provides `graphql.emit(data)`, `graphql.emitErrors(errs)`, and a `gql` that
+  reconstructs the interpolated string. It is **not** part of any bundle — leave it.
+- **Whole-string `gql` interpolation (`` gql`${queryString}` ``) is undocumented**
+  but is the same mechanism the structured builders already ship; live-verified per
+  the design. Wave 0 confirms the jest-level mechanism (the mock reconstructs and
+  tests assert the string); **org verification is a release-step task**, not part
+  of the conversion.
+- **apiVersion 65 floor** for dynamic `gql`. Do not bump or drop it.
+- **Relative `jest.mock`** of `../d3Loader` is required and it works (§3). Do not
+  try to mock `c/d3Loader` — the loader is bundle-local, not a `c/` module.
+- **`no-useless-return`** — the collapsed `loadData` must not end with a bare
+  `return;` or the lint-staged hook fails the commit.
+- **Do NOT delete the repo-shared `__mocks__/@salesforce/apex/D3ChartController.*.js`
+  files.** They live at the repo root, not in any bundle, and the 39
+  not-yet-converted charts' suites still import them via `moduleNameMapper`. You
+  only stop _referencing_ them from your bundle's tests; they get deleted in the
+  final teardown wave (with `D3ChartController` itself), not per chart.
+- **No-data flash on self-fetch** — if you skip the §4.2 loading-state gate, the
+  spinner clears before the wire emits and the chart flashes the "No data" state.
+  Carry the gate on every conversion.
+
+---
+
+## 9. Per-family conversion + free-text recipe
+
+Bar is an aggregation chart with a Count fallback and drill-down. Every family
+below gets an **explicit** `graphqlQuery` free-text recipe — the free-text
+document is always a flat `uiapi.query` record set (normalize with the §2.3
+`normalizeRecordsGeneric`, which auto-detects the object key so a **blank
+`objectApiName` still works**); what differs is the client-side computation that
+turns those flat rows into the chart's data shape.
+
+### 9.0 Already-GraphQL-only charts (R2) — skip the removals
+
+Some charts never had the Apex/`soqlQuery`/`fetchMode` surface. **Verified:
+`d3GanttChart`** has no `fetchMode`, `soqlQuery`, `filterClause`, or
+`@salesforce/apex` import — it already self-fetches through `lightning/graphql`
+with a recordCollection-priority gate. For such a chart, conversion is **only**:
+
+1. Inline the used subsets (§2) and switch to relative imports (§3).
+2. Add the `graphqlQuery` free-text override with the chart's family-specific
+   normalizer (below) + the empty-record hint.
+3. Confirm the existing recordCollection-priority gate and add the §4.2 loading
+   state if missing.
+4. Add the FlowScreen target + Flow targetConfig (§5.1).
+
+Skip every "remove Apex / remove soqlQuery / remove fetchMode" step and skip the
+apex-mock deletions in the tests — there are none. Verify with the §6 grep before
+assuming; charts vary.
+
+### 9.1 Aggregation charts (bar family: sortedBar, horizontalBar, lollipop, pie, donut, waffle, funnel, progress, gauge, bullet)
+
+The bar baseline. Structured path: `buildAggregateQuery`/`normalizeAggregate`
+(Sum/Avg) with a `buildRecordQuery` Count fallback. **Free-text:** project
+`[groupByField, valueField]` (or `[groupByField]` for Count) and run the chart's
+existing client-side `aggregateData` (`_aggregateRawData`). Numbers match the
+aggregate path because the client-side group-by sums duplicate keys.
+
+### 9.2 Raw-record charts, no aggregation (line, area, step, difference, slope, variableColorLine, scatter, bubble, dotPlot, sparklineGrid)
+
+These already self-fetch raw records via `buildRecordQuery` + a record
+normalizer, not `buildAggregateQuery`. Their `gqlQuery` has **no aggregate
+branch**. **Free-text:** normalize with `normalizeRecordsGeneric` projecting the
+chart's field set (e.g. `[xField, yField]`, or `[xField, yField, sizeField]` for
+bubble), then feed the chart's **existing record-shaping** step (date parsing,
+sorting, sampling) — there is **no client-side group-by**. Inline whichever
+record normalizer the chart uses.
+
+### 9.3 Matrix / hierarchy charts (stackedBar, stackedHorizontalBar, heatmap, chord, sunburst, treemap)
+
+Structured path: `buildMultiGroupQuery` + `normalizeMultiGroup` (two-field
+group), or `buildMatrix` / `buildHierarchy` (from dataService) fed from
+grouped rows. **Free-text:** the pasted document returns **flat `uiapi.query`
+records** — one row per source record, un-summed. So you MUST pivot+sum
+client-side before feeding `buildMatrix`/`buildHierarchy`, or the numbers will
+not match the structured aggregate path (which sums server-side). Concretely:
+
+1. `normalizeRecordsGeneric` with `[groupByField, seriesField, valueField]`
+   (matrix) or the hierarchy field list.
+2. Group rows by the composite key (`groupByField|seriesField`, or the full
+   hierarchy path) into a Map, **summing `valueField`** per key with the chart's
+   `operation` (Sum/Count/Average) — reuse `aggregateSeriesData` (inline it) for
+   the matrix case, or a small reducer for hierarchy.
+3. Feed the summed rows to `buildMatrix` / `buildHierarchy` (both accept flat
+   rows) → the chart's D3 shape.
+
+Document in the meta help text that the free-text query selects the two group
+fields + the value field as top-level node fields.
+
+### 9.4 Date / time-domain charts (gantt, calendarHeatmap, time-series line/area)
+
+Structured path uses `normalizeRecords` (gantt-specific `{label,start,end}`)
+and/or `parseDate` / `computeDateExtent` from chartUtils. **Free-text:** map the
+generic records to the chart's shape explicitly —
+`normalizeRecordsGeneric(data, { fields: [labelField, startField, endField] })`
+then `rows.map(r => ({ label: r[labelField], start: r[startField], end: r[endField] }))`,
+running each date through the inlined `parseDate`. **Critical:** the shared
+`normalizeRecords` indexes strictly by `objectApiName`, so it returns `[]` for a
+free-text query when `objectApiName` is blank; the free-text path must use the
+auto-detecting `normalizeRecordsGeneric` (§2.3) instead. Do **not** blindly
+substitute `normalizeRecordsGeneric` where the structured path depends on the
+fixed `{label,start,end}` shape — keep both: `normalizeRecords` for the
+structured wire, `normalizeRecordsGeneric` for free-text.
+
+### 9.5 Distribution / server-statistic charts (histogram, boxPlot, scatter)
+
+These had server-side stat Apex that is **already computed client-side on the
+graphql path**, so deleting the Apex branch is sufficient — no new math. The
+server-stat methods a converter will encounter and remove:
+
+- `getStatistics` — histogram (count/min/max/mean/median/stdDev)
+- `getCorrelation` — scatter (Pearson r, slope, intercept)
+- `getMultiGroupData` — heatmap/stacked (two-field group)
+- `getXYData` — scatter/bubble raw XY
+- `getDateRangeData` — gantt raw date ranges
+
+**Free-text:** project the raw fields with `normalizeRecordsGeneric` and feed the
+chart's existing client-side statistic (the same code the old `graphql` fetchMode
+already used — `computeQuartiles` for boxPlot, the histogram binning math, the
+scatter correlation reducer). **Require a test** that emits a raw-record wire
+payload and asserts the client-side stat output (e.g. boxPlot quartiles, scatter
+r), not just that the chart renders — this is the behavior the removed Apex used
+to guarantee.
+
+### 9.6 Cross-cutting
+
+- **Count-bounded caveat:** any chart whose Count path uses `buildRecordQuery`
+  (record query, then client-side count) is bounded to the first `recordLimit`
+  (default 2000) rows — GraphQL has no server COUNT. Keep that sentence on the
+  `operation` property (§5), separate from the free-text contract.
+- **objectApiName label:** widen to "Object API Name" + self-fetch note only when
+  the chart has drill-down to disambiguate; otherwise just name it the query
+  object (§5).
+
+---
+
+## Judgment outcomes (encoded above)
+
+- **Free-text validation gap is ACCEPTED — no runtime guard.** `normalizeRecordsGeneric`
+  sets every projected key (null when absent), so a free-text Sum query missing
+  the value field aggregates to zero bars rather than erroring. This footgun is
+  documented in the `graphqlQuery` meta help text (§5); do not add a runtime
+  field-presence check.
+- **Free-text is record-query-only** (`uiapi.query`). The empty-result path emits
+  a hint naming the record-query contract (§4.2). The meta help text says "record
+  query".
+- **objectApiName rename is conditional** per §5 (only when it disambiguates
+  drill-down vs query-object).
+- **Describe-block accuracy is mandatory** (§4.1, hygiene check 4).

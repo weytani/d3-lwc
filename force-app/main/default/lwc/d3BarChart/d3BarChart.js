@@ -3,14 +3,9 @@
  * ABOUTME: Displays aggregated data as vertical bars with drill-down support.
  */
 import { LightningElement, api, track, wire } from "lwc";
-import { loadD3 } from "c/d3Lib";
-import {
-  prepareData,
-  aggregateData,
-  OPERATIONS,
-  MAX_RECORDS
-} from "c/dataService";
-import { getColors, DEFAULT_THEME } from "c/themeService";
+import { loadD3 } from "./d3Loader";
+import { prepareData, aggregateData, OPERATIONS, MAX_RECORDS } from "./data";
+import { getColors, DEFAULT_THEME } from "./theme";
 import {
   formatNumber,
   truncateLabel,
@@ -19,17 +14,15 @@ import {
   buildTooltipContent,
   createLayoutRetry,
   applySvgA11y
-} from "c/chartUtils";
+} from "./utils";
 import { NavigationMixin } from "lightning/navigation";
-import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
-import getAggregatedData from "@salesforce/apex/D3ChartController.getAggregatedData";
 import { gql, graphql } from "lightning/graphql";
 import {
   buildAggregateQuery,
   buildRecordQuery,
   normalizeAggregate,
-  normalizeRecords
-} from "c/graphqlService";
+  normalizeRecordsGeneric
+} from "./graphql";
 
 export default class D3BarChart extends NavigationMixin(LightningElement) {
   // ═══════════════════════════════════════════════════════════════
@@ -38,9 +31,6 @@ export default class D3BarChart extends NavigationMixin(LightningElement) {
 
   /** Data collection from Flow or parent component */
   @api recordCollection = [];
-
-  /** SOQL query string (used if recordCollection is empty) */
-  @api soqlQuery = "SELECT StageName, Amount FROM Opportunity";
 
   /** Field to group by (category axis) */
   @api groupByField = "StageName";
@@ -63,17 +53,18 @@ export default class D3BarChart extends NavigationMixin(LightningElement) {
   /** Maximum records to process (overrides default limit) */
   @api recordLimit;
 
-  /** Object API name for drill-down navigation */
+  /** Object API name for drill-down navigation and structured GraphQL query building */
   @api objectApiName = "";
 
   /** Filter field for drill-down (usually same as groupByField) */
   @api filterField = "";
 
-  /** Optional WHERE clause fragment for server-side aggregation */
-  @api filterClause = "";
-
-  /** Fetch-mode selector: "auto" (default, existing priority order), "apex", or "graphql". */
-  @api fetchMode = "auto";
+  /**
+   * Free-text UI API GraphQL document. When non-blank it overrides the
+   * structured query builder as the wire's data source; the returned records
+   * are aggregated client-side by groupByField/valueField/operation.
+   */
+  @api graphqlQuery = "";
 
   /** Structured filter for the GraphQL path: { field, operator, value }. */
   @api graphqlFilter;
@@ -167,15 +158,31 @@ export default class D3BarChart extends NavigationMixin(LightningElement) {
   }
 
   // ═══════════════════════════════════════════════════════════════
-  // GRAPHQL SELF-FETCH PATH (Approach A — additive)
+  // GRAPHQL SELF-FETCH PATH
   // ═══════════════════════════════════════════════════════════════
 
+  /** True when an admin has supplied a non-blank free-text GraphQL document. */
+  get hasFreeTextQuery() {
+    return !!(this.graphqlQuery && this.graphqlQuery.trim());
+  }
+
   /**
-   * Reactive GraphQL query for the self-fetch path. Returns undefined (so the wire
-   * is skipped) unless fetchMode is "graphql" and all required config is present.
+   * Reactive GraphQL query for the self-fetch path. Returns undefined (so the
+   * wire is skipped) when recordCollection is the source or required config is
+   * missing. A non-blank graphqlQuery overrides the structured builder.
    */
   get gqlQuery() {
-    if (this.fetchMode !== "graphql") return undefined;
+    // recordCollection wins: skip the wire so it is never the data source.
+    if (this.recordCollection && this.recordCollection.length > 0) {
+      return undefined;
+    }
+    // Admin free-text override: pass the document straight to the wire.
+    if (this.hasFreeTextQuery) {
+      return gql`
+        ${this.graphqlQuery}
+      `;
+    }
+    // Structured builder path.
     if (!this.objectApiName || !this.groupByField || !this.operation) {
       return undefined;
     }
@@ -213,7 +220,8 @@ export default class D3BarChart extends NavigationMixin(LightningElement) {
 
   @wire(graphql, { query: "$gqlQuery" })
   wiredAggregate({ data, errors }) {
-    if (this.fetchMode !== "graphql") return;
+    // recordCollection is handled synchronously in loadData; ignore the wire.
+    if (this.recordCollection && this.recordCollection.length > 0) return;
     if (errors) {
       this.error = this._formatGqlErrors(errors);
       this.isLoading = false;
@@ -222,14 +230,32 @@ export default class D3BarChart extends NavigationMixin(LightningElement) {
     if (!data) return; // initial undefined emission
     try {
       let normalized;
-      if (this.operation === OPERATIONS.COUNT) {
-        const records = normalizeRecords(data, {
+      if (this.hasFreeTextQuery) {
+        // Free-text override: treat the response as a record query and
+        // aggregate client-side by the field mappings.
+        const fields =
+          this.operation === OPERATIONS.COUNT
+            ? [this.groupByField]
+            : [this.groupByField, this.valueField];
+        const records = normalizeRecordsGeneric(data, {
           objectApiName: this.objectApiName,
-          labelField: this.groupByField
+          fields
         });
-        normalized = this._aggregateRawData(
-          records.map((r) => ({ [this.groupByField]: r.label }))
-        );
+        if (!records.length) {
+          // No rows normalized: the pasted document must be a UI API record
+          // query (uiapi.query), not an aggregate query.
+          this.error =
+            "The GraphQL Query returned no records. It must be a UI API record query (uiapi.query).";
+          this.isLoading = false;
+          return;
+        }
+        normalized = this._aggregateRawData(records);
+      } else if (this.operation === OPERATIONS.COUNT) {
+        const records = normalizeRecordsGeneric(data, {
+          objectApiName: this.objectApiName,
+          fields: [this.groupByField]
+        });
+        normalized = this._aggregateRawData(records);
       } else {
         normalized = normalizeAggregate(data, {
           objectApiName: this.objectApiName,
@@ -273,7 +299,14 @@ export default class D3BarChart extends NavigationMixin(LightningElement) {
       this.error = e.message || "Failed to initialize chart";
       console.error("D3BarChart initialization error:", e);
     } finally {
-      this.isLoading = false;
+      // Keep the spinner up while a GraphQL query is provisioned but has not yet
+      // emitted data or an error — the wire handler clears isLoading on arrival.
+      // This avoids a no-data flash on the self-fetch path. When no wire is
+      // provisioned (recordCollection resolved it, or nothing is configured) we
+      // stop loading here.
+      if (this.hasData || this.error || !this.gqlQuery) {
+        this.isLoading = false;
+      }
     }
   }
 
@@ -307,64 +340,17 @@ export default class D3BarChart extends NavigationMixin(LightningElement) {
   // ═══════════════════════════════════════════════════════════════
 
   async loadData() {
-    // GraphQL path is handled reactively by the @wire(graphql) — nothing to do here.
-    if (this.fetchMode === "graphql") {
-      return;
-    }
-
-    // Priority 1: Use recordCollection if provided (client-side aggregation)
+    // recordCollection is aggregated client-side here. Otherwise the GraphQL
+    // wire (structured builder or a free-text graphqlQuery) provides the data
+    // reactively and there is nothing to fetch synchronously.
     if (this.recordCollection && this.recordCollection.length > 0) {
       this.chartData = this._aggregateRawData([...this.recordCollection]);
-      return;
     }
-
-    // Priority 2: Server-side aggregation when all required fields are set
-    if (
-      this.objectApiName &&
-      this.groupByField &&
-      this.valueField &&
-      this.operation
-    ) {
-      try {
-        const result = await getAggregatedData({
-          objectName: this.objectApiName,
-          groupByField: this.groupByField,
-          valueField: this.valueField,
-          operation: this.operation,
-          filterClause: this.filterClause || null
-        });
-        // Server returns [{label, value}, ...] — same shape as aggregateData()
-        this.chartData = result;
-      } catch (e) {
-        throw new Error(`Aggregation Error: ${e.body?.message || e.message}`);
-      }
-
-      if (!this.chartData || this.chartData.length === 0) {
-        throw new Error("No data after aggregation");
-      }
-      return;
-    }
-
-    // Priority 3: Fall back to SOQL query with client-side aggregation
-    if (this.soqlQuery) {
-      let rawData = [];
-      try {
-        rawData = await executeQuery({ queryString: this.soqlQuery });
-      } catch (e) {
-        throw new Error(`SOQL Error: ${e.body?.message || e.message}`);
-      }
-      this.chartData = this._aggregateRawData(rawData);
-      return;
-    }
-
-    throw new Error(
-      "No data source provided. Set recordCollection or soqlQuery."
-    );
   }
 
   /**
    * Validates, truncates, and aggregates raw record data client-side.
-   * Used by both recordCollection and soqlQuery paths.
+   * Used by the recordCollection path and the GraphQL free-text / Count paths.
    */
   _aggregateRawData(rawData) {
     // Validate required fields
