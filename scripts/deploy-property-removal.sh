@@ -60,7 +60,7 @@ for b in "${BUNDLES[@]}"; do
   fi
 done
 
-if ! git -C "$(dirname "$FLEXIPAGE")" diff --quiet -- "$FLEXIPAGE" 2>/dev/null; then
+if ! git -C "$(dirname "$FLEXIPAGE")" diff --quiet -- "$(basename "$FLEXIPAGE")" 2>/dev/null; then
   echo "[precondition] $FLEXIPAGE has uncommitted changes (expected -- this should be your detached edit)."
 else
   echo "WARNING: $FLEXIPAGE has NO uncommitted changes. Did you forget to detach the component instance first?" >&2
