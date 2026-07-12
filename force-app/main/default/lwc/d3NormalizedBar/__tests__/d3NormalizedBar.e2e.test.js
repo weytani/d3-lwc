@@ -3,20 +3,12 @@
 
 import { createElement } from "lwc";
 import D3NormalizedBar from "c/d3NormalizedBar";
-import { loadD3 } from "c/d3Lib";
-import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
+import { graphql } from "lightning/graphql";
+import { loadD3 } from "../d3Loader";
 
-jest.mock("c/d3Lib", () => ({
+jest.mock("../d3Loader", () => ({
   loadD3: jest.fn()
 }));
-
-jest.mock(
-  "@salesforce/apex/D3ChartController.executeQuery",
-  () => ({
-    default: jest.fn()
-  }),
-  { virtual: true }
-);
 
 jest.mock("lightning/navigation", () => {
   const Navigate = Symbol.for("Navigate");
@@ -139,7 +131,6 @@ describe("c-d3-normalized-bar e2e", () => {
     jest.clearAllMocks();
     mockD3 = createMockD3();
     loadD3.mockResolvedValue(mockD3);
-    executeQuery.mockResolvedValue([]);
 
     consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
 
@@ -169,7 +160,6 @@ describe("c-d3-normalized-bar e2e", () => {
       const element = await createChart({ recordCollection: LIFECYCLE_DATA });
 
       expect(loadD3).toHaveBeenCalled();
-      expect(executeQuery).not.toHaveBeenCalled();
       expect(mockD3.select).toHaveBeenCalled();
 
       const appendCalls = mockD3.append.mock.calls;
@@ -188,6 +178,57 @@ describe("c-d3-normalized-bar e2e", () => {
         ".slds-text-color_error"
       );
       expect(errorEl).toBeFalsy();
+    });
+
+    it("GraphQL self-fetch: no recordCollection -> wire emits multi-group data -> full pipeline", async () => {
+      const element = await createChart({
+        recordCollection: [],
+        objectApiName: "Opportunity",
+        groupByField: "StageName",
+        seriesField: "Type",
+        valueField: "Amount",
+        operation: "Sum"
+      });
+
+      graphql.emit({
+        uiapi: {
+          aggregate: {
+            Opportunity: {
+              edges: [
+                {
+                  node: {
+                    aggregate: {
+                      StageName: { value: "Discovery" },
+                      Type: { value: "New" },
+                      Amount: { sum: { value: 400 } }
+                    }
+                  }
+                },
+                {
+                  node: {
+                    aggregate: {
+                      StageName: { value: "Discovery" },
+                      Type: { value: "Existing" },
+                      Amount: { sum: { value: 100 } }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      });
+      await flushPromises();
+      await flushPromises();
+
+      const container = element.shadowRoot.querySelector(".chart-container");
+      expect(container).toBeTruthy();
+      expect(
+        element.shadowRoot.querySelector(".slds-text-color_error")
+      ).toBeFalsy();
+      expect(mockD3._mockStack.offset).toHaveBeenCalledWith(
+        "stackOffsetExpand"
+      );
     });
 
     it("cleanup destroys resize handler and tooltip on disconnect", async () => {
@@ -235,26 +276,6 @@ describe("c-d3-normalized-bar e2e", () => {
         ".slds-text-color_error"
       );
       expect(errorEl).toBeTruthy();
-    });
-
-    it("SOQL fetch path: no recordCollection -> Apex returns data -> full pipeline", async () => {
-      const soqlData = [
-        { StageName: "Discovery", Type: "New", Amount: 400 },
-        { StageName: "Discovery", Type: "Existing", Amount: 100 }
-      ];
-      executeQuery.mockResolvedValue(soqlData);
-
-      const element = await createChart({
-        recordCollection: [],
-        soqlQuery: "SELECT StageName, Type, Amount FROM Opportunity"
-      });
-
-      expect(executeQuery).toHaveBeenCalledWith({
-        queryString: "SELECT StageName, Type, Amount FROM Opportunity"
-      });
-
-      const container = element.shadowRoot.querySelector(".chart-container");
-      expect(container).toBeTruthy();
     });
   });
 
