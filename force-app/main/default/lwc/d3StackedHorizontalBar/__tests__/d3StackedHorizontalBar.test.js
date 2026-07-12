@@ -3,12 +3,12 @@
 
 import { createElement } from "lwc";
 import D3StackedHorizontalBar from "c/d3StackedHorizontalBar";
-import { loadD3 } from "c/d3Lib";
+import { loadD3 } from "../d3Loader";
 import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
 import getAggregatedData from "@salesforce/apex/D3ChartController.getAggregatedData";
 import getMultiGroupData from "@salesforce/apex/D3ChartController.getMultiGroupData";
 
-jest.mock("c/d3Lib", () => ({
+jest.mock("../d3Loader", () => ({
   loadD3: jest.fn()
 }));
 

@@ -1,15 +1,15 @@
 // ABOUTME: D3 Stacked Horizontal Bar Chart Lightning Web Component.
 // ABOUTME: Displays multi-dimensional data as horizontal stacked or 100%-normalized bars with series legend and drill-down.
 import { LightningElement, api, track, wire } from "lwc";
-import { loadD3 } from "c/d3Lib";
+import { loadD3 } from "./d3Loader";
 import {
   prepareData,
   aggregateData,
   aggregateSeriesData,
   OPERATIONS,
   MAX_RECORDS
-} from "c/dataService";
-import { getColors, DEFAULT_THEME } from "c/themeService";
+} from "./data";
+import { getColors, DEFAULT_THEME } from "./theme";
 import {
   formatNumber,
   truncateLabel,
@@ -18,7 +18,7 @@ import {
   buildTooltipContent,
   createLayoutRetry,
   applySvgA11y
-} from "c/chartUtils";
+} from "./utils";
 import { NavigationMixin } from "lightning/navigation";
 import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
 import getAggregatedData from "@salesforce/apex/D3ChartController.getAggregatedData";
@@ -31,7 +31,7 @@ import {
   normalizeAggregate,
   buildMultiGroupQuery,
   normalizeMultiGroup
-} from "c/graphqlService";
+} from "./graphql";
 
 export default class D3StackedHorizontalBar extends NavigationMixin(
   LightningElement

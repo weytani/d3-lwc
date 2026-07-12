@@ -6,9 +6,9 @@
 import { createElement } from "lwc";
 import D3StackedHorizontalBar from "c/d3StackedHorizontalBar";
 import { graphql, gql } from "lightning/graphql";
-import { loadD3 } from "c/d3Lib";
+import { loadD3 } from "../d3Loader";
 
-jest.mock("c/d3Lib", () => ({ loadD3: jest.fn() }));
+jest.mock("../d3Loader", () => ({ loadD3: jest.fn() }));
 
 const createMockD3 = () => {
   const mockStack = jest.fn(() => []);
