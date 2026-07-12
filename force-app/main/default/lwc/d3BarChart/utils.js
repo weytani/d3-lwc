@@ -1,5 +1,5 @@
 // ABOUTME: Bundle-local chart utilities for the d3BarChart standalone bundle.
-// ABOUTME: Number formatting, label truncation, tooltip, resize, layout-retry, and SVG a11y helpers.
+// ABOUTME: Number formatting, label truncation, tooltip, resize observer, and SVG a11y helpers.
 
 // ===== NUMBER FORMATTERS =====
 
