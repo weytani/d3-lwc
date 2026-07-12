@@ -1,21 +1,19 @@
 // ABOUTME: D3 Area Chart Lightning Web Component.
 // ABOUTME: Displays time series data as filled areas with stacked/overlapping modes and gradient fill.
 import { LightningElement, api, track, wire } from "lwc";
-import { loadD3 } from "c/d3Lib";
-import { prepareData, CHART_LIMITS, applyFilterClause } from "c/dataService";
-import { getColors, DEFAULT_THEME } from "c/themeService";
+import { loadD3 } from "./d3Loader";
+import { prepareData, AREA_RECORD_LIMIT } from "./data";
+import { getColors, DEFAULT_THEME } from "./theme";
 import {
   formatNumber,
   truncateLabel,
   createTooltip,
   createResizeHandler,
-  createLayoutRetry,
   applySvgA11y
-} from "c/chartUtils";
+} from "./utils";
 import { NavigationMixin } from "lightning/navigation";
-import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
 import { gql, graphql } from "lightning/graphql";
-import { buildRecordQuery, normalizeRecordsGeneric } from "c/graphqlService";
+import { buildRecordQuery, normalizeRecordsGeneric } from "./graphql";
 
 export default class D3AreaChart extends NavigationMixin(LightningElement) {
   // ═══════════════════════════════════════════════════════════════
@@ -24,10 +22,6 @@ export default class D3AreaChart extends NavigationMixin(LightningElement) {
 
   /** Data collection from Flow or parent component */
   @api recordCollection = [];
-
-  /** SOQL query string (used if recordCollection is empty) */
-  @api soqlQuery =
-    "SELECT CloseDate, Amount FROM Opportunity ORDER BY CloseDate";
 
   /** Date field for X-axis (time series) */
   @api dateField = "CloseDate";
@@ -59,17 +53,18 @@ export default class D3AreaChart extends NavigationMixin(LightningElement) {
   /** Advanced configuration JSON */
   @api advancedConfig = "{}";
 
-  /** Object API name for drill-down navigation */
+  /** Object API name — self-fetch query object and drill-down navigation target */
   @api objectApiName = "";
 
   /** Filter field for drill-down */
   @api filterField = "";
 
-  /** Optional WHERE clause fragment */
-  @api filterClause = "";
-
-  /** Fetch-mode selector: "auto" (default, existing priority order), "apex", or "graphql". */
-  @api fetchMode = "auto";
+  /**
+   * Free-text UI API GraphQL document. When non-blank it overrides the built
+   * record query as the wire's data source; the returned rows are charted as a
+   * time series client-side by dateField/valueField/seriesField.
+   */
+  @api graphqlQuery = "";
 
   /** Structured filter for the GraphQL path: { field, operator, value }. */
   @api graphqlFilter;
@@ -91,7 +86,6 @@ export default class D3AreaChart extends NavigationMixin(LightningElement) {
   tooltip = null;
   resizeHandler = null;
   chartRendered = false;
-  _layoutRetry = null;
   _config = {};
   _configParsed = false;
 
@@ -149,18 +143,34 @@ export default class D3AreaChart extends NavigationMixin(LightningElement) {
   }
 
   // ═══════════════════════════════════════════════════════════════
-  // GRAPHQL SELF-FETCH PATH (Approach A — additive, CT-REC)
+  // GRAPHQL SELF-FETCH PATH
   // ═══════════════════════════════════════════════════════════════
 
+  /** True when an admin has supplied a non-blank free-text GraphQL document. */
+  get hasFreeTextQuery() {
+    return !!(this.graphqlQuery && this.graphqlQuery.trim());
+  }
+
   /**
-   * Reactive GraphQL query for the self-fetch path. Returns undefined (so the wire
-   * is skipped) unless fetchMode is "graphql" and objectApiName/dateField/valueField
-   * are set. Area has no server-side aggregate: it always fetches raw records for
-   * dateField, valueField, and (if set) seriesField, then feeds the existing
-   * processTimeSeriesData path (same as recordCollection/soqlQuery).
+   * Reactive GraphQL query for the self-fetch path. Returns undefined (so the
+   * wire is skipped) when recordCollection is the source or required config is
+   * missing. A non-blank graphqlQuery overrides the built record query. Area
+   * never aggregates server-side: it always fetches raw records for dateField,
+   * valueField, and (if set) seriesField, then feeds the existing
+   * processTimeSeriesData path (same as recordCollection).
    */
   get gqlQuery() {
-    if (this.fetchMode !== "graphql") return undefined;
+    // recordCollection wins: skip the wire so it is never the data source.
+    if (this.recordCollection && this.recordCollection.length > 0) {
+      return undefined;
+    }
+    // Admin free-text override: pass the document straight to the wire.
+    if (this.hasFreeTextQuery) {
+      return gql`
+        ${this.graphqlQuery}
+      `;
+    }
+    // Structured record-query builder path.
     if (!this.objectApiName || !this.dateField || !this.valueField) {
       return undefined;
     }
@@ -188,7 +198,8 @@ export default class D3AreaChart extends NavigationMixin(LightningElement) {
 
   @wire(graphql, { query: "$gqlQuery" })
   wiredRecords({ data, errors }) {
-    if (this.fetchMode !== "graphql") return;
+    // recordCollection is handled synchronously in loadData; ignore the wire.
+    if (this.recordCollection && this.recordCollection.length > 0) return;
     if (errors) {
       this.error = this._formatGqlErrors(errors);
       this.isLoading = false;
@@ -205,6 +216,14 @@ export default class D3AreaChart extends NavigationMixin(LightningElement) {
         objectApiName: this.objectApiName,
         fields
       });
+      if (this.hasFreeTextQuery && !records.length) {
+        // No rows normalized: the pasted document must be a UI API record
+        // query (uiapi.query), not an aggregate query.
+        this.error =
+          "The GraphQL Query returned no records. It must be a UI API record query (uiapi.query).";
+        this.isLoading = false;
+        return;
+      }
       this.processTimeSeriesData(records);
       if (this.seriesData.length === 0) {
         this.error = "No data after processing";
@@ -235,32 +254,27 @@ export default class D3AreaChart extends NavigationMixin(LightningElement) {
       this.error = e.message || "Failed to initialize chart";
       console.error("D3AreaChart initialization error:", e);
     } finally {
-      this.isLoading = false;
+      // Keep the spinner up while a GraphQL query is provisioned but has not yet
+      // emitted data or an error — the wire handler clears isLoading on arrival.
+      // This avoids a no-data flash on the self-fetch path. When no wire is
+      // provisioned (recordCollection resolved it, or nothing is configured) we
+      // stop loading here.
+      if (this.hasData || this.error || !this.gqlQuery) {
+        this.isLoading = false;
+      }
     }
   }
 
   renderedCallback() {
     if (this.showChart && !this.chartRendered) {
+      // initializeChart installs a lifetime ResizeObserver that draws the chart
+      // on the first measurable width and re-draws on resize — so it is safe to
+      // mark initialization done even if the container is not measurable yet.
       this.chartRendered = this.initializeChart();
-      if (!this.chartRendered && !this._layoutRetry) {
-        const container = this.template.querySelector(".chart-container");
-        if (container) {
-          this._layoutRetry = createLayoutRetry(container, () => {
-            this._layoutRetry = null;
-            if (!this.chartRendered) {
-              this.chartRendered = this.initializeChart();
-            }
-          });
-        }
-      }
     }
   }
 
   disconnectedCallback() {
-    if (this._layoutRetry) {
-      this._layoutRetry.cancel();
-      this._layoutRetry = null;
-    }
     this.cleanup();
   }
 
@@ -269,43 +283,24 @@ export default class D3AreaChart extends NavigationMixin(LightningElement) {
   // ═══════════════════════════════════════════════════════════════
 
   async loadData() {
-    // GraphQL path is handled reactively by the @wire(graphql) — nothing to do here.
-    if (this.fetchMode === "graphql") {
-      return;
-    }
-
-    let rawData = [];
-
+    // recordCollection is shaped into a time series client-side here. Otherwise
+    // the GraphQL wire (structured builder or a free-text graphqlQuery) provides
+    // the data reactively and there is nothing to fetch synchronously.
     if (this.recordCollection && this.recordCollection.length > 0) {
-      rawData = [...this.recordCollection];
-    } else if (this.soqlQuery) {
-      try {
-        rawData = await executeQuery({
-          queryString: applyFilterClause(this.soqlQuery, this.filterClause)
-        });
-      } catch (e) {
-        throw new Error(`SOQL Error: ${e.body?.message || e.message}`);
+      const prepared = prepareData([...this.recordCollection], {
+        requiredFields: [this.dateField, this.valueField],
+        limit: this.recordLimit || AREA_RECORD_LIMIT
+      });
+
+      if (!prepared.valid) {
+        throw new Error(prepared.error);
       }
-    } else {
-      throw new Error(
-        "No data source provided. Set recordCollection or soqlQuery."
-      );
-    }
 
-    const requiredFields = [this.dateField, this.valueField];
-    const prepared = prepareData(rawData, {
-      requiredFields,
-      limit: this.recordLimit || CHART_LIMITS.AREA
-    });
+      this.processTimeSeriesData(prepared.data);
 
-    if (!prepared.valid) {
-      throw new Error(prepared.error);
-    }
-
-    this.processTimeSeriesData(prepared.data);
-
-    if (this.seriesData.length === 0) {
-      throw new Error("No data after processing");
+      if (this.seriesData.length === 0) {
+        throw new Error("No data after processing");
+      }
     }
   }
 
@@ -389,29 +384,56 @@ export default class D3AreaChart extends NavigationMixin(LightningElement) {
   // ═══════════════════════════════════════════════════════════════
 
   /**
-   * Initializes the chart SVG, tooltip, and resize observer.
-   * @returns {boolean} true if the chart was successfully initialized
+   * Initializes the tooltip and a single lifetime ResizeObserver, then attempts
+   * an immediate render. The observer drives both the first render (whenever the
+   * container becomes measurable — there is no fixed give-up window) and every
+   * subsequent resize, so a container that is unmeasurable or narrower than the
+   * chart margins at boot still renders the moment it gains usable width.
+   * @returns {boolean} true once the tooltip + observer are installed
    */
   initializeChart() {
     const container = this.template.querySelector(".chart-container");
     if (!container) return false;
 
-    const { width } = container.getBoundingClientRect();
-    if (width === 0) return false;
+    // Create the tooltip once.
+    if (!this.tooltip) {
+      this.tooltip = createTooltip(container);
+    }
 
-    this.tooltip = createTooltip(container);
-    this.renderChart(width);
-
-    this.resizeHandler = createResizeHandler(
-      container,
-      ({ width: newWidth }) => {
-        if (newWidth > 0) {
-          this.renderChart(newWidth);
+    // Install the single observer once; it renders on every measurable width.
+    if (!this.resizeHandler) {
+      this.resizeHandler = createResizeHandler(
+        container,
+        ({ width: newWidth }) => {
+          if (newWidth > 0) {
+            this._safeRenderChart(newWidth);
+          }
         }
-      }
-    );
-    this.resizeHandler.observe();
+      );
+      this.resizeHandler.observe();
+    }
+
+    // Render immediately when the container is already measured (the common,
+    // warm-cache path); otherwise the observer renders once it has a width.
+    const { width } = container.getBoundingClientRect();
+    if (width > 0) {
+      this._safeRenderChart(width);
+    }
+
     return true;
+  }
+
+  /**
+   * Renders the chart, surfacing any unexpected exception to the component error
+   * state instead of dying silently mid-render.
+   */
+  _safeRenderChart(containerWidth) {
+    try {
+      this.renderChart(containerWidth);
+    } catch (e) {
+      this.error = e.message || "Failed to render chart";
+      this.isLoading = false;
+    }
   }
 
   renderChart(containerWidth) {
