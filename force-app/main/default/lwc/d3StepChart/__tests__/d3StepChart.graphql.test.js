@@ -282,6 +282,55 @@ describe("d3StepChart GraphQL path", () => {
     ).toBe(true);
   });
 
+  it("plots duplicate (date, series) rows as distinct points on the free-text path (no client-side summation)", async () => {
+    // Step is a raw-record time-series chart: its structured path fetches raw
+    // records (buildRecordQuery, no server aggregate), so the free-text path must
+    // NOT sum duplicate keys — every row stays a distinct point, matching the
+    // structured raw path. Two rows at the same date + series => two points.
+    const DUP_RESPONSE = {
+      uiapi: {
+        query: {
+          Opportunity: {
+            edges: [
+              {
+                node: {
+                  CloseDate: { value: "2024-01-15" },
+                  Amount: { value: 100 }
+                }
+              },
+              {
+                node: {
+                  CloseDate: { value: "2024-01-15" },
+                  Amount: { value: 250 }
+                }
+              }
+            ]
+          }
+        }
+      }
+    };
+
+    const element = createElement("c-d3-step-chart", { is: D3StepChart });
+    element.graphqlQuery = FREE_TEXT_QUERY;
+    element.objectApiName = "Opportunity";
+    element.dateField = "CloseDate";
+    element.valueField = "Amount";
+    document.body.appendChild(element);
+
+    await flushPromises();
+    graphql.emit(DUP_RESPONSE);
+    await flushPromises();
+    await flushPromises();
+
+    // The single ("Default") series' points array is datum'd onto the step path;
+    // both same-date rows survive as separate points (length 2, not summed to 1).
+    const datumCall = d3Calls.find(
+      (c) => c[0] === "datum" && Array.isArray(c[1])
+    );
+    expect(datumCall).toBeTruthy();
+    expect(datumCall[1]).toHaveLength(2);
+  });
+
   it("surfaces wire errors from a free-text graphqlQuery in the error state", async () => {
     const element = createElement("c-d3-step-chart", { is: D3StepChart });
     element.graphqlQuery = FREE_TEXT_QUERY;
