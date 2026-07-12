@@ -1,19 +1,18 @@
-// ABOUTME: Tests the additive GraphQL self-fetch path on d3VariableColorLine (Approach A, CT-REC).
-// ABOUTME: This chart has no server-side aggregate — the graphql path always fetches raw
-// ABOUTME: dateField/valueField records and feeds the existing processTimeSeriesData path,
-// ABOUTME: same as recordCollection/soqlQuery.
+// ABOUTME: Tests the GraphQL self-fetch path on the standalone d3VariableColorLine bundle.
+// ABOUTME: This chart has no server-side aggregate — it fetches raw dateField/valueField
+// ABOUTME: records (structured builder or a free-text graphqlQuery override) and feeds the
+// ABOUTME: existing processTimeSeriesData / threshold-gradient pipeline.
 import { createElement } from "lwc";
 import D3VariableColorLine from "c/d3VariableColorLine";
 import { graphql, gql } from "lightning/graphql";
-import { loadD3 } from "c/d3Lib";
+import { loadD3 } from "../d3Loader";
 
-jest.mock("c/d3Lib", () => ({ loadD3: jest.fn() }));
+jest.mock("../d3Loader", () => ({ loadD3: jest.fn() }));
 
 // Value-axis chart: renderChart calls d3.max/min/extent to build scales, and
 // ALSO evaluates xScale(...) numerically (subtracting two calls to compute
 // the gradient's total pixel span), so unlike the plain CT-REC template the
-// `apply` trap must return a real number (0), not the chain object — matching
-// conversion-templates.md's guidance for scales interpolated arithmetically.
+// `apply` trap must return a real number (0), not the chain object.
 function makeD3Stub() {
   const calls = [];
   const chain = new Proxy(function () {}, {
@@ -60,11 +59,18 @@ const RECORD_RESPONSE = {
   }
 };
 
+// A record-query response an admin's free-text graphqlQuery would return. Same
+// envelope shape as the structured path — the chart date-parses and renders it.
+const FREE_TEXT_RESPONSE = RECORD_RESPONSE;
+
+const FREE_TEXT_QUERY =
+  "query { uiapi { query { Opportunity { edges { node { CloseDate { value } Amount { value } } } } } } }";
+
 async function flushPromises() {
   return Promise.resolve();
 }
 
-describe("d3VariableColorLine GraphQL path (Approach A, CT-REC)", () => {
+describe("d3VariableColorLine GraphQL path", () => {
   let d3Calls;
 
   beforeEach(() => {
@@ -94,11 +100,10 @@ describe("d3VariableColorLine GraphQL path (Approach A, CT-REC)", () => {
     jest.clearAllMocks();
   });
 
-  it("renders the chart container and actually draws the threshold-gradient line when GraphQL record data arrives", async () => {
+  it("renders the chart container and draws the threshold-gradient line when GraphQL record data arrives", async () => {
     const element = createElement("c-d3-variable-color-line", {
       is: D3VariableColorLine
     });
-    element.fetchMode = "graphql";
     element.objectApiName = "Opportunity";
     element.dateField = "CloseDate";
     element.valueField = "Amount";
@@ -114,9 +119,8 @@ describe("d3VariableColorLine GraphQL path (Approach A, CT-REC)", () => {
       element.shadowRoot.querySelector(".slds-text-color_error")
     ).toBeNull();
 
-    // Prove renderChart actually ran (not just that the wire populated data):
-    // a "line" path must have been appended, AND a linearGradient with stops
-    // (the threshold-coloring mechanism) must have been built.
+    // Prove renderChart actually ran: a "line" path was appended AND a
+    // linearGradient with stops (the threshold-coloring mechanism) was built.
     expect(
       d3Calls.some(
         (c) => c[0] === "attr" && c[1] === "class" && c[2] === "line"
@@ -130,11 +134,38 @@ describe("d3VariableColorLine GraphQL path (Approach A, CT-REC)", () => {
     );
   });
 
+  it("keeps the loading spinner up while the wire is provisioned and awaiting its first emission", async () => {
+    const element = createElement("c-d3-variable-color-line", {
+      is: D3VariableColorLine
+    });
+    element.objectApiName = "Opportunity";
+    element.dateField = "CloseDate";
+    element.valueField = "Amount";
+    document.body.appendChild(element);
+
+    await flushPromises();
+    // Provisioned wire, no emission yet: spinner shows, no chart, no error —
+    // i.e. no no-data flash on the self-fetch path.
+    expect(
+      element.shadowRoot.querySelector("lightning-spinner")
+    ).not.toBeNull();
+    expect(element.shadowRoot.querySelector(".chart-container")).toBeNull();
+    expect(
+      element.shadowRoot.querySelector(".slds-text-color_error")
+    ).toBeNull();
+
+    graphql.emit(RECORD_RESPONSE);
+    await flushPromises();
+    await flushPromises();
+
+    expect(element.shadowRoot.querySelector("lightning-spinner")).toBeNull();
+    expect(element.shadowRoot.querySelector(".chart-container")).not.toBeNull();
+  });
+
   it("shows an error when the GraphQL wire emits errors", async () => {
     const element = createElement("c-d3-variable-color-line", {
       is: D3VariableColorLine
     });
-    element.fetchMode = "graphql";
     element.objectApiName = "Opportunity";
     element.dateField = "CloseDate";
     element.valueField = "Amount";
@@ -149,11 +180,10 @@ describe("d3VariableColorLine GraphQL path (Approach A, CT-REC)", () => {
     ).not.toBeNull();
   });
 
-  it("bounds the query with the same first: value as other CT-REC charts", async () => {
+  it("bounds the query with the same first: value as other record-fetch charts", async () => {
     const element = createElement("c-d3-variable-color-line", {
       is: D3VariableColorLine
     });
-    element.fetchMode = "graphql";
     element.objectApiName = "Opportunity";
     element.dateField = "CloseDate";
     element.valueField = "Amount";
@@ -169,7 +199,6 @@ describe("d3VariableColorLine GraphQL path (Approach A, CT-REC)", () => {
     const element = createElement("c-d3-variable-color-line", {
       is: D3VariableColorLine
     });
-    element.fetchMode = "graphql";
     element.objectApiName = "Opportunity";
     // dateField repeats valueField's name on purpose to prove deduping.
     element.dateField = "Amount";
@@ -187,7 +216,6 @@ describe("d3VariableColorLine GraphQL path (Approach A, CT-REC)", () => {
     const element = createElement("c-d3-variable-color-line", {
       is: D3VariableColorLine
     });
-    element.fetchMode = "graphql";
     element.objectApiName = "Opportunity";
     element.dateField = "CloseDate";
     element.valueField = "";
@@ -195,6 +223,139 @@ describe("d3VariableColorLine GraphQL path (Approach A, CT-REC)", () => {
 
     await flushPromises();
 
+    expect(gql).not.toHaveBeenCalled();
+  });
+
+  it("uses a free-text graphqlQuery verbatim and feeds the record pipeline", async () => {
+    const element = createElement("c-d3-variable-color-line", {
+      is: D3VariableColorLine
+    });
+    element.graphqlQuery = FREE_TEXT_QUERY;
+    element.objectApiName = "Opportunity";
+    element.dateField = "CloseDate";
+    element.valueField = "Amount";
+    document.body.appendChild(element);
+
+    await flushPromises();
+    graphql.emit(FREE_TEXT_RESPONSE);
+    await flushPromises();
+    await flushPromises();
+
+    expect(element.shadowRoot.querySelector(".chart-container")).not.toBeNull();
+    expect(
+      element.shadowRoot.querySelector(".slds-text-color_error")
+    ).toBeNull();
+
+    // The admin's document is passed to gql verbatim; the structured record
+    // builder (which emits a `uiapi { query {` with a first: bound) is skipped.
+    const queryStrings = gql.mock.results.map((r) => r.value);
+    expect(queryStrings.some((q) => q.includes(FREE_TEXT_QUERY))).toBe(true);
+    expect(queryStrings.every((q) => !q.includes("first:"))).toBe(true);
+  });
+
+  it("auto-detects the object key for a free-text query with a blank objectApiName", async () => {
+    const element = createElement("c-d3-variable-color-line", {
+      is: D3VariableColorLine
+    });
+    element.graphqlQuery = FREE_TEXT_QUERY;
+    element.objectApiName = ""; // blank: normalizeRecordsGeneric must auto-detect
+    element.dateField = "CloseDate";
+    element.valueField = "Amount";
+    document.body.appendChild(element);
+
+    await flushPromises();
+    graphql.emit(FREE_TEXT_RESPONSE);
+    await flushPromises();
+    await flushPromises();
+
+    // The first object key under uiapi.query is used, so the rows still normalize.
+    expect(element.shadowRoot.querySelector(".chart-container")).not.toBeNull();
+    expect(
+      element.shadowRoot.querySelector(".slds-text-color_error")
+    ).toBeNull();
+  });
+
+  it("surfaces wire errors from a free-text graphqlQuery in the error state", async () => {
+    const element = createElement("c-d3-variable-color-line", {
+      is: D3VariableColorLine
+    });
+    element.graphqlQuery = FREE_TEXT_QUERY;
+    element.dateField = "CloseDate";
+    element.valueField = "Amount";
+    document.body.appendChild(element);
+
+    await flushPromises();
+    graphql.emitErrors([{ message: "bad free-text query" }]);
+    await flushPromises();
+
+    expect(
+      element.shadowRoot.querySelector(".slds-text-color_error")
+    ).not.toBeNull();
+  });
+
+  it("hints record-query-only when a free-text graphqlQuery yields no records", async () => {
+    // An aggregate-shaped payload has no uiapi.query, so the record normalizer
+    // finds nothing — the error should point the admin at the record-query contract.
+    const element = createElement("c-d3-variable-color-line", {
+      is: D3VariableColorLine
+    });
+    element.graphqlQuery = FREE_TEXT_QUERY;
+    element.dateField = "CloseDate";
+    element.valueField = "Amount";
+    document.body.appendChild(element);
+
+    await flushPromises();
+    graphql.emit({ uiapi: { aggregate: { Opportunity: { edges: [] } } } });
+    await flushPromises();
+
+    const err = element.shadowRoot.querySelector(".slds-text-color_error");
+    expect(err).not.toBeNull();
+    expect(err.textContent).toMatch(/record query/i);
+  });
+
+  it("ignores a blank graphqlQuery and falls through to the structured builder", async () => {
+    const element = createElement("c-d3-variable-color-line", {
+      is: D3VariableColorLine
+    });
+    element.graphqlQuery = "   ";
+    element.objectApiName = "Opportunity";
+    element.dateField = "CloseDate";
+    element.valueField = "Amount";
+    document.body.appendChild(element);
+
+    await flushPromises();
+    graphql.emit(RECORD_RESPONSE);
+    await flushPromises();
+    await flushPromises();
+
+    expect(element.shadowRoot.querySelector(".chart-container")).not.toBeNull();
+    // The structured builder ran: its bounded record query carries a first: arg.
+    const queryStrings = gql.mock.results.map((r) => r.value);
+    expect(queryStrings.some((q) => q.includes("first: 2000"))).toBe(true);
+  });
+
+  it("recordCollection beats a set graphqlQuery (wire never provisioned)", async () => {
+    const element = createElement("c-d3-variable-color-line", {
+      is: D3VariableColorLine
+    });
+    element.recordCollection = [
+      { CloseDate: "2024-01-01", Amount: -20 },
+      { CloseDate: "2024-02-01", Amount: 80 }
+    ];
+    element.graphqlQuery = FREE_TEXT_QUERY;
+    element.dateField = "CloseDate";
+    element.valueField = "Amount";
+    document.body.appendChild(element);
+
+    await flushPromises();
+    await flushPromises();
+
+    // recordCollection wins: the chart renders from it and the free-text wire is
+    // never built (gqlQuery short-circuits before touching gql).
+    expect(element.shadowRoot.querySelector(".chart-container")).not.toBeNull();
+    expect(
+      element.shadowRoot.querySelector(".slds-text-color_error")
+    ).toBeNull();
     expect(gql).not.toHaveBeenCalled();
   });
 });

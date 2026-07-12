@@ -1,20 +1,13 @@
-// ABOUTME: Integration tests for d3VariableColorLine verifying real service pipelines (dataService, themeService, chartUtils).
-// ABOUTME: Only D3, Apex, and NavigationMixin are mocked; time series processing and threshold-color logic run for real.
+// ABOUTME: Integration tests for d3VariableColorLine verifying real bundle-local pipelines (data, theme, utils, graphql).
+// ABOUTME: Only D3 and NavigationMixin are mocked; time series processing and threshold-color logic run for real.
 
 import { createElement } from "lwc";
 import D3VariableColorLine from "c/d3VariableColorLine";
-import { loadD3 } from "c/d3Lib";
-import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
+import { loadD3 } from "../d3Loader";
 
-jest.mock("c/d3Lib", () => ({
+jest.mock("../d3Loader", () => ({
   loadD3: jest.fn()
 }));
-
-jest.mock(
-  "@salesforce/apex/D3ChartController.executeQuery",
-  () => ({ default: jest.fn() }),
-  { virtual: true }
-);
 
 const mockNavigate = jest.fn();
 jest.mock(
@@ -111,7 +104,6 @@ describe("c-d3-variable-color-line integration", () => {
 
     mockD3 = createMockD3();
     loadD3.mockResolvedValue(mockD3);
-    executeQuery.mockResolvedValue(SINGLE_SERIES_DATA);
 
     consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
 
