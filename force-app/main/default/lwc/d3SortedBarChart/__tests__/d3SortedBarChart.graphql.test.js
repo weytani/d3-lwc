@@ -3,9 +3,9 @@
 import { createElement } from "lwc";
 import D3SortedBarChart from "c/d3SortedBarChart";
 import { graphql, gql } from "lightning/graphql";
-import { loadD3 } from "c/d3Lib";
+import { loadD3 } from "../d3Loader";
 
-jest.mock("c/d3Lib", () => ({ loadD3: jest.fn() }));
+jest.mock("../d3Loader", () => ({ loadD3: jest.fn() }));
 
 function makeD3Stub() {
   const calls = [];

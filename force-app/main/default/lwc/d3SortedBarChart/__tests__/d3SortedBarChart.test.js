@@ -3,11 +3,11 @@
 
 import { createElement } from "lwc";
 import D3SortedBarChart from "c/d3SortedBarChart";
-import { loadD3 } from "c/d3Lib";
+import { loadD3 } from "../d3Loader";
 import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
 import getAggregatedData from "@salesforce/apex/D3ChartController.getAggregatedData";
 
-jest.mock("c/d3Lib", () => ({
+jest.mock("../d3Loader", () => ({
   loadD3: jest.fn()
 }));
 
@@ -623,46 +623,89 @@ describe("c-d3-sorted-bar-chart", () => {
       expect(loadD3).toHaveBeenCalled();
     });
 
-    it("retries chart init when container starts at zero width", async () => {
-      let containerWidth = 0;
+    it("renders once the container becomes measurable via the resize observer", async () => {
+      // Container starts at zero width; capture the ResizeObserver callback.
+      let roCallback = null;
+      global.ResizeObserver = jest.fn().mockImplementation((cb) => {
+        roCallback = cb;
+        return {
+          observe: jest.fn(),
+          unobserve: jest.fn(),
+          disconnect: jest.fn()
+        };
+      });
       Element.prototype.getBoundingClientRect = jest.fn(() => ({
-        width: containerWidth,
+        width: 0,
         height: 300,
         top: 0,
         left: 0,
         bottom: 300,
-        right: containerWidth
+        right: 0
       }));
-
-      const rafCallbacks = [];
-      global.requestAnimationFrame = jest.fn((cb) => {
-        rafCallbacks.push(cb);
-        return rafCallbacks.length;
-      });
-      global.cancelAnimationFrame = jest.fn();
 
       await createChart();
       await flushPromises();
 
-      expect(global.requestAnimationFrame).toHaveBeenCalled();
+      // Zero width: nothing drawn yet, but the observer must already be
+      // registered so a later measurement can render (no fixed give-up window).
       expect(mockD3.scaleBand).not.toHaveBeenCalled();
+      expect(roCallback).toBeTruthy();
 
-      containerWidth = 400;
+      // The container becomes measurable; the observer fires the render.
+      jest.useFakeTimers();
+      roCallback([{ contentRect: { width: 400, height: 300 } }]);
+      jest.advanceTimersByTime(250);
+      jest.useRealTimers();
+      await flushPromises();
+
+      expect(mockD3.scaleBand).toHaveBeenCalled();
+    });
+
+    it("does not latch an empty shell when first measured below the chart margins, and recovers when it grows", async () => {
+      // A sub-margin width (< left+right margin, 80px) makes renderChart bail
+      // before appending the svg. The observer must draw the chart once the
+      // container grows past the margins — not leave a permanent empty shell.
+      let roCallback = null;
+      global.ResizeObserver = jest.fn().mockImplementation((cb) => {
+        roCallback = cb;
+        return {
+          observe: jest.fn(),
+          unobserve: jest.fn(),
+          disconnect: jest.fn()
+        };
+      });
       Element.prototype.getBoundingClientRect = jest.fn(() => ({
-        width: 400,
+        width: 40,
         height: 300,
         top: 0,
         left: 0,
         bottom: 300,
-        right: 400
+        right: 40
       }));
 
-      while (rafCallbacks.length > 0) {
-        const cb = rafCallbacks.shift();
-        cb();
-      }
+      await createChart();
+      await flushPromises();
 
-      expect(mockD3.select).toHaveBeenCalled();
+      // 40px is below the 80px horizontal margin: no bars drawn yet.
+      expect(mockD3.scaleBand).not.toHaveBeenCalled();
+      expect(roCallback).toBeTruthy();
+
+      jest.useFakeTimers();
+      roCallback([{ contentRect: { width: 400, height: 300 } }]);
+      jest.advanceTimersByTime(250);
+      jest.useRealTimers();
+      await flushPromises();
+
+      expect(mockD3.scaleBand).toHaveBeenCalled();
+    });
+
+    it("creates exactly one resize observer across the render lifecycle", async () => {
+      await createChart();
+      await flushPromises();
+      await flushPromises();
+
+      // A single unified observer drives both the first render and re-renders.
+      expect(global.ResizeObserver).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -696,6 +739,22 @@ describe("c-d3-sorted-bar-chart", () => {
         ".slds-text-color_error"
       );
       expect(errorElement).toBeTruthy();
+    });
+
+    it("surfaces an exception thrown during renderChart to the error state", async () => {
+      // Force renderChart to throw mid-flight; it must not die silently.
+      mockD3.select = jest.fn(() => {
+        throw new Error("render boom");
+      });
+
+      await createChart();
+      await flushPromises();
+
+      const errorElement = element.shadowRoot.querySelector(
+        ".slds-text-color_error"
+      );
+      expect(errorElement).toBeTruthy();
+      expect(errorElement.textContent).toContain("render boom");
     });
   });
 
