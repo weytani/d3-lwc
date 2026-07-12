@@ -1,20 +1,13 @@
-// ABOUTME: Integration tests for d3StackedHorizontalBar verifying real service pipelines (dataService, themeService, chartUtils).
-// ABOUTME: Only D3, Apex, and NavigationMixin are mocked; aggregation and color logic run for real.
+// ABOUTME: Integration tests for d3StackedHorizontalBar verifying the real bundle-local pipelines (data, theme, utils).
+// ABOUTME: Only D3 and NavigationMixin are mocked; aggregation and color logic run for real.
 
 import { createElement } from "lwc";
 import D3StackedHorizontalBar from "c/d3StackedHorizontalBar";
 import { loadD3 } from "../d3Loader";
-import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
 
 jest.mock("../d3Loader", () => ({
   loadD3: jest.fn()
 }));
-
-jest.mock(
-  "@salesforce/apex/D3ChartController.executeQuery",
-  () => ({ default: jest.fn() }),
-  { virtual: true }
-);
 
 const mockNavigate = jest.fn();
 jest.mock(
@@ -107,7 +100,6 @@ describe("c-d3-stacked-horizontal-bar integration", () => {
 
     mockD3 = createMockD3();
     loadD3.mockResolvedValue(mockD3);
-    executeQuery.mockResolvedValue(SERIES_DATA);
 
     consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
 
