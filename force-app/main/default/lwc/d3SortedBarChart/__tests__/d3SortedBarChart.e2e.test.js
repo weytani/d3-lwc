@@ -3,20 +3,12 @@
 
 import { createElement } from "lwc";
 import D3SortedBarChart from "c/d3SortedBarChart";
-import { loadD3 } from "c/d3Lib";
-import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
+import { loadD3 } from "../d3Loader";
+import { graphql } from "lightning/graphql";
 
-jest.mock("c/d3Lib", () => ({
+jest.mock("../d3Loader", () => ({
   loadD3: jest.fn()
 }));
-
-jest.mock(
-  "@salesforce/apex/D3ChartController.executeQuery",
-  () => ({
-    default: jest.fn()
-  }),
-  { virtual: true }
-);
 
 jest.mock("lightning/navigation", () => {
   const Navigate = Symbol.for("Navigate");
@@ -133,7 +125,6 @@ describe("c-d3-sorted-bar-chart e2e", () => {
     jest.clearAllMocks();
     mockD3 = createMockD3();
     loadD3.mockResolvedValue(mockD3);
-    executeQuery.mockResolvedValue([]);
 
     consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
 
@@ -164,7 +155,6 @@ describe("c-d3-sorted-bar-chart e2e", () => {
       const element = await createChart({ recordCollection: LIFECYCLE_DATA });
 
       expect(loadD3).toHaveBeenCalled();
-      expect(executeQuery).not.toHaveBeenCalled();
       expect(mockD3.select).toHaveBeenCalled();
 
       const appendCalls = mockD3.append.mock.calls;
@@ -185,7 +175,6 @@ describe("c-d3-sorted-bar-chart e2e", () => {
       await flushPromises();
 
       loadD3.mockClear();
-      executeQuery.mockClear();
       mockD3.transition.mockClear();
 
       element.sortBy = "label";
@@ -193,8 +182,66 @@ describe("c-d3-sorted-bar-chart e2e", () => {
       await flushPromises();
 
       expect(loadD3).not.toHaveBeenCalled();
-      expect(executeQuery).not.toHaveBeenCalled();
       expect(mockD3.transition).toHaveBeenCalled();
+    });
+
+    it("GraphQL fetch path: no recordCollection -> wire emits -> full pipeline", async () => {
+      const element = createElement("c-d3-sorted-bar-chart", {
+        is: D3SortedBarChart
+      });
+      Object.assign(element, {
+        groupByField: "StageName",
+        valueField: "Amount",
+        operation: "Sum",
+        height: 300,
+        objectApiName: "Opportunity",
+        recordCollection: []
+      });
+      document.body.appendChild(element);
+      await flushPromises();
+
+      // Grouped-aggregate wire result for the structured Sum path
+      graphql.emit({
+        uiapi: {
+          aggregate: {
+            Opportunity: {
+              edges: [
+                {
+                  node: {
+                    aggregate: {
+                      StageName: { value: "Discovery" },
+                      Amount: { sum: { value: 500 } }
+                    }
+                  }
+                },
+                {
+                  node: {
+                    aggregate: {
+                      StageName: { value: "Proposal" },
+                      Amount: { sum: { value: 300 } }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      });
+      await flushPromises();
+      await flushPromises();
+
+      expect(loadD3).toHaveBeenCalled();
+      expect(mockD3.select).toHaveBeenCalled();
+      const appendCalls = mockD3.append.mock.calls;
+      expect(appendCalls.some((call) => call[0] === "svg")).toBe(true);
+      expect(mockD3.data).toHaveBeenCalled();
+
+      const container = element.shadowRoot.querySelector(".chart-container");
+      expect(container).toBeTruthy();
+      const errorEl = element.shadowRoot.querySelector(
+        ".slds-text-color_error"
+      );
+      expect(errorEl).toBeFalsy();
     });
 
     it("cleanup destroys resize handler and tooltip on disconnect", async () => {
@@ -226,26 +273,6 @@ describe("c-d3-sorted-bar-chart e2e", () => {
       );
       expect(errorEl).toBeTruthy();
       expect(errorEl.textContent).toContain("CDN unreachable");
-    });
-
-    it("SOQL fetch path: no recordCollection -> Apex returns data -> full pipeline", async () => {
-      const soqlData = [
-        { StageName: "Discovery", Amount: 400 },
-        { StageName: "Proposal", Amount: 300 }
-      ];
-      executeQuery.mockResolvedValue(soqlData);
-
-      const element = await createChart({
-        recordCollection: [],
-        soqlQuery: "SELECT StageName, Amount FROM Opportunity"
-      });
-
-      expect(executeQuery).toHaveBeenCalledWith({
-        queryString: "SELECT StageName, Amount FROM Opportunity"
-      });
-
-      const container = element.shadowRoot.querySelector(".chart-container");
-      expect(container).toBeTruthy();
     });
   });
 

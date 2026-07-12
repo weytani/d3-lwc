@@ -1,20 +1,13 @@
-// ABOUTME: Integration tests for d3SortedBarChart verifying real service pipelines (dataService, themeService) and sort behavior.
-// ABOUTME: Only D3, Apex, and NavigationMixin are mocked; aggregation, color, and sort logic run for real.
+// ABOUTME: Integration tests for d3SortedBarChart verifying real bundle-local pipelines (data, theme, utils, graphql) and sort behavior.
+// ABOUTME: Only D3, GraphQL, and NavigationMixin are mocked; aggregation, color, and sort logic run for real.
 
 import { createElement } from "lwc";
 import D3SortedBarChart from "c/d3SortedBarChart";
-import { loadD3 } from "c/d3Lib";
-import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
+import { loadD3 } from "../d3Loader";
 
-jest.mock("c/d3Lib", () => ({
+jest.mock("../d3Loader", () => ({
   loadD3: jest.fn()
 }));
-
-jest.mock(
-  "@salesforce/apex/D3ChartController.executeQuery",
-  () => ({ default: jest.fn() }),
-  { virtual: true }
-);
 
 const mockNavigate = jest.fn();
 jest.mock(
@@ -99,7 +92,6 @@ describe("c-d3-sorted-bar-chart integration", () => {
 
     mockD3 = createMockD3();
     loadD3.mockResolvedValue(mockD3);
-    executeQuery.mockResolvedValue(SAMPLE_DATA);
 
     consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
 
@@ -205,7 +197,7 @@ describe("c-d3-sorted-bar-chart integration", () => {
 
     it("changing sortBy after render re-computes the domain without a refetch", async () => {
       await createChart();
-      executeQuery.mockClear();
+      loadD3.mockClear();
 
       mockD3.scaleBand.mockClear();
       element.sortBy = "label";
@@ -218,7 +210,108 @@ describe("c-d3-sorted-bar-chart integration", () => {
         "Prospecting",
         "Closed Won"
       ]);
-      expect(executeQuery).not.toHaveBeenCalled();
+      expect(loadD3).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("graphql wire integration", () => {
+    it("aggregates a GraphQL Count record set through the real pipeline and sorts it", async () => {
+      const { graphql } = require("lightning/graphql");
+
+      element = createElement("c-d3-sorted-bar-chart", {
+        is: D3SortedBarChart
+      });
+      Object.assign(element, {
+        objectApiName: "Opportunity",
+        groupByField: "StageName",
+        operation: "Count"
+      });
+      document.body.appendChild(element);
+
+      await flushPromises();
+      graphql.emit({
+        uiapi: {
+          query: {
+            Opportunity: {
+              edges: [
+                { node: { StageName: { value: "Negotiation" } } },
+                { node: { StageName: { value: "Negotiation" } } },
+                { node: { StageName: { value: "Closed Lost" } } }
+              ]
+            }
+          }
+        }
+      });
+      await flushPromises();
+      await flushPromises();
+
+      // Real aggregateData Count: Negotiation=2, Closed Lost=1; default value-desc.
+      expect(lastScaleBandDomain()).toEqual(["Negotiation", "Closed Lost"]);
+      const errorEl = element.shadowRoot.querySelector(
+        ".slds-text-color_error"
+      );
+      expect(errorEl).toBeFalsy();
+    });
+
+    it("free-text graphqlQuery Sum aggregates the wire rows to the correct values", async () => {
+      const { graphql } = require("lightning/graphql");
+
+      element = createElement("c-d3-sorted-bar-chart", {
+        is: D3SortedBarChart
+      });
+      Object.assign(element, {
+        graphqlQuery:
+          "query { uiapi { query { Opportunity { edges { node { StageName { value } Amount { value } } } } } } }",
+        objectApiName: "Opportunity",
+        groupByField: "StageName",
+        valueField: "Amount",
+        operation: "Sum"
+      });
+      document.body.appendChild(element);
+
+      await flushPromises();
+      graphql.emit({
+        uiapi: {
+          query: {
+            Opportunity: {
+              edges: [
+                {
+                  node: {
+                    StageName: { value: "Prospecting" },
+                    Amount: { value: 100 }
+                  }
+                },
+                {
+                  node: {
+                    StageName: { value: "Prospecting" },
+                    Amount: { value: 200 }
+                  }
+                },
+                {
+                  node: {
+                    StageName: { value: "Closed Won" },
+                    Amount: { value: 500 }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      });
+      await flushPromises();
+      await flushPromises();
+
+      const dataCalls = mockD3.data.mock.calls;
+      const chartDataCall = dataCalls.find(
+        (call) =>
+          Array.isArray(call[0]) && call[0].length > 0 && call[0][0].label
+      );
+      expect(chartDataCall).toBeTruthy();
+      // Sum: Closed Won=500, Prospecting=300 (default value-desc sort).
+      expect(chartDataCall[0]).toEqual([
+        { label: "Closed Won", value: 500 },
+        { label: "Prospecting", value: 300 }
+      ]);
     });
   });
 
