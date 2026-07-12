@@ -89,9 +89,12 @@ buildTooltipContent, createLayoutRetry, applySvgA11y` (chartUtils);
   d3Loader.js   # loadD3 singleton + CSP fetch/eval fallback
   theme.js      # PALETTES, DEFAULT_THEME, extendColors, getColors
   data.js       # MAX_RECORDS, OPERATIONS, validate/truncate/prepare/aggregate
-  utils.js      # formatters, tooltip, resize, layout-retry, applySvgA11y
+  utils.js      # formatters, tooltip, resize observer, applySvgA11y
   graphql.js    # buildWhere/buildRecordQuery/buildAggregateQuery/normalizers
 ```
+
+Note: do **not** inline the shared `createLayoutRetry` — it carries the
+render-orchestration defect (§4.3). The resize observer replaces it.
 
 Every inlined file starts with a 2-line `// ABOUTME:` header. `graphql.js` (a
 bundle-local module) coexists with the platform `lightning/graphql` import — the
@@ -99,7 +102,7 @@ compiler distinguishes `./graphql` (relative) from `lightning/graphql` (bare) so
 there is no collision; jest's `moduleNameMapper` for `^lightning/graphql$` does
 not match the relative path either.
 
-Bar inlined line counts: d3Loader 79, theme 99, data 173, utils 278, graphql 141.
+Bar inlined line counts: d3Loader 79, theme 99, data 173, utils 229, graphql 141.
 
 ### 2.3 The canonical free-text normalizer
 
@@ -308,6 +311,76 @@ TDD it: with a provisioned wire and no emission yet, the spinner shows (no chart
 no error); the first `graphql.emit(...)` clears it. When no wire is provisioned
 (recordCollection resolved it, or nothing is configured) the spinner clears
 immediately — the no-data state is then correct, not a flash.
+
+### 4.3 Render orchestration hardening — every conversion must carry this
+
+The inlined render loop must **not** reproduce the shared `createLayoutRetry`
+silent give-up. Live on AGENT, a cold-cache/wedged boot rendered an **empty
+shell** (slds-card + chart-container + tooltip element, but no svg, no spinner,
+no error). Two silent failure modes cause it:
+
+1. **rAF give-up at width 0.** `createLayoutRetry` polls the container width for
+   `maxAttempts=60` frames then returns with no signal (and rAF is throttled on
+   hidden/busy pages). Past the budget the chart never renders — and in the
+   original `initializeChart` the ResizeObserver was never even installed at
+   width 0, so a later growth is never caught.
+2. **Sub-margin `renderChart` bail after the tooltip.** `initializeChart`'s gate
+   was `width === 0`, so a transient small width (e.g. 40px) passes, creates the
+   tooltip, then `renderChart` computes `width = containerWidth - (left+right
+margin)` ≤ 0 and returns **before appending the svg** — while
+   `initializeChart` returns `true`, latching `chartRendered`. Tooltip present,
+   no svg, never retried. (This is the exact state observed live.)
+
+**Fix — bundle-local `utils.js` + component; do NOT touch shared chartUtils:**
+
+- **Delete the inlined `createLayoutRetry`.** Install a **single lifetime**
+  `createResizeHandler` observer in `initializeChart` (guarded by
+  `if (!this.resizeHandler)`), which draws on the first measurable width and
+  re-draws on every resize — **no give-up window**. Keep the immediate
+  `getBoundingClientRect` draw only as a warm-path fast path. Create the tooltip
+  once (`if (!this.tooltip)`). `disconnectedCallback` just calls `cleanup()`
+  (which disconnects the observer); drop the `_layoutRetry` field + cancel and
+  the `createLayoutRetry` import.
+- **Wrap every render in `_safeRenderChart`** (try/catch) so an exception thrown
+  mid-render surfaces to the component error state (same UX as wire errors),
+  never a silent partial render.
+
+```js
+initializeChart() {
+  const container = this.template.querySelector(".chart-container");
+  if (!container) return false;
+  if (!this.tooltip) this.tooltip = createTooltip(container);
+  if (!this.resizeHandler) {
+    this.resizeHandler = createResizeHandler(container, ({ width }) => {
+      if (width > 0) this._safeRenderChart(width);
+    });
+    this.resizeHandler.observe();
+  }
+  const { width } = container.getBoundingClientRect();
+  if (width > 0) this._safeRenderChart(width);
+  return true;
+}
+
+_safeRenderChart(containerWidth) {
+  try {
+    this.renderChart(containerWidth);
+  } catch (e) {
+    this.error = e.message || "Failed to render chart";
+    this.isLoading = false;
+  }
+}
+```
+
+Tests (unit tier): (a) container 0-width, capture the RO callback, fire it with a
+measurable width → chart renders (**RED** against old code, which installs no
+observer at width 0); (b) a render exception → error state visible; (c) disconnect
+disconnects the observer; (d) exactly one observer across the lifecycle.
+
+**Why this matters more now:** with `recordCollection` the parent usually sizes
+the container before data arrives; with GraphQL-by-default the chart boots and
+self-fetches inside App Builder / Flow where the container is frequently
+unmeasurable for many frames — so this pre-existing library defect fires far more
+often. Every converted chart needs the fix in its inlined `utils.js`.
 
 ---
 

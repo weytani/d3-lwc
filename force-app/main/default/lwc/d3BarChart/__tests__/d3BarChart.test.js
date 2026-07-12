@@ -643,99 +643,105 @@ describe("c-d3-bar-chart", () => {
       expect(loadD3).toHaveBeenCalled();
     });
 
-    it("retries chart init when container starts at zero width", async () => {
-      // Start with zero width
-      let containerWidth = 0;
-      Element.prototype.getBoundingClientRect = jest.fn(() => ({
-        width: containerWidth,
-        height: 300,
-        top: 0,
-        left: 0,
-        bottom: 300,
-        right: containerWidth
-      }));
-
-      // Track RAF calls
-      const rafCallbacks = [];
-      global.requestAnimationFrame = jest.fn((cb) => {
-        rafCallbacks.push(cb);
-        return rafCallbacks.length;
+    it("renders once the container becomes measurable via the resize observer", async () => {
+      // Container starts at zero width; capture the ResizeObserver callback.
+      let roCallback = null;
+      global.ResizeObserver = jest.fn().mockImplementation((cb) => {
+        roCallback = cb;
+        return {
+          observe: jest.fn(),
+          unobserve: jest.fn(),
+          disconnect: jest.fn()
+        };
       });
-      global.cancelAnimationFrame = jest.fn();
-
-      await createChart();
-      await flushPromises();
-
-      // Chart was not rendered (width was 0), but RAF should have been requested
-      expect(global.requestAnimationFrame).toHaveBeenCalled();
-      expect(mockD3.scaleBand).not.toHaveBeenCalled();
-
-      // Simulate container getting width from layout engine
-      containerWidth = 400;
-      Element.prototype.getBoundingClientRect = jest.fn(() => ({
-        width: 400,
-        height: 300,
-        top: 0,
-        left: 0,
-        bottom: 300,
-        right: 400
-      }));
-
-      // Fire the RAF callback chain
-      while (rafCallbacks.length > 0) {
-        const cb = rafCallbacks.shift();
-        cb();
-      }
-
-      // Chart should now have rendered
-      expect(mockD3.select).toHaveBeenCalled();
-    });
-
-    it("cancels layout retry on disconnect", async () => {
-      // Start with zero width
       Element.prototype.getBoundingClientRect = jest.fn(() => ({
         width: 0,
-        height: 0,
+        height: 300,
         top: 0,
         left: 0,
-        bottom: 0,
+        bottom: 300,
         right: 0
       }));
 
-      global.requestAnimationFrame = jest.fn(() => 42);
-      global.cancelAnimationFrame = jest.fn();
+      await createChart();
+      await flushPromises();
+
+      // Zero width: nothing drawn yet, but the observer must already be
+      // registered so a later measurement can render (no fixed give-up window).
+      expect(mockD3.scaleBand).not.toHaveBeenCalled();
+      expect(roCallback).toBeTruthy();
+
+      // The container becomes measurable; the observer fires the render.
+      jest.useFakeTimers();
+      roCallback([{ contentRect: { width: 400, height: 300 } }]);
+      jest.advanceTimersByTime(250);
+      jest.useRealTimers();
+      await flushPromises();
+
+      expect(mockD3.scaleBand).toHaveBeenCalled();
+    });
+
+    it("does not latch an empty shell when first measured below the chart margins, and recovers when it grows", async () => {
+      // A sub-margin width (< left+right margin, 80px) makes renderChart bail
+      // before appending the svg. The observer must draw the chart once the
+      // container grows past the margins — not leave a permanent empty shell.
+      let roCallback = null;
+      global.ResizeObserver = jest.fn().mockImplementation((cb) => {
+        roCallback = cb;
+        return {
+          observe: jest.fn(),
+          unobserve: jest.fn(),
+          disconnect: jest.fn()
+        };
+      });
+      Element.prototype.getBoundingClientRect = jest.fn(() => ({
+        width: 40,
+        height: 300,
+        top: 0,
+        left: 0,
+        bottom: 300,
+        right: 40
+      }));
 
       await createChart();
       await flushPromises();
 
-      // Remove element triggers disconnectedCallback
+      // 40px is below the 80px horizontal margin: no bars drawn yet.
+      expect(mockD3.scaleBand).not.toHaveBeenCalled();
+      expect(roCallback).toBeTruthy();
+
+      jest.useFakeTimers();
+      roCallback([{ contentRect: { width: 400, height: 300 } }]);
+      jest.advanceTimersByTime(250);
+      jest.useRealTimers();
+      await flushPromises();
+
+      expect(mockD3.scaleBand).toHaveBeenCalled();
+    });
+
+    it("disconnects the resize observer cleanly on disconnect", async () => {
+      const mockDisconnect = jest.fn();
+      global.ResizeObserver = jest.fn().mockImplementation(() => ({
+        observe: jest.fn(),
+        unobserve: jest.fn(),
+        disconnect: mockDisconnect
+      }));
+
+      await createChart();
+      await flushPromises();
+
       document.body.removeChild(element);
 
-      expect(global.cancelAnimationFrame).toHaveBeenCalled();
+      expect(mockDisconnect).toHaveBeenCalled();
     });
 
-    it("does not start duplicate retries on multiple renderedCallback calls", async () => {
-      // Start with zero width
-      Element.prototype.getBoundingClientRect = jest.fn(() => ({
-        width: 0,
-        height: 300,
-        top: 0,
-        left: 0,
-        bottom: 300,
-        right: 0
-      }));
-
-      let rafCount = 0;
-      global.requestAnimationFrame = jest.fn(() => ++rafCount);
-      global.cancelAnimationFrame = jest.fn();
-
+    it("creates exactly one resize observer across the render lifecycle", async () => {
       await createChart();
       await flushPromises();
       await flushPromises();
-      await flushPromises();
 
-      // Only one RAF should be requested (one retry loop, not multiple)
-      expect(global.requestAnimationFrame).toHaveBeenCalledTimes(1);
+      // A single unified observer drives both the first render and re-renders.
+      expect(global.ResizeObserver).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -774,6 +780,22 @@ describe("c-d3-bar-chart", () => {
       // Spinner should be gone
       const spinner = element.shadowRoot.querySelector("lightning-spinner");
       expect(spinner).toBeFalsy();
+    });
+
+    it("surfaces an exception thrown during renderChart to the error state", async () => {
+      // Force renderChart to throw mid-flight; it must not die silently.
+      mockD3.select = jest.fn(() => {
+        throw new Error("render boom");
+      });
+
+      await createChart();
+      await flushPromises();
+
+      const errorElement = element.shadowRoot.querySelector(
+        ".slds-text-color_error"
+      );
+      expect(errorElement).toBeTruthy();
+      expect(errorElement.textContent).toContain("render boom");
     });
   });
 
