@@ -266,6 +266,7 @@ describe("c-d3-variable-color-line e2e", () => {
       );
       expect(errorEl).toBeTruthy();
       expect(errorEl.textContent).toContain("CDN unreachable");
+      expect(consoleErrorSpy).toHaveBeenCalled();
     });
   });
 
