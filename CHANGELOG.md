@@ -5,6 +5,60 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0] - 2026-07-12
+
+First release of the v3 line: every chart becomes a fully standalone,
+GraphQL-only bundle — one release per converted chart. This release converts
+`d3BarChart` (the reference conversion) and ships the conversion recipe the
+remaining charts follow.
+
+### Changed
+
+- **BREAKING: `d3BarChart` is now a standalone GraphQL-only bundle.** The
+  component self-fetches exclusively through the v2 `lightning/graphql` wire
+  adapter (FLS/sharing enforced by the platform) and carries bundle-local
+  copies of exactly the service code it uses (`d3Loader.js`, `theme.js`,
+  `data.js`, `utils.js`, `graphql.js`) — it no longer imports `c/d3Lib`,
+  `c/themeService`, `c/dataService`, `c/chartUtils`, `c/graphqlService`, or
+  any Apex. Copy the bundle folder plus the `d3` static resource into any
+  project and it works. `recordCollection` (Flow/parent data) still takes
+  priority over self-fetch.
+- **Render orchestration hardened.** A single lifetime ResizeObserver draws
+  the chart whenever its container first becomes measurable (replacing a
+  60-frame polling budget that could silently give up on slow page boots),
+  and any exception thrown mid-render now surfaces in the component's error
+  state instead of leaving a silent blank card. Live-verified on a cold-cache
+  Lightning boot.
+
+### Added
+
+- **`graphqlQuery` (Admin free-text query)** on `d3BarChart`: paste a complete
+  UI API GraphQL _record_ query and the chart renders it — the replacement
+  for the removed raw-SOQL escape hatch. Works with a blank Object API Name
+  via response object-key auto-detection. Bounded by the platform's UI-API
+  object coverage and 2,000-records-per-query cap.
+- **`lightning__FlowScreen` target** on `d3BarChart` — the chart can be
+  placed on Flow screens, fed by `recordCollection`.
+- **`docs/conversion-recipe.md`** — the reviewed per-chart conversion recipe
+  (per-family free-text normalization, meta templates, hygiene scans,
+  render-orchestration hardening) used by all subsequent v3.x releases.
+
+### Removed
+
+- **`soqlQuery` and `fetchMode`** properties on `d3BarChart`. Raw SOQL cannot
+  execute without Apex; the structured builder properties and `graphqlQuery`
+  are the replacements.
+
+### Migration
+
+- Detach any placed `d3BarChart` instance from its Lightning pages before
+  deploying (Salesforce blocks `@api` property removal while referenced);
+  `scripts/deploy-property-removal.sh` sequences the detach → bundle →
+  reattach deploys.
+- Replace a configured `soqlQuery` with either the structured properties
+  (Object API Name + fields + operation) or a pasted `graphqlQuery` record
+  query.
+
 ## [2.1.0] - 2026-07-11
 
 ### Added
