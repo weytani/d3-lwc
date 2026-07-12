@@ -5,6 +5,32 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.6.0] - 2026-07-12
+
+Wave 2 opens with the line/time-series family. This release also folds the
+Wave 2 lessons into `docs/conversion-recipe.md`: the line family is
+documented as §9.2 raw-record charts with a date X-axis (single
+auto-detecting normalizer, component-owned date parsing, no gantt-style
+normalizer/parseDate), the §9.4 gantt path is scoped to gantt +
+calendarHeatmap only, and the unified single-path wire handler is promoted
+as the recommended shape for raw-record charts.
+
+### Changed
+
+- **BREAKING: `d3LineChart` is now a standalone GraphQL-only bundle**,
+  converted per the v3 recipe (see 3.0.0): GraphQL wire self-fetch only,
+  bundle-local support modules, no shared `c/` imports, no Apex. `soqlQuery`
+  and `fetchMode` removed; `graphqlQuery` free-text record queries and the
+  `lightning__FlowScreen` target added; render-orchestration hardening
+  applied. As a raw-record time-series chart it shapes dates with its own
+  parser and feeds the same pipeline on every data path — multi-series
+  points are never collapsed. Live-verified on-org.
+
+### Migration
+
+- Same pattern as 3.0.0: detach placed `d3LineChart` instances before
+  deploying, then reconfigure with structured properties or `graphqlQuery`.
+
 ## [3.5.0] - 2026-07-12
 
 ### Changed
