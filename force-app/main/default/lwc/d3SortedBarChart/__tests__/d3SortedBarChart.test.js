@@ -4,28 +4,10 @@
 import { createElement } from "lwc";
 import D3SortedBarChart from "c/d3SortedBarChart";
 import { loadD3 } from "../d3Loader";
-import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
-import getAggregatedData from "@salesforce/apex/D3ChartController.getAggregatedData";
 
 jest.mock("../d3Loader", () => ({
   loadD3: jest.fn()
 }));
-
-jest.mock(
-  "@salesforce/apex/D3ChartController.executeQuery",
-  () => ({
-    default: jest.fn()
-  }),
-  { virtual: true }
-);
-
-jest.mock(
-  "@salesforce/apex/D3ChartController.getAggregatedData",
-  () => ({
-    default: jest.fn()
-  }),
-  { virtual: true }
-);
 
 // ═══════════════════════════════════════════════════════════════
 // MOCK D3 FACTORY
@@ -107,12 +89,6 @@ describe("c-d3-sorted-bar-chart", () => {
     jest.clearAllMocks();
     mockD3 = createMockD3();
     loadD3.mockResolvedValue(mockD3);
-    executeQuery.mockResolvedValue(SAMPLE_DATA);
-    getAggregatedData.mockResolvedValue([
-      { label: "Prospecting", value: 300 },
-      { label: "Qualification", value: 150 },
-      { label: "Closed Won", value: 500 }
-    ]);
 
     consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
     consoleWarnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
@@ -214,45 +190,50 @@ describe("c-d3-sorted-bar-chart", () => {
   // ═══════════════════════════════════════════════════════════════
 
   describe("data handling", () => {
-    it("uses recordCollection when provided", async () => {
+    it("renders from recordCollection when provided", async () => {
       await createChart({ recordCollection: SAMPLE_DATA });
-      expect(executeQuery).not.toHaveBeenCalled();
-    });
 
-    it("executes SOQL when recordCollection is empty", async () => {
-      await createChart({
-        recordCollection: [],
-        soqlQuery: "SELECT StageName, Amount FROM Opportunity"
-      });
-
-      expect(executeQuery).toHaveBeenCalledWith({
-        queryString: "SELECT StageName, Amount FROM Opportunity"
-      });
-    });
-
-    it("shows error when no data source provided", async () => {
-      await createChart({ recordCollection: [], soqlQuery: "" });
-      await flushPromises();
-
+      const container = element.shadowRoot.querySelector(".chart-container");
+      expect(container).toBeTruthy();
       const errorElement = element.shadowRoot.querySelector(
         ".slds-text-color_error"
       );
-      expect(errorElement).toBeTruthy();
+      expect(errorElement).toBeFalsy();
     });
 
-    it("shows error when SOQL query fails", async () => {
-      executeQuery.mockRejectedValue({ body: { message: "Query error" } });
-
+    it("shows the no-data state when no source is configured", async () => {
       await createChart({
         recordCollection: [],
-        soqlQuery: "SELECT Invalid FROM Opportunity"
+        objectApiName: "",
+        graphqlQuery: ""
       });
       await flushPromises();
 
+      // No recordCollection and no provisioned GraphQL query: neither an error
+      // nor a chart, just the empty state.
       const errorElement = element.shadowRoot.querySelector(
         ".slds-text-color_error"
       );
-      expect(errorElement).toBeTruthy();
+      expect(errorElement).toBeFalsy();
+      const container = element.shadowRoot.querySelector(".chart-container");
+      expect(container).toBeFalsy();
+    });
+
+    it("recordCollection takes priority over a free-text graphqlQuery", async () => {
+      await createChart({
+        recordCollection: SAMPLE_DATA,
+        graphqlQuery:
+          "query { uiapi { query { Opportunity { edges { node { StageName { value } } } } } } }"
+      });
+
+      // recordCollection wins: the chart renders from it and the un-emitted
+      // free-text wire never becomes the data source (no error state).
+      const container = element.shadowRoot.querySelector(".chart-container");
+      expect(container).toBeTruthy();
+      const errorElement = element.shadowRoot.querySelector(
+        ".slds-text-color_error"
+      );
+      expect(errorElement).toBeFalsy();
     });
   });
 
@@ -369,15 +350,12 @@ describe("c-d3-sorted-bar-chart", () => {
       await createChart({ recordCollection: SAMPLE_DATA });
       await flushPromises();
 
-      executeQuery.mockClear();
-      getAggregatedData.mockClear();
       loadD3.mockClear();
 
       element.sortBy = "label";
       await flushPromises();
 
-      expect(executeQuery).not.toHaveBeenCalled();
-      expect(getAggregatedData).not.toHaveBeenCalled();
+      // A resort redraws in place; it never re-runs the D3 load / data pipeline.
       expect(loadD3).not.toHaveBeenCalled();
     });
 
@@ -385,13 +363,11 @@ describe("c-d3-sorted-bar-chart", () => {
       await createChart({ recordCollection: SAMPLE_DATA });
       await flushPromises();
 
-      executeQuery.mockClear();
       loadD3.mockClear();
 
       element.sortDirection = "asc";
       await flushPromises();
 
-      expect(executeQuery).not.toHaveBeenCalled();
       expect(loadD3).not.toHaveBeenCalled();
     });
 
@@ -714,21 +690,6 @@ describe("c-d3-sorted-bar-chart", () => {
   // ═══════════════════════════════════════════════════════════════
 
   describe("error recovery", () => {
-    it("shows error from SOQL body.message", async () => {
-      executeQuery.mockRejectedValue({ body: { message: "Specific error" } });
-
-      await createChart({
-        recordCollection: [],
-        soqlQuery: "SELECT Bad FROM Object"
-      });
-      await flushPromises();
-
-      const errorElement = element.shadowRoot.querySelector(
-        ".slds-text-color_error"
-      );
-      expect(errorElement).toBeTruthy();
-    });
-
     it("shows error when D3 fails to load", async () => {
       loadD3.mockRejectedValue(new Error("D3 load failed"));
 
@@ -805,45 +766,6 @@ describe("c-d3-sorted-bar-chart", () => {
 
       expect(mockD3.select).toHaveBeenCalled();
       expect(mockD3.remove).toHaveBeenCalled();
-    });
-  });
-
-  // ═══════════════════════════════════════════════════════════════
-  // SERVER AGGREGATION TESTS
-  // ═══════════════════════════════════════════════════════════════
-
-  describe("server aggregation", () => {
-    it("calls getAggregatedData when objectApiName, groupByField, valueField, and operation are set", async () => {
-      await createChart({
-        recordCollection: [],
-        soqlQuery: "",
-        objectApiName: "Opportunity",
-        groupByField: "StageName",
-        valueField: "Amount",
-        operation: "Sum"
-      });
-      await flushPromises();
-
-      expect(getAggregatedData).toHaveBeenCalledWith({
-        objectName: "Opportunity",
-        groupByField: "StageName",
-        valueField: "Amount",
-        operation: "Sum",
-        filterClause: null
-      });
-    });
-
-    it("prefers recordCollection over server aggregation", async () => {
-      await createChart({
-        recordCollection: SAMPLE_DATA,
-        objectApiName: "Opportunity",
-        groupByField: "StageName",
-        valueField: "Amount",
-        operation: "Sum"
-      });
-      await flushPromises();
-
-      expect(getAggregatedData).not.toHaveBeenCalled();
     });
   });
 
