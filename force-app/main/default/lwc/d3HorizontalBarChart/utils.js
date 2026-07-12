@@ -1,5 +1,5 @@
 // ABOUTME: Bundle-local chart utilities for the d3HorizontalBarChart standalone bundle.
-// ABOUTME: Number formatting, label truncation, tooltip, resize, layout-retry, and SVG a11y helpers.
+// ABOUTME: Number formatting, label truncation, tooltip, resize, and SVG a11y helpers.
 
 // ===== NUMBER FORMATTERS =====
 
@@ -194,55 +194,6 @@ export const createResizeHandler = (container, callback, debounceMs = 250) => {
       if (observer) {
         observer.disconnect();
         observer = null;
-      }
-    }
-  };
-};
-
-// ===== LAYOUT RETRY UTILITIES =====
-
-/**
- * Creates a RAF-based retry loop that polls a container for non-zero width.
- * Useful when a container starts at zero width (e.g. flex-grow: 0 in Local Dev Preview)
- * and the chart needs to wait for the layout engine to assign width.
- * @param {HTMLElement} container - Element to poll
- * @param {Function} onLayout - Called with width when container has non-zero width
- * @param {Object} options - { maxAttempts: number } (default: 60 ≈ 1 second at 60fps)
- * @returns {Object} - { cancel() } for cleanup
- */
-export const createLayoutRetry = (
-  container,
-  onLayout,
-  { maxAttempts = 60 } = {}
-) => {
-  let rafId = null;
-  let cancelled = false;
-
-  const check = (attempt) => {
-    if (cancelled) return;
-    const { width } = container.getBoundingClientRect();
-    if (width > 0) {
-      rafId = null;
-      onLayout(width);
-      return;
-    }
-    if (attempt >= maxAttempts) {
-      rafId = null;
-      return;
-    }
-    // eslint-disable-next-line @lwc/lwc/no-async-operation
-    rafId = requestAnimationFrame(() => check(attempt + 1));
-  };
-
-  // eslint-disable-next-line @lwc/lwc/no-async-operation
-  rafId = requestAnimationFrame(() => check(0));
-
-  return {
-    cancel() {
-      cancelled = true;
-      if (rafId !== null) {
-        cancelAnimationFrame(rafId);
-        rafId = null;
       }
     }
   };
