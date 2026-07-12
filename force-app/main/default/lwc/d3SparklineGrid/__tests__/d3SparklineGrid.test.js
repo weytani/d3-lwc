@@ -3,22 +3,12 @@
 
 import { createElement } from "lwc";
 import D3SparklineGrid from "c/d3SparklineGrid";
-import { loadD3 } from "c/d3Lib";
-import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
+import { loadD3 } from "../d3Loader";
 
-// Mock d3Lib
-jest.mock("c/d3Lib", () => ({
+// Mock the bundle-local D3 loader
+jest.mock("../d3Loader", () => ({
   loadD3: jest.fn()
 }));
-
-// Mock Apex
-jest.mock(
-  "@salesforce/apex/D3ChartController.executeQuery",
-  () => ({
-    default: jest.fn()
-  }),
-  { virtual: true }
-);
 
 // Mock NavigationMixin
 const mockNavigate = jest.fn();
@@ -182,7 +172,6 @@ describe("c-d3-sparkline-grid", () => {
     jest.clearAllMocks();
     mockD3 = createMockD3();
     loadD3.mockResolvedValue(mockD3);
-    executeQuery.mockResolvedValue(SPARKLINE_RECORDS);
 
     // Spy on console to keep output pristine
     consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
@@ -277,23 +266,6 @@ describe("c-d3-sparkline-grid", () => {
       const container = element.shadowRoot.querySelector(".chart-container");
       expect(container).toBeTruthy();
     });
-
-    it("shows error state when query returns missing fields", async () => {
-      executeQuery.mockResolvedValue([
-        { WrongField: "A", WrongDate: "2024-01-01", WrongValue: 100 }
-      ]);
-      await createChart({
-        recordCollection: [],
-        soqlQuery: "SELECT Name FROM Account"
-      });
-
-      await flushPromises();
-
-      const errorElement = element.shadowRoot.querySelector(
-        ".slds-text-color_error"
-      );
-      expect(errorElement).toBeTruthy();
-    });
   });
 
   // ===============================================================
@@ -362,25 +334,6 @@ describe("c-d3-sparkline-grid", () => {
       await createChart({ filterField: "CustomField__c" });
       expect(element.filterField).toBe("CustomField__c");
     });
-
-    it("accepts filterClause property", async () => {
-      await createChart({ filterClause: "Amount > 1000" });
-      expect(element.filterClause).toBe("Amount > 1000");
-    });
-
-    it("wires filterClause into the SOQL query sent to Apex, before ORDER BY", async () => {
-      await createChart({
-        recordCollection: [],
-        soqlQuery:
-          "SELECT Type, CloseDate, Amount FROM Opportunity ORDER BY CloseDate",
-        filterClause: "Amount > 1000"
-      });
-
-      expect(executeQuery).toHaveBeenCalledWith({
-        queryString:
-          "SELECT Type, CloseDate, Amount FROM Opportunity WHERE (Amount > 1000) ORDER BY CloseDate"
-      });
-    });
   });
 
   // ===============================================================
@@ -401,25 +354,6 @@ describe("c-d3-sparkline-grid", () => {
       expect(errorEl.textContent).toContain("D3 load failed");
     });
 
-    it("displays error when SOQL query fails", async () => {
-      executeQuery.mockRejectedValue({
-        body: { message: "SOQL syntax error" }
-      });
-
-      await createChart({
-        recordCollection: [],
-        soqlQuery: "SELECT Bad FROM Stuff"
-      });
-
-      await flushPromises();
-
-      const errorEl = element.shadowRoot.querySelector(
-        ".slds-text-color_error"
-      );
-      expect(errorEl).toBeTruthy();
-      expect(errorEl.textContent).toContain("SOQL");
-    });
-
     it("handles invalid advancedConfig JSON gracefully", async () => {
       await createChart({ advancedConfig: "not valid json" });
       await flushPromises();
@@ -431,19 +365,20 @@ describe("c-d3-sparkline-grid", () => {
       expect(errorEl).toBeFalsy();
     });
 
-    it("displays error when no data source is provided", async () => {
-      await createChart({
-        recordCollection: [],
-        soqlQuery: ""
-      });
+    it("shows the no-data state (no error) when nothing is configured", async () => {
+      // No recordCollection, no objectApiName, no graphqlQuery: the wire is
+      // never provisioned, so this is a no-data state, not an error.
+      await createChart({ recordCollection: [] });
 
       await flushPromises();
 
       const errorEl = element.shadowRoot.querySelector(
         ".slds-text-color_error"
       );
-      expect(errorEl).toBeTruthy();
-      expect(errorEl.textContent).toContain("No data source");
+      expect(errorEl).toBeFalsy();
+      expect(element.shadowRoot.querySelector(".chart-container")).toBeFalsy();
+      expect(element.shadowRoot.querySelector("lightning-spinner")).toBeFalsy();
+      expect(element.shadowRoot.textContent).toContain("No data available");
     });
 
     it("displays error when entityField is missing from records", async () => {
@@ -466,23 +401,16 @@ describe("c-d3-sparkline-grid", () => {
   // ===============================================================
 
   describe("data loading", () => {
-    it("uses recordCollection when provided", async () => {
+    it("renders the grid from recordCollection", async () => {
       await createChart({ recordCollection: SPARKLINE_RECORDS });
+      await flushPromises();
 
-      expect(executeQuery).not.toHaveBeenCalled();
-    });
-
-    it("falls back to SOQL query when no recordCollection", async () => {
-      await createChart({
-        recordCollection: [],
-        soqlQuery:
-          "SELECT Type, CloseDate, Amount FROM Opportunity ORDER BY CloseDate"
-      });
-
-      expect(executeQuery).toHaveBeenCalledWith({
-        queryString:
-          "SELECT Type, CloseDate, Amount FROM Opportunity ORDER BY CloseDate"
-      });
+      const container = element.shadowRoot.querySelector(".chart-container");
+      expect(container).toBeTruthy();
+      const errorEl = element.shadowRoot.querySelector(
+        ".slds-text-color_error"
+      );
+      expect(errorEl).toBeFalsy();
     });
 
     it("silently truncates data exceeding record limit", async () => {
@@ -1161,6 +1089,130 @@ describe("c-d3-sparkline-grid", () => {
 
       // scaleTime should not have been called because width is 0
       expect(mockD3.scaleTime).not.toHaveBeenCalled();
+    });
+  });
+
+  // ===============================================================
+  // RENDER ORCHESTRATION HARDENING (§4.3)
+  // ===============================================================
+
+  describe("render orchestration hardening", () => {
+    it("installs a lifetime resize observer at width 0 and renders once the container gains width", async () => {
+      // Boot with an unmeasurable container; capture the RO callback.
+      let roCallback = null;
+      global.ResizeObserver = jest.fn().mockImplementation((cb) => {
+        roCallback = cb;
+        return {
+          observe: jest.fn(),
+          unobserve: jest.fn(),
+          disconnect: jest.fn()
+        };
+      });
+      Element.prototype.getBoundingClientRect = jest.fn(() => ({
+        width: 0,
+        height: 400,
+        top: 0,
+        left: 0,
+        bottom: 400,
+        right: 0
+      }));
+
+      await createChart();
+      await flushPromises();
+
+      // Zero width: no sparkline drawn yet, but the observer is registered so a
+      // later measurement can render (no fixed give-up window).
+      expect(mockD3.scaleTime).not.toHaveBeenCalled();
+      expect(roCallback).toBeTruthy();
+
+      // The container becomes measurable; the observer fires the render.
+      jest.useFakeTimers();
+      roCallback([{ contentRect: { width: 600, height: 400 } }]);
+      jest.advanceTimersByTime(250);
+      jest.useRealTimers();
+      await flushPromises();
+
+      expect(mockD3.scaleTime).toHaveBeenCalled();
+    });
+
+    it("does not latch an empty shell when first measured below the grid margins, and recovers when it grows", async () => {
+      // The grid's horizontal chrome is labelWidth 120 + valueWidth 80 + 40
+      // padding = 240px. A width under 240 makes renderChart bail before the
+      // per-entity sparkline loop. The observer must draw the grid once the
+      // container grows past that — not leave a permanent empty shell.
+      let roCallback = null;
+      global.ResizeObserver = jest.fn().mockImplementation((cb) => {
+        roCallback = cb;
+        return {
+          observe: jest.fn(),
+          unobserve: jest.fn(),
+          disconnect: jest.fn()
+        };
+      });
+      Element.prototype.getBoundingClientRect = jest.fn(() => ({
+        width: 150,
+        height: 400,
+        top: 0,
+        left: 0,
+        bottom: 400,
+        right: 150
+      }));
+
+      await createChart();
+      await flushPromises();
+
+      // 150px is below the 240px horizontal chrome: no sparkline drawn yet.
+      expect(mockD3.scaleTime).not.toHaveBeenCalled();
+      expect(roCallback).toBeTruthy();
+
+      jest.useFakeTimers();
+      roCallback([{ contentRect: { width: 600, height: 400 } }]);
+      jest.advanceTimersByTime(250);
+      jest.useRealTimers();
+      await flushPromises();
+
+      expect(mockD3.scaleTime).toHaveBeenCalled();
+    });
+
+    it("surfaces an exception thrown during renderChart to the error state", async () => {
+      // Force renderChart to throw mid-flight; it must not die silently.
+      mockD3.select = jest.fn(() => {
+        throw new Error("render boom");
+      });
+
+      await createChart();
+      await flushPromises();
+
+      const errorElement = element.shadowRoot.querySelector(
+        ".slds-text-color_error"
+      );
+      expect(errorElement).toBeTruthy();
+      expect(errorElement.textContent).toContain("render boom");
+    });
+
+    it("disconnects the resize observer cleanly on disconnect", async () => {
+      const mockDisconnect = jest.fn();
+      global.ResizeObserver = jest.fn().mockImplementation(() => ({
+        observe: jest.fn(),
+        unobserve: jest.fn(),
+        disconnect: mockDisconnect
+      }));
+
+      await createChart();
+      await flushPromises();
+
+      document.body.removeChild(element);
+
+      expect(mockDisconnect).toHaveBeenCalled();
+    });
+
+    it("creates exactly one resize observer across the render lifecycle", async () => {
+      await createChart();
+      await flushPromises();
+      await flushPromises();
+
+      // A single unified observer drives both the first render and re-renders.
+      expect(global.ResizeObserver).toHaveBeenCalledTimes(1);
     });
   });
 
