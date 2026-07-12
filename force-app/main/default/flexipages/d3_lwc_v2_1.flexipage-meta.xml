@@ -152,9 +152,8 @@
             <!-- Stacked Horizontal Bar: Amount by Stage and Type (Wave 1, CHART-INDEX #9) -->
             <componentInstance>
                 <componentInstanceProperties>
-                    <name>soqlQuery</name>
-                    <value
-          >SELECT StageName, Type, Amount FROM Opportunity WHERE Amount != null AND Type != null</value>
+                    <name>objectApiName</name>
+                    <value>Opportunity</value>
                 </componentInstanceProperties>
                 <componentInstanceProperties>
                     <name>groupByField</name>
