@@ -163,6 +163,15 @@ function flushPromises() {
   });
 }
 
+// Counts <path class="area-path"> elements from the mockD3.attr call log —
+// mirrors the countAreaPaths() helper in d3AreaChart.graphql.test.js, adapted
+// to this file's per-method jest.fn() mock (rather than a unified call log).
+function countAreaPaths(attrCalls) {
+  return attrCalls.filter(
+    (call) => call[0] === "class" && call[1] === "area-path"
+  ).length;
+}
+
 let consoleErrorSpy;
 
 async function createChart(props = {}) {
@@ -302,7 +311,10 @@ describe("c-d3-area-chart e2e", () => {
       expect(mockD3.stack).toHaveBeenCalled();
 
       const appendCalls = mockD3.append.mock.calls;
-      expect(appendCalls.some((call) => call[0] === "path")).toBe(true);
+      // Stacked mode renders one <path class="area-path"> per stacked layer;
+      // with 2 series (Prospecting, Closed Won) that's exactly 2 layers, so
+      // this is strictly stronger than merely checking some path appended.
+      expect(countAreaPaths(mockD3.attr.mock.calls)).toBe(2);
       // Stacked mode renders via renderStackedAreas, which never builds a
       // gradient (that is overlapping single-series only).
       expect(appendCalls.some((call) => call[0] === "linearGradient")).toBe(
@@ -328,9 +340,17 @@ describe("c-d3-area-chart e2e", () => {
 
       const element = await createChart({ recordCollection: LIFECYCLE_DATA });
 
+      // createTooltip() appends a real (unmocked) DOM node into the
+      // lwc:dom="manual" .chart-container, so its presence/removal is
+      // observable directly through the shadow DOM.
+      const tooltipBefore = element.shadowRoot.querySelector(".slds-popover");
+      expect(tooltipBefore).toBeTruthy();
+
       document.body.removeChild(element);
 
       expect(mockDisconnect).toHaveBeenCalled();
+      const tooltipAfter = element.shadowRoot.querySelector(".slds-popover");
+      expect(tooltipAfter).toBeFalsy();
     });
   });
 
@@ -347,6 +367,7 @@ describe("c-d3-area-chart e2e", () => {
       );
       expect(errorEl).toBeTruthy();
       expect(errorEl.textContent).toContain("CDN unreachable");
+      expect(consoleErrorSpy).toHaveBeenCalled();
     });
   });
 
