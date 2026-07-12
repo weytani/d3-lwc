@@ -5,10 +5,6 @@
             <!-- Bar Chart via GraphQL self-fetch: Opportunity Amount by Stage -->
             <componentInstance>
                 <componentInstanceProperties>
-                    <name>fetchMode</name>
-                    <value>graphql</value>
-                </componentInstanceProperties>
-                <componentInstanceProperties>
                     <name>objectApiName</name>
                     <value>Opportunity</value>
                 </componentInstanceProperties>

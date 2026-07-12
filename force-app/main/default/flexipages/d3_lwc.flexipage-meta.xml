@@ -2,12 +2,12 @@
 <FlexiPage xmlns="http://soap.sforce.com/2006/04/metadata">
     <flexiPageRegions>
         <itemInstances>
-            <!-- Bar Chart: Opportunity Amount by Stage -->
+            <!-- Bar Chart: Opportunity Amount by Stage via free-text GraphQL record query (blank objectApiName exercises object-key auto-detection) -->
             <componentInstance>
                 <componentInstanceProperties>
-                    <name>soqlQuery</name>
+                    <name>graphqlQuery</name>
                     <value
-          >SELECT StageName, Amount FROM Opportunity WHERE Amount != null</value>
+          >query BarByStage { uiapi { query { Opportunity(first: 2000) { edges { node { StageName { value } Amount { value } } } } } } }</value>
                 </componentInstanceProperties>
                 <componentInstanceProperties>
                     <name>groupByField</name>
