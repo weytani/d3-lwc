@@ -301,6 +301,33 @@ describe("d3FunnelChart GraphQL path", () => {
     expect(element.shadowRoot.querySelector(".chart-container")).toBeNull();
   });
 
+  it("surfaces a missing-field error for the free-text Count arm too when groupByField is blank", async () => {
+    // Companion to the Sum-arm test above, covering the OTHER arm of the
+    // ternary. Asserting only "an error is shown" would not discriminate this
+    // fix: aggregateData(data, groupByField, ...) short-circuits to [] whenever
+    // groupByField is falsy regardless of the projected fields, so even the
+    // unfixed code already reaches an error state here — just the wrong one
+    // ("No data after aggregation", from that unrelated downstream guard)
+    // instead of this dedup fix's precise "Missing required fields" message.
+    // The message assertion is load-bearing, not decorative.
+    const element = createElement("c-d3-funnel-chart", { is: D3FunnelChart });
+    element.graphqlQuery = FREE_TEXT_QUERY;
+    element.objectApiName = "Opportunity";
+    element.groupByField = "";
+    element.operation = "Count";
+    document.body.appendChild(element);
+
+    await flushPromises();
+    graphql.emit(RECORD_RESPONSE);
+    await flushPromises();
+    await flushPromises();
+
+    const err = element.shadowRoot.querySelector(".slds-text-color_error");
+    expect(err).not.toBeNull();
+    expect(err.textContent).toMatch(/missing required field/i);
+    expect(element.shadowRoot.querySelector(".chart-container")).toBeNull();
+  });
+
   it("surfaces wire errors from a free-text graphqlQuery in the error state", async () => {
     const element = createElement("c-d3-funnel-chart", { is: D3FunnelChart });
     element.graphqlQuery = FREE_TEXT_QUERY;
