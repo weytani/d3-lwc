@@ -317,8 +317,13 @@ export default class D3SparklineGrid extends NavigationMixin(LightningElement) {
         const date = new Date(dateVal);
         if (isNaN(date.getTime())) return;
 
-        // Bucket key: YYYY-MM
-        const bucketKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+        // Bucket key: YYYY-MM. UTC getters, not local: a date-only field
+        // (e.g. CloseDate) arrives as "2024-01-01" and is parsed as UTC
+        // midnight per the ECMAScript date-string spec. Reading it back with
+        // local getters rolls it back a calendar day in any negative-UTC-offset
+        // timezone (all of the Americas), silently bucketing the 1st of the
+        // month into the previous month and corrupting the sum.
+        const bucketKey = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
 
         if (!monthBuckets.has(bucketKey)) {
           monthBuckets.set(bucketKey, { sum: 0, count: 0 });
@@ -348,9 +353,11 @@ export default class D3SparklineGrid extends NavigationMixin(LightningElement) {
             value = bucket.count;
         }
 
-        // Parse bucket key back to date (first day of month)
+        // Parse bucket key back to date (first day of month), in UTC to match
+        // the UTC bucket key above — a local-time reconstruction here would
+        // reintroduce the same off-by-one-day/month drift downstream.
         const [year, month] = bucketKey.split("-").map(Number);
-        const date = new Date(year, month - 1, 1);
+        const date = new Date(Date.UTC(year, month - 1, 1));
 
         sparklineData.push({ date, value });
       });
@@ -719,9 +726,13 @@ export default class D3SparklineGrid extends NavigationMixin(LightningElement) {
   _showPointTooltip(event, entityName, d) {
     if (!this.tooltip) return;
 
+    // timeZone: "UTC" matches the UTC bucket date built in processEntityData —
+    // formatting it in the host's local zone would re-shift the displayed
+    // month back by a day in negative-UTC-offset timezones.
     const monthLabel = d.date.toLocaleString("default", {
       month: "short",
-      year: "numeric"
+      year: "numeric",
+      timeZone: "UTC"
     });
     const content = buildTooltipContent(entityName, d.value, {
       prefix: `${monthLabel}: `
