@@ -1,6 +1,16 @@
 # Salesforce D3.js Chart Component Library
 
-A complete suite of 40 Lightning Web Components (LWC) that wrap D3.js charts for use in Salesforce App Builder, Experience Builder, and Screen Flows. Components are drag-and-drop ready, capable of ingesting raw Salesforce record collections, and intelligently handle aggregation via server-side SOQL GROUP BY (preferred) or client-side JavaScript (fallback).
+A complete suite of Lightning Web Components (LWC) that wrap D3.js charts for use in Salesforce App Builder, Experience Builder, and Screen Flows. Components are drag-and-drop ready and support three data sources — a record collection from a Flow, a structured self-fetch straight from the object, or a free-text GraphQL override (see `docs/ADMIN-GUIDE.md` for the full admin-facing model).
+
+The library is migrating chart-by-chart to a **v3 "standalone, GraphQL-only"**
+architecture: each converted chart is a fully self-contained bundle (its
+support modules inlined, no shared `c/` services, no Apex) that self-fetches
+via the `lightning/graphql` wire adapter. The old `soqlQuery`/`fetchMode`
+properties are replaced by the structured self-fetch + a `graphqlQuery`
+free-text override, and every converted chart gains a `lightning__FlowScreen`
+target. Charts not yet converted still use the earlier Apex/SOQL-backed data
+path described further down; see `CHANGELOG.md` for which charts have moved
+and `docs/conversion-recipe.md` for the conversion procedure itself.
 
 ## 🖼️ Gallery
 
@@ -28,15 +38,13 @@ _Gauge, Bar, Donut, Line, Scatter, Histogram, Treemap, Sankey, Force Graph, and 
 
 - **40 Chart Types**: Bar, Line, Donut, Gauge, Scatter, Histogram, Treemap, Sankey, Force Graph, Choropleth, Area, Stacked Bar, Funnel, Radar, Heatmap, Box Plot, Waterfall, Bullet, Calendar Heatmap, Sparkline Grid, Pie, Horizontal Bar, Lollipop, Progress Bar, Diverging Bar, Waffle, Sunburst, Bubble, Chord Diagram, Gantt, Dot Plot, Sorted Bar, Step, Slope, Stacked Horizontal Bar, Icon Array, Normalized Bar, Variable-Color Line, Band, Difference
 - **Drag-and-Drop Ready**: Fully configurable in Lightning App Builder
-- **Server-Side Aggregation**: GROUP BY queries run in Apex, processing 50K+ records and sending pre-bucketed results to the browser
-- **Dual Data Path**: Server-preferred when `objectApiName` is configured; client-side fallback for `recordCollection` and `soqlQuery`-only usage
-- **GraphQL Self-Fetch** (all charts): Opt-in `fetchMode="graphql"` fetches data declaratively via Salesforce's `lightning/graphql` wire adapter — no Apex controller required, FLS/sharing enforced by the platform. `auto` (default) and `apex` preserve the existing data paths; the gantt chart is GraphQL-only
-- **Server-Side Analytics**: Statistics (mean, median, stdDev) and correlation (Pearson r, linear regression) computed in Apex
+- **GraphQL Self-Fetch** (v3 standalone charts): structured self-fetch is the default the moment Object API Name + field mappings are set — no `fetchMode` attribute to opt into, no Apex controller, FLS/sharing enforced by the platform. A free-text `graphqlQuery` override is available for advanced queries, and a `recordCollection` passed in from a Flow always wins over either. See `docs/ADMIN-GUIDE.md` for the full precedence rules and property reference.
+- **Server-Side Aggregation & Analytics** (charts not yet converted): GROUP BY, statistics (mean, median, stdDev), and correlation (Pearson r, linear regression) run in Apex, sending pre-bucketed results to the browser — this is the pre-v3 data path, still in place for charts the conversion hasn't reached yet
 - **Configurable Limits**: Per-chart `recordLimit` property in App Builder — set your own data ceiling or use smart defaults
 - **Responsive**: Uses ResizeObserver for adaptive reflow
 - **SLDS Styled**: Consistent with Salesforce Lightning Design System
 - **Theme Support**: 4 built-in palettes + custom colors via JSON config
-- **3,384 Tests**: Comprehensive Jest test coverage across 133 suites
+- **3,435 Tests** (as of 2026-07-13): Comprehensive Jest test coverage across 135 suites
 
 ## 📦 Components
 
@@ -140,41 +148,57 @@ sf lightning dev app -o <your-org-alias>
 
 ## 📊 Usage
 
-### Common Properties (All Charts)
+### Common Properties
 
-| Property           | Type     | Description                                                                      |
-| ------------------ | -------- | -------------------------------------------------------------------------------- |
-| `recordCollection` | Object[] | Data from Flow or parent component                                               |
-| `soqlQuery`        | String   | SOQL query (used if recordCollection empty)                                      |
-| `objectApiName`    | String   | SObject API name — enables server-side aggregation                               |
-| `filterClause`     | String   | Optional WHERE clause for server aggregation                                     |
-| `recordLimit`      | Integer  | Max records to process (1–10,000). Leave empty for smart defaults per chart type |
-| `height`           | Integer  | Chart height in pixels                                                           |
-| `theme`            | String   | Color theme (Salesforce Standard, Warm, Cool, Vibrant)                           |
-| `advancedConfig`   | String   | JSON for advanced options                                                        |
+Properties vary somewhat between a chart's pre-v3 (Apex/SOQL-backed) form and
+its converted v3 standalone form — see `docs/ADMIN-GUIDE.md` for the full,
+per-family property reference sourced from the actual component metadata.
+Broad strokes:
 
-`soqlQuery`/`filterClause` are common to every chart **except the gantt chart**,
-which fetches exclusively via `objectApiName` + GraphQL as of 2.0 (see below).
+| Property           | Type     | Description                                                                                                                                       |
+| ------------------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `recordCollection` | Object[] | Data from a Flow or parent component. Always wins over any query the chart would otherwise run.                                                   |
+| `objectApiName`    | String   | SObject API name to query. On a v3 standalone chart this drives the GraphQL self-fetch; on a pre-v3 chart it drives server-side Apex aggregation. |
+| `graphqlQuery`     | String   | **v3 standalone charts only.** Free-text `uiapi.query` override of the built query — see `docs/ADMIN-GUIDE.md` §2c for the contract and footgun.  |
+| `soqlQuery`        | String   | **Pre-v3 charts only.** SOQL query (used if `recordCollection` is empty).                                                                         |
+| `filterClause`     | String   | **Pre-v3 charts only.** Optional WHERE clause for server-side Apex aggregation.                                                                   |
+| `recordLimit`      | Integer  | Max records to process (1–10,000). Leave empty for smart defaults per chart type.                                                                 |
+| `height`           | Integer  | Chart height in pixels                                                                                                                            |
+| `theme`            | String   | Color theme (Salesforce Standard, Warm, Cool, Vibrant)                                                                                            |
+| `advancedConfig`   | String   | JSON for advanced options                                                                                                                         |
 
-### D3 Bar Chart (Server Aggregation)
+### D3 Bar Chart — structured self-fetch (v3 standalone)
+
+The bar chart is a converted v3 standalone bundle: set `object-api-name` plus
+the field mapping and it self-fetches via the `lightning/graphql` wire adapter
+automatically — there's no `fetch-mode` attribute to opt into, and no
+`D3ChartController` Apex class in the loop. Field- and record-level security
+are enforced by the platform. The chart below is rendering live Opportunity
+Amount summed by Stage, fetched entirely via GraphQL (verified against a live
+org):
+
+![D3 Bar Chart rendering live data via GraphQL self-fetch](docs/screenshots/d3-bar-chart-graphql-self-fetch.png)
 
 ```html
-<!-- Server-side: aggregates across all matching records via SOQL GROUP BY -->
+<!-- Structured self-fetch: aggregates via the UI API GraphQL wire adapter, no Apex -->
 <c-d3-bar-chart
   object-api-name="Opportunity"
   group-by-field="StageName"
   value-field="Amount"
   operation="Sum"
-  filter-clause="IsClosed = false"
-  height="300"
+  height="400"
 >
 </c-d3-bar-chart>
 ```
 
-### D3 Bar Chart (Client-Side Fallback)
+For a `Count` operation, this path fetches raw rows up to `record-limit` and
+counts client-side (GraphQL has no server-side COUNT) — for an exact count on
+a large object, pass records in from a Flow instead (below).
+
+### D3 Bar Chart — records from a Flow
 
 ```html
-<!-- Client-side: uses recordCollection from Flow or parent component -->
+<!-- recordCollection always wins: the chart renders exactly what it's given, no query -->
 <c-d3-bar-chart
   record-collection="{records}"
   group-by-field="StageName"
@@ -185,45 +209,26 @@ which fetches exclusively via `objectApiName` + GraphQL as of 2.0 (see below).
 </c-d3-bar-chart>
 ```
 
-### D3 Bar Chart (GraphQL Self-Fetch — New in 1.1)
-
-Set `fetch-mode="graphql"` to fetch data declaratively through Salesforce's
-`lightning/graphql` wire adapter — no `D3ChartController` Apex class required.
-Field- and record-level security are enforced by the platform. The chart below
-is rendering live Opportunity Amount summed by Stage, fetched entirely via
-GraphQL (verified against a live org):
-
-![D3 Bar Chart rendering live data via GraphQL self-fetch](docs/screenshots/d3-bar-chart-graphql-self-fetch.png)
+### D3 Bar Chart — free-text GraphQL override
 
 ```html
-<!-- GraphQL self-fetch: aggregates via the UI API GraphQL wire adapter, no Apex -->
+<!-- graphqlQuery overrides the built query; must be a uiapi.query record query -->
 <c-d3-bar-chart
-  fetch-mode="graphql"
   object-api-name="Opportunity"
   group-by-field="StageName"
   value-field="Amount"
   operation="Sum"
+  graphql-query="query { uiapi { query { Opportunity(first: 200) { edges { node { StageName { value } Amount { value } } } } } } }"
   height="400"
 >
 </c-d3-bar-chart>
 ```
 
-`fetch-mode` accepts `auto` (default — preserves the existing `recordCollection` →
-Apex priority), `apex` (force the Apex path), or `graphql` (self-fetch). The GraphQL
-path covers UI API-queryable objects with structured filters; for non-UI-API objects
-or arbitrary SOQL, use `auto`/`apex` — the Apex escape hatch remains.
+### D3 Gantt Chart (GraphQL-only since 2.0, BREAKING)
 
-Every chart supports `fetch-mode`; the bar chart is shown here as the reference
-example. The gantt chart is the one exception — it fetches exclusively via GraphQL
-(see below). For a `Count` operation, the GraphQL path fetches raw rows up to the
-`recordLimit` and counts client-side, so use `auto`/`apex` for exact counts on large
-objects.
-
-### D3 Gantt Chart (GraphQL Self-Fetch — New in 2.0, BREAKING)
-
-Unlike the bar chart's additive `fetch-mode`, the gantt chart's data path is
-**GraphQL-only** as of 2.0 — the Apex `soqlQuery`/`filterClause` properties have
-been removed entirely. Set `object-api-name` plus `label-field`/`start-date-field`/
+The gantt chart converted to GraphQL-only ahead of the wider v3 wave — like
+the bar chart above, the Apex `soqlQuery`/`filterClause` properties have been
+removed entirely. Set `object-api-name` plus `label-field`/`start-date-field`/
 `end-date-field` and the chart fetches its own tasks through Salesforce's
 `lightning/graphql` wire adapter, with no `D3ChartController` involved. The chart
 below is rendering 12 live Opportunity project timelines fetched entirely via
@@ -333,6 +338,18 @@ Custom colors via `advancedConfig`:
 
 ### Architecture
 
+The diagram below is the **pre-v3 architecture** — still accurate for any
+chart the v3 conversion hasn't reached yet: a shared Apex controller plus
+shared LWC modules (`dataService`, `themeService`, `chartUtils`) that every
+chart component imports from.
+
+A **converted v3 standalone chart** doesn't fit this picture — it has no Apex
+Controller in its data path and no shared-module imports at all. Its support
+code (a D3 loader, theme palette, data helpers, formatters, and GraphQL query
+builders) is inlined bundle-local inside that chart's own folder, and it talks
+to Salesforce directly over the `lightning/graphql` wire. See
+`docs/conversion-recipe.md` for exactly what "standalone" means per bundle.
+
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                        SALESFORCE ORG                           │
@@ -372,10 +389,21 @@ Custom colors via `advancedConfig`:
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-**Data flow:**
+**Data flow, pre-v3 charts:**
 
 1. **Server-preferred path** (when `objectApiName` + field config available) — aggregation, statistics, and correlation are computed in Apex; only pre-bucketed results cross the wire.
 2. **Client-side path** (`recordCollection` or `soqlQuery`-only) — raw records flow through `dataService.validateData()` → `truncateData()` → `aggregateData()`, then D3 renders into an empty `<div>`.
+
+**Data flow, v3 standalone charts** (see `docs/ADMIN-GUIDE.md` §2 for the
+admin-facing version of this):
+
+1. **`recordCollection` wins** — if records are passed in (always the case on
+   a Flow Screen), the chart renders them and never queries anything.
+2. **Free-text `graphqlQuery` is next**, if set — the pasted UI API record
+   query overrides the built query.
+3. **Structured self-fetch is the fallback** — `objectApiName` + field
+   mappings build a query the chart runs itself over `lightning/graphql`, no
+   Apex involved.
 
 ### Shared Modules
 
@@ -495,12 +523,14 @@ npm test
 npm test -- --coverage
 ```
 
-**Test Coverage:** 3,384 tests across 133 suites (includes server-side aggregation and GraphQL self-fetch path tests).
+**Test Coverage:** 3,435 tests across 135 suites, as of 2026-07-13 (includes server-side aggregation and GraphQL self-fetch path tests; grows with each chart's v3 conversion).
 
 > Note: this Jest config runs the full suite — there is no per-component `--testPathPattern` narrowing flag. The pre-commit hook (husky + lint-staged) runs the relevant tests on staged files automatically.
 
 ## 📚 References
 
+- [Admin Guide: App Builder & Flow usage](docs/ADMIN-GUIDE.md) — the admin-facing property reference and step-by-step setup
+- [v3 conversion recipe](docs/conversion-recipe.md) — the per-chart procedure for converting to the standalone GraphQL architecture
 - [D3.js Documentation](https://d3js.org/)
 - [Lightning Web Components Guide](https://developer.salesforce.com/docs/component-library/documentation/en/lwc)
 - [SLDS Design Tokens](https://www.lightningdesignsystem.com/design-tokens/)
