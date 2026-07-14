@@ -5,6 +5,26 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.0] - 2026-07-13
+
+### Changed
+
+- **BREAKING: `d3VariableColorLine` is now a standalone GraphQL-only bundle**,
+  converted per the v3 recipe (see 3.0.0): GraphQL wire self-fetch only,
+  bundle-local support modules, no shared `c/` imports, no Apex. `soqlQuery`
+  and `fetchMode` removed; `graphqlQuery` free-text record queries and the
+  `lightning__FlowScreen` target added; render-orchestration hardening
+  applied. As a raw-record time-series chart its stroke color switches at a
+  configurable threshold (below vs above target); it shapes dates with its
+  own parser and feeds the same pipeline on every data path. Ships with the
+  full unit + integration + e2e test tiers. Live-verified on-org (91 points,
+  Amount over CloseDate, threshold 50K).
+
+### Migration
+
+- Same pattern as 3.0.0: detach placed `d3VariableColorLine` instances before
+  deploying, then reconfigure with structured properties or `graphqlQuery`.
+
 ## [3.8.0] - 2026-07-12
 
 ### Changed
