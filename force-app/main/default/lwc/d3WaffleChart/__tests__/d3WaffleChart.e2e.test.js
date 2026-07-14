@@ -1,26 +1,19 @@
 // ABOUTME: End-to-end lifecycle tests for the D3 Waffle Chart component.
-// ABOUTME: Verifies full render pipeline, 100-cell allocation, multi-instance isolation, and error recovery using real services with mocked D3.
+// ABOUTME: Verifies full render pipeline, 100-cell allocation, GraphQL self-fetch, multi-instance isolation, and error recovery using real bundle-local modules with mocked D3.
 
 import { createElement } from "lwc";
 import D3WaffleChart from "c/d3WaffleChart";
-import { loadD3 } from "c/d3Lib";
+import { loadD3 } from "../d3Loader";
+import { graphql } from "lightning/graphql";
 
 // ═══════════════════════════════════════════════════════════════
-// MOCK SETUP: Only mock D3 lib, Apex, navigation, and toast
-// Real modules: c/dataService, c/themeService, c/chartUtils
+// MOCK SETUP: Only mock D3 lib and navigation.
+// Real modules: ./data, ./theme, ./utils, ./graphql
 // ═══════════════════════════════════════════════════════════════
 
-jest.mock("c/d3Lib", () => ({
+jest.mock("../d3Loader", () => ({
   loadD3: jest.fn()
 }));
-
-jest.mock(
-  "@salesforce/apex/D3ChartController.executeQuery",
-  () => ({
-    default: jest.fn()
-  }),
-  { virtual: true }
-);
 
 const mockNavigate = jest.fn();
 jest.mock(
@@ -164,7 +157,6 @@ describe("c-d3-waffle-chart e2e", () => {
       loadD3.mockResolvedValue(mockD3);
 
       const element = await createChart();
-      await flushPromises();
 
       // loadD3 was called during connectedCallback
       expect(loadD3).toHaveBeenCalled();
@@ -198,6 +190,56 @@ describe("c-d3-waffle-chart e2e", () => {
       expect(consoleWarnSpy).not.toHaveBeenCalled();
     });
 
+    it("GraphQL self-fetch path: no recordCollection -> wire emits -> full pipeline", async () => {
+      const mockD3 = createMockD3();
+      loadD3.mockResolvedValue(mockD3);
+
+      const element = createElement("c-d3-waffle-chart", {
+        is: D3WaffleChart
+      });
+      Object.assign(element, {
+        groupByField: "StageName",
+        operation: "Count",
+        objectApiName: "Opportunity",
+        recordCollection: []
+      });
+      document.body.appendChild(element);
+      await flushPromises();
+
+      graphql.emit({
+        uiapi: {
+          query: {
+            Opportunity: {
+              edges: [
+                { node: { StageName: { value: "Discovery" } } },
+                { node: { StageName: { value: "Discovery" } } },
+                { node: { StageName: { value: "Proposal" } } }
+              ]
+            }
+          }
+        }
+      });
+      await flushPromises();
+      await flushPromises();
+
+      expect(loadD3).toHaveBeenCalled();
+      const appendCalls = mockD3.append.mock.calls.map((c) => c[0]);
+      expect(appendCalls).toContain("svg");
+      expect(appendCalls).toContain("rect");
+      const cellBinding = mockD3.data.mock.calls.find(
+        (call) => Array.isArray(call[0]) && call[0].length === 100
+      );
+      expect(cellBinding).toBeDefined();
+
+      const chartContainer =
+        element.shadowRoot.querySelector(".chart-container");
+      expect(chartContainer).toBeTruthy();
+      const errorEl = element.shadowRoot.querySelector(
+        ".slds-text-color_error"
+      );
+      expect(errorEl).toBeFalsy();
+    });
+
     it("cleanup removes resize handler on disconnect without errors", async () => {
       const mockDisconnect = jest.fn();
       global.ResizeObserver = jest.fn().mockImplementation(() => ({
@@ -210,7 +252,6 @@ describe("c-d3-waffle-chart e2e", () => {
       loadD3.mockResolvedValue(mockD3);
 
       const element = await createChart();
-      await flushPromises();
 
       const chartContainer =
         element.shadowRoot.querySelector(".chart-container");
@@ -233,7 +274,6 @@ describe("c-d3-waffle-chart e2e", () => {
       loadD3.mockResolvedValue(mockD3);
 
       await createChart({ operation: "Sum" });
-      await flushPromises();
 
       const cells = mockD3.data.mock.calls.find(
         (call) => Array.isArray(call[0]) && call[0].length === 100
@@ -261,12 +301,10 @@ describe("c-d3-waffle-chart e2e", () => {
       const mockD3A = createMockD3();
       loadD3.mockResolvedValue(mockD3A);
       const elementA = await createChart({ theme: "Salesforce Standard" });
-      await flushPromises();
 
       const mockD3B = createMockD3();
       loadD3.mockResolvedValue(mockD3B);
       const elementB = await createChart({ theme: "Warm" });
-      await flushPromises();
 
       // Each instance bound its own 100-cell array
       const cellsA = mockD3A.data.mock.calls.find(
@@ -306,8 +344,6 @@ describe("c-d3-waffle-chart e2e", () => {
       loadD3.mockRejectedValue(new Error("Network failure loading D3"));
 
       const element = await createChart();
-      await flushPromises();
-      await flushPromises();
 
       const errorElement = element.shadowRoot.querySelector(
         ".slds-text-color_error"

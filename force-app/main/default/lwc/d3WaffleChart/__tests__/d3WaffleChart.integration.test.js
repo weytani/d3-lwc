@@ -1,26 +1,17 @@
-// ABOUTME: Integration tests for d3WaffleChart verifying real service interactions.
-// ABOUTME: Tests real dataService aggregation, themeService colors, and chartUtils contrast against mock D3 rect rendering.
+// ABOUTME: Integration tests for d3WaffleChart verifying real bundle-local pipelines (data, theme, utils, graphql).
+// ABOUTME: Only D3, GraphQL, and NavigationMixin are mocked; aggregation, color, contrast, and self-fetch logic run for real.
 
 import { createElement } from "lwc";
 import D3WaffleChart from "c/d3WaffleChart";
-import { loadD3 } from "c/d3Lib";
-import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
+import { loadD3 } from "../d3Loader";
 
 // ═══════════════════════════════════════════════════════════════
-// MOCKS — Only external dependencies, NOT real utility services
+// MOCKS — Only external dependencies, NOT the bundle-local modules
 // ═══════════════════════════════════════════════════════════════
 
-jest.mock("c/d3Lib", () => ({
+jest.mock("../d3Loader", () => ({
   loadD3: jest.fn()
 }));
-
-jest.mock(
-  "@salesforce/apex/D3ChartController.executeQuery",
-  () => ({
-    default: jest.fn()
-  }),
-  { virtual: true }
-);
 
 jest.mock(
   "lightning/platformShowToastEvent",
@@ -122,7 +113,6 @@ describe("c-d3-waffle-chart integration", () => {
     jest.clearAllMocks();
     mockD3 = createMockD3();
     loadD3.mockResolvedValue(mockD3);
-    executeQuery.mockResolvedValue(SAMPLE_DATA);
 
     consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
     consoleWarnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
@@ -152,7 +142,7 @@ describe("c-d3-waffle-chart integration", () => {
   });
 
   // ═══════════════════════════════════════════════════════════════
-  // CELL ALLOCATION WITH REAL DATASERVICE AGGREGATION
+  // CELL ALLOCATION WITH REAL DATA.JS AGGREGATION
   // ═══════════════════════════════════════════════════════════════
 
   describe("cell allocation with real aggregation", () => {
@@ -180,7 +170,7 @@ describe("c-d3-waffle-chart integration", () => {
         return acc;
       }, {});
 
-      // Real dataService Sum: Closed Won=500, Prospecting=300, Qualification=150 (total 950)
+      // Real data.js Sum: Closed Won=500, Prospecting=300, Qualification=150 (total 950)
       // round(500/950*100)=53, round(300/950*100)=32, round(150/950*100)=16
       // descending allocator caps at 100 -> Qualification trimmed to 15
       expect(counts["Closed Won"]).toBe(53);
@@ -214,10 +204,10 @@ describe("c-d3-waffle-chart integration", () => {
   });
 
   // ═══════════════════════════════════════════════════════════════
-  // REAL THEMESERVICE PALETTE FLOWS INTO CELLS
+  // REAL THEME.JS PALETTE FLOWS INTO CELLS
   // ═══════════════════════════════════════════════════════════════
 
-  describe("real themeService palette", () => {
+  describe("real theme.js palette", () => {
     it("Salesforce Standard hex colors map to descending categories", async () => {
       await createChart({ operation: "Sum", theme: "Salesforce Standard" });
 
@@ -253,10 +243,10 @@ describe("c-d3-waffle-chart integration", () => {
   });
 
   // ═══════════════════════════════════════════════════════════════
-  // REAL CHARTUTILS CONTRAST
+  // REAL UTILS.JS CONTRAST
   // ═══════════════════════════════════════════════════════════════
 
-  describe("real chartUtils contrast", () => {
+  describe("real utils.js contrast", () => {
     it("each cell carries a real getContrastColor textColor", async () => {
       await createChart({ operation: "Sum", theme: "Salesforce Standard" });
 
@@ -273,6 +263,123 @@ describe("c-d3-waffle-chart integration", () => {
       // #1589EE (Closed Won) has WCAG luminance ~0.24 (> 0.179) -> dark text
       const closedWonCell = cells.find((c) => c.label === "Closed Won");
       expect(closedWonCell.textColor).toBe("#000000");
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════
+  // GRAPHQL WIRE INTEGRATION (real graphql.js + data.js pipeline)
+  // ═══════════════════════════════════════════════════════════════
+
+  describe("graphql wire integration", () => {
+    it("aggregates a GraphQL Count record set through the real pipeline", async () => {
+      const { graphql } = require("lightning/graphql");
+
+      const element = createElement("c-d3-waffle-chart", {
+        is: D3WaffleChart
+      });
+      Object.assign(element, {
+        objectApiName: "Opportunity",
+        groupByField: "StageName",
+        operation: "Count"
+      });
+      document.body.appendChild(element);
+
+      await flushPromises();
+      graphql.emit({
+        uiapi: {
+          query: {
+            Opportunity: {
+              edges: [
+                { node: { StageName: { value: "Negotiation" } } },
+                { node: { StageName: { value: "Negotiation" } } },
+                { node: { StageName: { value: "Closed Lost" } } }
+              ]
+            }
+          }
+        }
+      });
+      await flushPromises();
+      await flushPromises();
+
+      // Real aggregateData Count: Negotiation=2, Closed Lost=1 (total 3)
+      // round(2/3*100)=67, round(1/3*100)=33
+      const dataCalls = mockD3.data.mock.calls;
+      const cells = dataCalls.find(
+        (call) => Array.isArray(call[0]) && call[0].length === 100
+      )[0];
+      const counts = cells.reduce((acc, cell) => {
+        if (cell.label) acc[cell.label] = (acc[cell.label] || 0) + 1;
+        return acc;
+      }, {});
+      expect(counts.Negotiation).toBe(67);
+      expect(counts["Closed Lost"]).toBe(33);
+
+      const errorEl = element.shadowRoot.querySelector(
+        ".slds-text-color_error"
+      );
+      expect(errorEl).toBeFalsy();
+    });
+
+    it("free-text graphqlQuery Sum aggregates the wire rows to the correct values", async () => {
+      const { graphql } = require("lightning/graphql");
+
+      const element = createElement("c-d3-waffle-chart", {
+        is: D3WaffleChart
+      });
+      Object.assign(element, {
+        graphqlQuery:
+          "query { uiapi { query { Opportunity { edges { node { StageName { value } Amount { value } } } } } } }",
+        objectApiName: "Opportunity",
+        groupByField: "StageName",
+        valueField: "Amount",
+        operation: "Sum"
+      });
+      document.body.appendChild(element);
+
+      await flushPromises();
+      graphql.emit({
+        uiapi: {
+          query: {
+            Opportunity: {
+              edges: [
+                {
+                  node: {
+                    StageName: { value: "Prospecting" },
+                    Amount: { value: 100 }
+                  }
+                },
+                {
+                  node: {
+                    StageName: { value: "Prospecting" },
+                    Amount: { value: 200 }
+                  }
+                },
+                {
+                  node: {
+                    StageName: { value: "Closed Won" },
+                    Amount: { value: 500 }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      });
+      await flushPromises();
+      await flushPromises();
+
+      // Sum: Closed Won=500, Prospecting=300 (total 800)
+      // round(500/800*100)=63, round(300/800*100)=38 -> capped: 63+37=100
+      const dataCalls = mockD3.data.mock.calls;
+      const cells = dataCalls.find(
+        (call) => Array.isArray(call[0]) && call[0].length === 100
+      )[0];
+      const counts = cells.reduce((acc, cell) => {
+        if (cell.label) acc[cell.label] = (acc[cell.label] || 0) + 1;
+        return acc;
+      }, {});
+      expect(counts["Closed Won"]).toBe(63);
+      expect(counts.Prospecting).toBe(37);
     });
   });
 

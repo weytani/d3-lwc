@@ -1,11 +1,11 @@
-// ABOUTME: Tests the additive GraphQL self-fetch path on d3WaffleChart (Approach A).
-// ABOUTME: Count is this chart's PRIMARY graphql path (default operation), so it is tested first and explicitly.
+// ABOUTME: Tests the GraphQL self-fetch path on the standalone d3WaffleChart bundle.
+// ABOUTME: Covers the structured builders (Count is this chart's PRIMARY graphql path) and the free-text graphqlQuery admin override.
 import { createElement } from "lwc";
 import D3WaffleChart from "c/d3WaffleChart";
 import { graphql, gql } from "lightning/graphql";
-import { loadD3 } from "c/d3Lib";
+import { loadD3 } from "../d3Loader";
 
-jest.mock("c/d3Lib", () => ({ loadD3: jest.fn() }));
+jest.mock("../d3Loader", () => ({ loadD3: jest.fn() }));
 
 // Minimal chainable D3 stub: every call returns the same chainable object.
 // The `then` guard keeps this from looking like a thenable to
@@ -61,11 +61,42 @@ const AGG_RESPONSE = {
   }
 };
 
+// A record-query response an admin's free-text graphqlQuery would return.
+// The chart aggregates these rows client-side by groupByField/valueField.
+const FREE_TEXT_RESPONSE = {
+  uiapi: {
+    query: {
+      Opportunity: {
+        edges: [
+          {
+            node: {
+              StageName: { value: "Prospecting" },
+              Amount: { value: 100 }
+            }
+          },
+          {
+            node: {
+              StageName: { value: "Prospecting" },
+              Amount: { value: 200 }
+            }
+          },
+          {
+            node: { StageName: { value: "Closed Won" }, Amount: { value: 500 } }
+          }
+        ]
+      }
+    }
+  }
+};
+
+const FREE_TEXT_QUERY =
+  "query { uiapi { query { Opportunity { edges { node { StageName { value } Amount { value } } } } } } }";
+
 async function flushPromises() {
   return Promise.resolve();
 }
 
-describe("d3WaffleChart GraphQL path (Approach A)", () => {
+describe("d3WaffleChart GraphQL path", () => {
   beforeEach(() => {
     loadD3.mockResolvedValue(makeD3Stub());
 
@@ -97,7 +128,6 @@ describe("d3WaffleChart GraphQL path (Approach A)", () => {
     const element = createElement("c-d3-waffle-chart", {
       is: D3WaffleChart
     });
-    element.fetchMode = "graphql";
     element.objectApiName = "Opportunity";
     element.groupByField = "StageName";
     element.operation = "Count";
@@ -118,7 +148,6 @@ describe("d3WaffleChart GraphQL path (Approach A)", () => {
     const element = createElement("c-d3-waffle-chart", {
       is: D3WaffleChart
     });
-    element.fetchMode = "graphql";
     element.objectApiName = "Opportunity";
     element.groupByField = "StageName";
     element.operation = "Count";
@@ -134,7 +163,6 @@ describe("d3WaffleChart GraphQL path (Approach A)", () => {
     const element = createElement("c-d3-waffle-chart", {
       is: D3WaffleChart
     });
-    element.fetchMode = "graphql";
     element.objectApiName = "Opportunity";
     element.groupByField = "StageName";
     element.valueField = "Amount";
@@ -152,11 +180,38 @@ describe("d3WaffleChart GraphQL path (Approach A)", () => {
     ).toBeNull();
   });
 
+  it("keeps the loading spinner up while the wire is provisioned and awaiting its first emission", async () => {
+    const element = createElement("c-d3-waffle-chart", {
+      is: D3WaffleChart
+    });
+    element.objectApiName = "Opportunity";
+    element.groupByField = "StageName";
+    element.operation = "Count";
+    document.body.appendChild(element);
+
+    await flushPromises();
+    // Provisioned wire, no emission yet: spinner shows, no chart, no error —
+    // i.e. no no-data flash on the self-fetch path.
+    expect(
+      element.shadowRoot.querySelector("lightning-spinner")
+    ).not.toBeNull();
+    expect(element.shadowRoot.querySelector(".chart-container")).toBeNull();
+    expect(
+      element.shadowRoot.querySelector(".slds-text-color_error")
+    ).toBeNull();
+
+    graphql.emit(RECORD_RESPONSE);
+    await flushPromises();
+    await flushPromises();
+
+    expect(element.shadowRoot.querySelector("lightning-spinner")).toBeNull();
+    expect(element.shadowRoot.querySelector(".chart-container")).not.toBeNull();
+  });
+
   it("shows an error when the GraphQL wire emits errors", async () => {
     const element = createElement("c-d3-waffle-chart", {
       is: D3WaffleChart
     });
-    element.fetchMode = "graphql";
     element.objectApiName = "Opportunity";
     element.groupByField = "StageName";
     element.operation = "Count";
@@ -169,5 +224,126 @@ describe("d3WaffleChart GraphQL path (Approach A)", () => {
     expect(
       element.shadowRoot.querySelector(".slds-text-color_error")
     ).not.toBeNull();
+  });
+
+  it("uses a free-text graphqlQuery verbatim and aggregates the rows client-side", async () => {
+    const element = createElement("c-d3-waffle-chart", {
+      is: D3WaffleChart
+    });
+    element.graphqlQuery = FREE_TEXT_QUERY;
+    element.objectApiName = "Opportunity";
+    element.groupByField = "StageName";
+    element.valueField = "Amount";
+    element.operation = "Sum";
+    document.body.appendChild(element);
+
+    await flushPromises();
+    graphql.emit(FREE_TEXT_RESPONSE);
+    await flushPromises();
+    await flushPromises();
+
+    expect(element.shadowRoot.querySelector(".chart-container")).not.toBeNull();
+    expect(
+      element.shadowRoot.querySelector(".slds-text-color_error")
+    ).toBeNull();
+
+    // The admin's document is passed to gql verbatim; the structured aggregate
+    // builder (which emits a groupBy clause) is never used.
+    const queryStrings = gql.mock.results.map((r) => r.value);
+    expect(queryStrings.some((q) => q.includes(FREE_TEXT_QUERY))).toBe(true);
+    expect(queryStrings.every((q) => !q.includes("groupBy"))).toBe(true);
+  });
+
+  it("surfaces wire errors from a free-text graphqlQuery in the error state", async () => {
+    const element = createElement("c-d3-waffle-chart", {
+      is: D3WaffleChart
+    });
+    element.graphqlQuery = FREE_TEXT_QUERY;
+    element.objectApiName = "Opportunity";
+    element.groupByField = "StageName";
+    element.valueField = "Amount";
+    element.operation = "Sum";
+    document.body.appendChild(element);
+
+    await flushPromises();
+    graphql.emitErrors([{ message: "bad free-text query" }]);
+    await flushPromises();
+
+    expect(
+      element.shadowRoot.querySelector(".slds-text-color_error")
+    ).not.toBeNull();
+  });
+
+  it("names the missing field when groupByField is blank on a free-text query", async () => {
+    // A blank groupByField must not sneak an empty-string key into the
+    // projected field set. Undeduped/unfiltered, normalizeRecordsGeneric
+    // would set that "" key to null on every record, which makes
+    // validateFields see the (bogus) "" field as present and pass — the
+    // vaguer "No data after aggregation" (from aggregateData's own
+    // groupByField guard) surfaces instead of naming the real problem.
+    // Dropping the blank entry from the projection lets validateFields catch
+    // it directly and name the missing field.
+    const element = createElement("c-d3-waffle-chart", {
+      is: D3WaffleChart
+    });
+    element.graphqlQuery = FREE_TEXT_QUERY;
+    element.objectApiName = "Opportunity";
+    element.groupByField = "";
+    element.valueField = "Amount";
+    element.operation = "Sum";
+    document.body.appendChild(element);
+
+    await flushPromises();
+    graphql.emit(FREE_TEXT_RESPONSE);
+    await flushPromises();
+    await flushPromises();
+
+    const err = element.shadowRoot.querySelector(".slds-text-color_error");
+    expect(err).not.toBeNull();
+    expect(err.textContent).toMatch(/missing required fields/i);
+    expect(element.shadowRoot.querySelector(".chart-container")).toBeNull();
+  });
+
+  it("hints record-query-only when a free-text graphqlQuery yields no records", async () => {
+    // An aggregate-shaped payload has no uiapi.query, so the record normalizer
+    // finds nothing — the error should point the admin at the record-query contract.
+    const element = createElement("c-d3-waffle-chart", {
+      is: D3WaffleChart
+    });
+    element.graphqlQuery = FREE_TEXT_QUERY;
+    element.objectApiName = "Opportunity";
+    element.groupByField = "StageName";
+    element.valueField = "Amount";
+    element.operation = "Sum";
+    document.body.appendChild(element);
+
+    await flushPromises();
+    graphql.emit({ uiapi: { aggregate: { Opportunity: { edges: [] } } } });
+    await flushPromises();
+
+    const err = element.shadowRoot.querySelector(".slds-text-color_error");
+    expect(err).not.toBeNull();
+    expect(err.textContent).toMatch(/record query/i);
+  });
+
+  it("ignores a blank graphqlQuery and falls through to the structured builder", async () => {
+    const element = createElement("c-d3-waffle-chart", {
+      is: D3WaffleChart
+    });
+    element.graphqlQuery = "   ";
+    element.objectApiName = "Opportunity";
+    element.groupByField = "StageName";
+    element.valueField = "Amount";
+    element.operation = "Sum";
+    document.body.appendChild(element);
+
+    await flushPromises();
+    graphql.emit(AGG_RESPONSE);
+    await flushPromises();
+    await flushPromises();
+
+    expect(element.shadowRoot.querySelector(".chart-container")).not.toBeNull();
+    const queryStrings = gql.mock.results.map((r) => r.value);
+    expect(queryStrings.some((q) => q.includes("groupBy"))).toBe(true);
   });
 });

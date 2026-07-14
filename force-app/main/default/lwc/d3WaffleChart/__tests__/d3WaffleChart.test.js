@@ -3,31 +3,11 @@
 
 import { createElement } from "lwc";
 import D3WaffleChart from "c/d3WaffleChart";
-import { loadD3 } from "c/d3Lib";
-import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
-import getAggregatedData from "@salesforce/apex/D3ChartController.getAggregatedData";
+import { loadD3 } from "../d3Loader";
 
-// Mock d3Lib
-jest.mock("c/d3Lib", () => ({
+jest.mock("../d3Loader", () => ({
   loadD3: jest.fn()
 }));
-
-// Mock Apex
-jest.mock(
-  "@salesforce/apex/D3ChartController.executeQuery",
-  () => ({
-    default: jest.fn()
-  }),
-  { virtual: true }
-);
-
-jest.mock(
-  "@salesforce/apex/D3ChartController.getAggregatedData",
-  () => ({
-    default: jest.fn()
-  }),
-  { virtual: true }
-);
 
 // Mock NavigationMixin
 const mockNavigate = jest.fn();
@@ -45,44 +25,11 @@ jest.mock(
   { virtual: true }
 );
 
-// Mock chartUtils
-jest.mock("c/chartUtils", () => ({
-  formatNumber: jest.fn((v) => String(v)),
-  formatPercent: jest.fn((v) => (v * 100).toFixed(1) + "%"),
-  createTooltip: jest.fn().mockReturnValue({
-    show: jest.fn(),
-    hide: jest.fn(),
-    destroy: jest.fn()
-  }),
-  buildTooltipContent: jest.fn().mockReturnValue("<div>tooltip</div>"),
-  createResizeHandler: jest.fn().mockReturnValue({
-    observe: jest.fn(),
-    disconnect: jest.fn()
-  }),
-  createLayoutRetry: jest.fn().mockReturnValue({ cancel: jest.fn() }),
-  calculateDimensions: jest
-    .fn()
-    .mockReturnValue({ width: 300, height: 200, margins: {} }),
-  shouldUseCompactMode: jest.fn().mockReturnValue(false),
-  getContrastColor: jest.fn(() => "#ffffff"),
-  applySvgA11y: jest.fn()
-}));
+// ═══════════════════════════════════════════════════════════════
+// MOCK D3 FACTORY (waffle uses RECTS, not arcs) — the bundle-local
+// data.js/theme.js/utils.js/graphql.js modules run for real.
+// ═══════════════════════════════════════════════════════════════
 
-// Mock themeService — real createColorScale behaviour (label -> color Map, fallback colors[0])
-jest.mock("c/themeService", () => {
-  const PALETTE = ["#1589EE", "#FF9E2C", "#4BCA81", "#FF5D5D", "#AD7BFF"];
-  return {
-    DEFAULT_THEME: "Salesforce Standard",
-    getColors: jest.fn((theme, count) => PALETTE.slice(0, count)),
-    createColorScale: jest.fn((theme, domain) => {
-      const map = new Map();
-      domain.forEach((label, i) => map.set(label, PALETTE[i] || PALETTE[0]));
-      return (label) => map.get(label) || PALETTE[0];
-    })
-  };
-});
-
-// Factory function for isolated mock D3 instances (waffle uses RECTS, not arcs)
 const createMockD3 = () => {
   const d3 = {
     select: jest.fn(() => d3),
@@ -123,12 +70,6 @@ describe("c-d3-waffle-chart", () => {
     jest.clearAllMocks();
     mockD3 = createMockD3();
     loadD3.mockResolvedValue(mockD3);
-    executeQuery.mockResolvedValue(SAMPLE_DATA);
-    getAggregatedData.mockResolvedValue([
-      { label: "Closed Won", value: 500 },
-      { label: "Prospecting", value: 300 },
-      { label: "Qualification", value: 150 }
-    ]);
 
     consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
     consoleWarnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
@@ -173,6 +114,7 @@ describe("c-d3-waffle-chart", () => {
 
     document.body.appendChild(element);
     await flushPromises();
+    await flushPromises();
     return element;
   }
 
@@ -201,7 +143,6 @@ describe("c-d3-waffle-chart", () => {
 
     it("hides spinner after data loads", async () => {
       await createChart();
-      await flushPromises();
 
       const spinner = element.shadowRoot.querySelector("lightning-spinner");
       expect(spinner).toBeFalsy();
@@ -209,7 +150,6 @@ describe("c-d3-waffle-chart", () => {
 
     it("renders chart container when data is available", async () => {
       await createChart();
-      await flushPromises();
 
       const container = element.shadowRoot.querySelector(".chart-container");
       expect(container).toBeTruthy();
@@ -217,56 +157,67 @@ describe("c-d3-waffle-chart", () => {
   });
 
   // ═══════════════════════════════════════════════════════════════
-  // DATA SOURCE TESTS
+  // DATA HANDLING TESTS
   // ═══════════════════════════════════════════════════════════════
 
-  describe("data sources", () => {
+  describe("data handling", () => {
     it("uses recordCollection when provided", async () => {
       await createChart({ recordCollection: SAMPLE_DATA });
-      expect(executeQuery).not.toHaveBeenCalled();
+
+      const container = element.shadowRoot.querySelector(".chart-container");
+      expect(container).toBeTruthy();
+      expect(
+        element.shadowRoot.querySelector(".slds-text-color_error")
+      ).toBeFalsy();
     });
 
-    it("calls Apex when recordCollection is empty", async () => {
+    it("shows the no-data state when no source is configured", async () => {
       await createChart({
         recordCollection: [],
-        soqlQuery: "SELECT StageName, Amount FROM Opportunity"
+        objectApiName: "",
+        graphqlQuery: ""
       });
 
-      expect(executeQuery).toHaveBeenCalledWith({
-        queryString: "SELECT StageName, Amount FROM Opportunity"
-      });
-    });
-
-    it("shows error when no data source provided", async () => {
-      await createChart({
-        recordCollection: [],
-        soqlQuery: ""
-      });
-      await flushPromises();
-      await flushPromises();
-
-      const errorMessage = element.shadowRoot.querySelector(
+      // No recordCollection and no provisioned GraphQL query: neither an error
+      // nor a chart, just the empty state.
+      const errorElement = element.shadowRoot.querySelector(
         ".slds-text-color_error"
       );
-      expect(errorMessage).toBeTruthy();
+      expect(errorElement).toBeFalsy();
+      const container = element.shadowRoot.querySelector(".chart-container");
+      expect(container).toBeFalsy();
     });
 
-    it("shows error when SOQL query fails", async () => {
-      executeQuery.mockRejectedValue({
-        body: { message: "Invalid query" }
-      });
-
+    it("recordCollection takes priority over a free-text graphqlQuery", async () => {
       await createChart({
-        recordCollection: [],
-        soqlQuery: "SELECT Invalid FROM Object"
+        recordCollection: SAMPLE_DATA,
+        graphqlQuery:
+          "query { uiapi { query { Opportunity { edges { node { StageName { value } } } } } } }"
       });
-      await flushPromises();
-      await flushPromises();
 
-      const errorMessage = element.shadowRoot.querySelector(
+      // recordCollection wins: the chart renders from it and the un-emitted
+      // free-text wire never becomes the data source (no error state).
+      const container = element.shadowRoot.querySelector(".chart-container");
+      expect(container).toBeTruthy();
+      expect(
+        element.shadowRoot.querySelector(".slds-text-color_error")
+      ).toBeFalsy();
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════
+  // DATA EDGE CASES
+  // ═══════════════════════════════════════════════════════════════
+
+  describe("data edge cases", () => {
+    it("shows an error when records are missing the mapped fields", async () => {
+      const wrongFields = [{ WrongField: "A", WrongValue: 100 }];
+      await createChart({ recordCollection: wrongFields });
+
+      const errorElement = element.shadowRoot.querySelector(
         ".slds-text-color_error"
       );
-      expect(errorMessage).toBeTruthy();
+      expect(errorElement).toBeTruthy();
     });
   });
 
@@ -274,10 +225,9 @@ describe("c-d3-waffle-chart", () => {
   // AGGREGATION TESTS
   // ═══════════════════════════════════════════════════════════════
 
-  describe("aggregation", () => {
+  describe("aggregation operations", () => {
     it("accepts Sum operation", async () => {
       await createChart({ operation: "Sum" });
-      await flushPromises();
 
       const container = element.shadowRoot.querySelector(".chart-container");
       expect(container).toBeTruthy();
@@ -285,7 +235,6 @@ describe("c-d3-waffle-chart", () => {
 
     it("accepts Count operation", async () => {
       await createChart({ operation: "Count" });
-      await flushPromises();
 
       const container = element.shadowRoot.querySelector(".chart-container");
       expect(container).toBeTruthy();
@@ -293,7 +242,6 @@ describe("c-d3-waffle-chart", () => {
 
     it("accepts Average operation", async () => {
       await createChart({ operation: "Average" });
-      await flushPromises();
 
       const container = element.shadowRoot.querySelector(".chart-container");
       expect(container).toBeTruthy();
@@ -307,29 +255,21 @@ describe("c-d3-waffle-chart", () => {
   describe("themes", () => {
     it("renders with Salesforce Standard theme", async () => {
       await createChart({ theme: "Salesforce Standard" });
-      await flushPromises();
-
       expect(element.shadowRoot.querySelector(".chart-container")).toBeTruthy();
     });
 
     it("renders with Warm theme", async () => {
       await createChart({ theme: "Warm" });
-      await flushPromises();
-
       expect(element.shadowRoot.querySelector(".chart-container")).toBeTruthy();
     });
 
     it("renders with Cool theme", async () => {
       await createChart({ theme: "Cool" });
-      await flushPromises();
-
       expect(element.shadowRoot.querySelector(".chart-container")).toBeTruthy();
     });
 
     it("renders with Vibrant theme", async () => {
       await createChart({ theme: "Vibrant" });
-      await flushPromises();
-
       expect(element.shadowRoot.querySelector(".chart-container")).toBeTruthy();
     });
   });
@@ -341,7 +281,6 @@ describe("c-d3-waffle-chart", () => {
   describe("configuration", () => {
     it("applies custom height", async () => {
       await createChart({ height: 400 });
-      await flushPromises();
 
       const container = element.shadowRoot.querySelector(".chart-container");
       expect(container.getAttribute("style")).toContain("400px");
@@ -351,7 +290,6 @@ describe("c-d3-waffle-chart", () => {
       await createChart({
         advancedConfig: '{"showCellLabels": true}'
       });
-      await flushPromises();
 
       expect(element.shadowRoot.querySelector(".chart-container")).toBeTruthy();
     });
@@ -360,78 +298,6 @@ describe("c-d3-waffle-chart", () => {
       await createChart({
         advancedConfig: "not valid json"
       });
-      await flushPromises();
-
-      expect(element.shadowRoot.querySelector(".chart-container")).toBeTruthy();
-    });
-  });
-
-  // ═══════════════════════════════════════════════════════════════
-  // RESPONSIVE TESTS
-  // ═══════════════════════════════════════════════════════════════
-
-  describe("responsive behavior", () => {
-    it("creates resize handler for responsive reflow", async () => {
-      const { createResizeHandler } = require("c/chartUtils");
-      await createChart();
-      await flushPromises();
-
-      expect(createResizeHandler).toHaveBeenCalled();
-      const handler = createResizeHandler.mock.results[0].value;
-      expect(handler.observe).toHaveBeenCalled();
-    });
-
-    it("disconnects resize handler on component removal", async () => {
-      const { createResizeHandler } = require("c/chartUtils");
-      const mockDisconnect = jest.fn();
-      createResizeHandler.mockReturnValue({
-        observe: jest.fn(),
-        disconnect: mockDisconnect
-      });
-
-      await createChart();
-      await flushPromises();
-
-      document.body.removeChild(element);
-
-      expect(mockDisconnect).toHaveBeenCalled();
-    });
-
-    it("re-renders on resize callback via createResizeHandler", async () => {
-      const { createResizeHandler } = require("c/chartUtils");
-      let capturedCallback;
-
-      createResizeHandler.mockImplementation((container, callback) => {
-        capturedCallback = callback;
-        return {
-          observe: jest.fn(),
-          disconnect: jest.fn()
-        };
-      });
-
-      await createChart();
-      await flushPromises();
-
-      expect(capturedCallback).toBeDefined();
-      mockD3.select.mockClear();
-
-      capturedCallback({ width: 500 });
-
-      expect(mockD3.select).toHaveBeenCalled();
-    });
-
-    it("skips rendering when container has zero width", async () => {
-      Element.prototype.getBoundingClientRect = jest.fn(() => ({
-        width: 0,
-        height: 300,
-        top: 0,
-        left: 0,
-        bottom: 300,
-        right: 0
-      }));
-
-      await createChart();
-      await flushPromises();
 
       expect(element.shadowRoot.querySelector(".chart-container")).toBeTruthy();
     });
@@ -447,7 +313,6 @@ describe("c-d3-waffle-chart", () => {
         objectApiName: "Opportunity",
         filterField: "StageName"
       });
-      await flushPromises();
 
       const onCalls = mockD3.on.mock.calls;
       const clickCalls = onCalls.filter((c) => c[0] === "click");
@@ -456,7 +321,6 @@ describe("c-d3-waffle-chart", () => {
 
     it("registers mouseenter handler on cells", async () => {
       await createChart();
-      await flushPromises();
 
       const onCalls = mockD3.on.mock.calls;
       const mouseenterCalls = onCalls.filter((c) => c[0] === "mouseenter");
@@ -465,7 +329,6 @@ describe("c-d3-waffle-chart", () => {
 
     it("registers mouseleave handler on cells", async () => {
       await createChart();
-      await flushPromises();
 
       const onCalls = mockD3.on.mock.calls;
       const mouseleaveCalls = onCalls.filter((c) => c[0] === "mouseleave");
@@ -480,7 +343,6 @@ describe("c-d3-waffle-chart", () => {
   describe("rendering details", () => {
     it("removes existing SVG before re-render", async () => {
       await createChart();
-      await flushPromises();
 
       expect(mockD3.select).toHaveBeenCalled();
       expect(mockD3.remove).toHaveBeenCalled();
@@ -488,7 +350,6 @@ describe("c-d3-waffle-chart", () => {
 
     it("appends an svg element", async () => {
       await createChart();
-      await flushPromises();
 
       const appendCalls = mockD3.append.mock.calls.map((c) => c[0]);
       expect(appendCalls).toContain("svg");
@@ -496,7 +357,6 @@ describe("c-d3-waffle-chart", () => {
 
     it("binds exactly 100 cells to d3.data()", async () => {
       await createChart();
-      await flushPromises();
 
       // renderChart builds a flat array of 100 cell descriptors and binds it
       const dataCalls = mockD3.data.mock.calls;
@@ -508,26 +368,16 @@ describe("c-d3-waffle-chart", () => {
 
     it("appends rect elements for cells (not arcs)", async () => {
       await createChart();
-      await flushPromises();
 
       const appendCalls = mockD3.append.mock.calls.map((c) => c[0]);
       expect(appendCalls).toContain("rect");
     });
 
     it("allocates filled cell counts matching rounded proportions", async () => {
-      // Server returns Closed Won=500, Prospecting=300, Qualification=150 (total 950)
+      // recordCollection (Sum): Closed Won=500, Prospecting=300, Qualification=150 (total 950)
       // round(500/950*100)=53, round(300/950*100)=32, round(150/950*100)=16 => 101,
       // descending allocator caps total at 100: last category trimmed to 15
-      await createChart({
-        recordCollection: [],
-        soqlQuery: "",
-        objectApiName: "Opportunity",
-        groupByField: "StageName",
-        valueField: "Amount",
-        operation: "Sum"
-      });
-      await flushPromises();
-      await flushPromises();
+      await createChart({ recordCollection: SAMPLE_DATA, operation: "Sum" });
 
       const dataCalls = mockD3.data.mock.calls;
       const cellBinding = dataCalls.find(
@@ -546,17 +396,8 @@ describe("c-d3-waffle-chart", () => {
       expect(counts.Qualification).toBe(15);
     });
 
-    it("assigns a color to each cell from the category color scale", async () => {
-      const { createColorScale } = require("c/themeService");
-
+    it("assigns each cell a color string from the category color scale", async () => {
       await createChart();
-      await flushPromises();
-
-      // createColorScale called with the full category domain (Count path:
-      // Prospecting=2, then the tied 1-count categories in insertion order)
-      expect(createColorScale).toHaveBeenCalled();
-      const domainArg = createColorScale.mock.calls[0][1];
-      expect(domainArg).toEqual(["Prospecting", "Qualification", "Closed Won"]);
 
       const dataCalls = mockD3.data.mock.calls;
       const cellBinding = dataCalls.find(
@@ -571,99 +412,169 @@ describe("c-d3-waffle-chart", () => {
   });
 
   // ═══════════════════════════════════════════════════════════════
-  // SERVER AGGREGATION TESTS
-  // ═══════════════════════════════════════════════════════════════
-
-  describe("server aggregation", () => {
-    it("calls getAggregatedData when objectApiName, groupByField, valueField, and operation are set", async () => {
-      await createChart({
-        recordCollection: [],
-        soqlQuery: "",
-        objectApiName: "Opportunity",
-        groupByField: "StageName",
-        valueField: "Amount",
-        operation: "Count"
-      });
-
-      await flushPromises();
-
-      expect(getAggregatedData).toHaveBeenCalledWith({
-        objectName: "Opportunity",
-        groupByField: "StageName",
-        valueField: "Amount",
-        operation: "Count",
-        filterClause: null
-      });
-      expect(executeQuery).not.toHaveBeenCalled();
-    });
-
-    it("shows error when getAggregatedData fails", async () => {
-      getAggregatedData.mockRejectedValue({
-        body: { message: "Aggregation failed" }
-      });
-
-      await createChart({
-        recordCollection: [],
-        soqlQuery: "",
-        objectApiName: "Opportunity",
-        groupByField: "StageName",
-        valueField: "Amount",
-        operation: "Count"
-      });
-
-      await flushPromises();
-
-      const errorElement = element.shadowRoot.querySelector(
-        ".slds-text-color_error"
-      );
-      expect(errorElement).toBeTruthy();
-    });
-
-    it("prefers recordCollection over server aggregation", async () => {
-      await createChart({
-        recordCollection: SAMPLE_DATA,
-        objectApiName: "Opportunity",
-        groupByField: "StageName",
-        valueField: "Amount",
-        operation: "Count"
-      });
-
-      await flushPromises();
-
-      expect(getAggregatedData).not.toHaveBeenCalled();
-      expect(executeQuery).not.toHaveBeenCalled();
-    });
-  });
-
-  // ═══════════════════════════════════════════════════════════════
   // GETTERS
   // ═══════════════════════════════════════════════════════════════
 
   describe("getters", () => {
     it("containerStyle reflects configured height", async () => {
       await createChart({ height: 350 });
-      await flushPromises();
 
       const container = element.shadowRoot.querySelector(".chart-container");
       expect(container.getAttribute("style")).toContain("350px");
     });
+  });
 
-    it("hasData is false and no-data state shows when no data", async () => {
-      getAggregatedData.mockResolvedValue([]);
-      await createChart({
-        recordCollection: [],
-        soqlQuery: "",
-        objectApiName: "Opportunity",
-        groupByField: "StageName",
-        valueField: "Amount",
-        operation: "Count"
+  // ═══════════════════════════════════════════════════════════════
+  // RESPONSIVE BEHAVIOR / RENDER-ORCHESTRATION HARDENING (§4.3)
+  // ═══════════════════════════════════════════════════════════════
+
+  describe("responsive behavior", () => {
+    it("sets up a resize observer", async () => {
+      await createChart();
+      expect(global.ResizeObserver).toHaveBeenCalled();
+    });
+
+    it("handles zero container width gracefully", async () => {
+      Element.prototype.getBoundingClientRect = jest.fn(() => ({
+        width: 0,
+        height: 300,
+        top: 0,
+        left: 0,
+        bottom: 300,
+        right: 0
+      }));
+
+      await createChart();
+      expect(element.shadowRoot.querySelector(".chart-container")).toBeTruthy();
+    });
+
+    it("renders once the container becomes measurable via the resize observer", async () => {
+      // Container starts at zero width; capture the ResizeObserver callback.
+      let roCallback = null;
+      global.ResizeObserver = jest.fn().mockImplementation((cb) => {
+        roCallback = cb;
+        return {
+          observe: jest.fn(),
+          unobserve: jest.fn(),
+          disconnect: jest.fn()
+        };
       });
+      Element.prototype.getBoundingClientRect = jest.fn(() => ({
+        width: 0,
+        height: 300,
+        top: 0,
+        left: 0,
+        bottom: 300,
+        right: 0
+      }));
+
+      await createChart();
+
+      // Zero width: nothing drawn yet, but the observer must already be
+      // registered so a later measurement can render (no fixed give-up window).
+      expect(mockD3.append.mock.calls.map((c) => c[0])).not.toContain("svg");
+      expect(roCallback).toBeTruthy();
+
+      // The container becomes measurable; the observer fires the render.
+      jest.useFakeTimers();
+      roCallback([{ contentRect: { width: 400, height: 300 } }]);
+      jest.advanceTimersByTime(250);
+      jest.useRealTimers();
       await flushPromises();
+
+      expect(mockD3.append.mock.calls.map((c) => c[0])).toContain("svg");
+    });
+
+    it("does not latch an empty shell when first measured below the chart margins, and recovers when it grows", async () => {
+      // waffle's padding floors at 10px per side (Math.max(10, round(cw*0.04)))
+      // for any containerWidth under 250, so the left+right margin sum is a
+      // flat 20px in that range. A 10px width (nonzero) makes renderChart bail
+      // before appending the svg. The observer must draw the chart once the
+      // container grows past the margins — not leave a permanent empty shell.
+      let roCallback = null;
+      global.ResizeObserver = jest.fn().mockImplementation((cb) => {
+        roCallback = cb;
+        return {
+          observe: jest.fn(),
+          unobserve: jest.fn(),
+          disconnect: jest.fn()
+        };
+      });
+      Element.prototype.getBoundingClientRect = jest.fn(() => ({
+        width: 10,
+        height: 300,
+        top: 0,
+        left: 0,
+        bottom: 300,
+        right: 10
+      }));
+
+      await createChart();
+
+      // 10px is below the 20px horizontal margin: no svg drawn yet.
+      expect(mockD3.append.mock.calls.map((c) => c[0])).not.toContain("svg");
+      expect(roCallback).toBeTruthy();
+
+      jest.useFakeTimers();
+      roCallback([{ contentRect: { width: 400, height: 300 } }]);
+      jest.advanceTimersByTime(250);
+      jest.useRealTimers();
+      await flushPromises();
+
+      expect(mockD3.append.mock.calls.map((c) => c[0])).toContain("svg");
+    });
+
+    it("creates exactly one resize observer across the render lifecycle", async () => {
+      await createChart();
+
+      // A single unified observer drives both the first render and re-renders.
+      expect(global.ResizeObserver).toHaveBeenCalledTimes(1);
+    });
+
+    it("disconnects resize handler on component removal", async () => {
+      const mockDisconnect = jest.fn();
+      global.ResizeObserver = jest.fn().mockImplementation(() => ({
+        observe: jest.fn(),
+        unobserve: jest.fn(),
+        disconnect: mockDisconnect
+      }));
+
+      await createChart();
+      document.body.removeChild(element);
+
+      expect(mockDisconnect).toHaveBeenCalled();
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════
+  // ERROR RECOVERY TESTS
+  // ═══════════════════════════════════════════════════════════════
+
+  describe("error recovery", () => {
+    it("shows error when D3 fails to load", async () => {
+      loadD3.mockRejectedValue(new Error("D3 load failed"));
+
+      await createChart();
 
       const errorElement = element.shadowRoot.querySelector(
         ".slds-text-color_error"
       );
       expect(errorElement).toBeTruthy();
+    });
+
+    it("surfaces an exception thrown during renderChart to the error state", async () => {
+      // Force renderChart to throw mid-flight; it must not die silently.
+      mockD3.select = jest.fn(() => {
+        throw new Error("render boom");
+      });
+
+      await createChart();
+
+      const errorElement = element.shadowRoot.querySelector(
+        ".slds-text-color_error"
+      );
+      expect(errorElement).toBeTruthy();
+      expect(errorElement.textContent).toContain("render boom");
     });
   });
 
@@ -672,21 +583,18 @@ describe("c-d3-waffle-chart", () => {
   // ═══════════════════════════════════════════════════════════════
 
   describe("cleanup", () => {
-    it("destroys tooltip on disconnect", async () => {
-      const { createTooltip } = require("c/chartUtils");
-      const mockDestroy = jest.fn();
-      createTooltip.mockReturnValue({
-        show: jest.fn(),
-        hide: jest.fn(),
-        destroy: mockDestroy
-      });
-
+    it("destroys the tooltip element on disconnect", async () => {
       await createChart();
-      await flushPromises();
+
+      const tooltip = element.shadowRoot
+        .querySelector(".chart-container")
+        .querySelector(".slds-popover_tooltip");
+      expect(tooltip).toBeTruthy();
+      expect(tooltip.parentNode).toBeTruthy();
 
       document.body.removeChild(element);
 
-      expect(mockDestroy).toHaveBeenCalled();
+      expect(tooltip.parentNode).toBeFalsy();
     });
   });
 });
