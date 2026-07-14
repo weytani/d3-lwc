@@ -1,26 +1,17 @@
-// ABOUTME: Integration tests for d3FunnelChart verifying real service pipelines (dataService, themeService, chartUtils).
-// ABOUTME: Only D3, Apex, NavigationMixin, and ShowToastEvent are mocked; all utility services use real implementations.
+// ABOUTME: Integration tests for d3FunnelChart verifying real bundle-local pipelines (data, theme, utils, graphql).
+// ABOUTME: Only D3, GraphQL, and NavigationMixin are mocked; aggregation, color, and a11y logic run for real.
 
 import { createElement } from "lwc";
 import D3FunnelChart from "c/d3FunnelChart";
-import { loadD3 } from "c/d3Lib";
-import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
+import { loadD3 } from "../d3Loader";
 
 // ═══════════════════════════════════════════════════════════════
-// MOCKS — Only external dependencies, NOT real utility services
+// MOCKS — Only external dependencies, NOT real bundle-local pipelines
 // ═══════════════════════════════════════════════════════════════
 
-jest.mock("c/d3Lib", () => ({
+jest.mock("../d3Loader", () => ({
   loadD3: jest.fn()
 }));
-
-jest.mock(
-  "@salesforce/apex/D3ChartController.executeQuery",
-  () => ({
-    default: jest.fn()
-  }),
-  { virtual: true }
-);
 
 jest.mock(
   "lightning/platformShowToastEvent",
@@ -124,7 +115,6 @@ describe("c-d3-funnel-chart integration", () => {
     jest.clearAllMocks();
     mockD3 = createMockD3();
     loadD3.mockResolvedValue(mockD3);
-    executeQuery.mockResolvedValue(SAMPLE_DATA);
 
     consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
     consoleWarnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
@@ -185,6 +175,78 @@ describe("c-d3-funnel-chart integration", () => {
 
       const fillFn = fillCalls[0][1];
       expect(fillFn({}, 0)).toBe("#FF6B6B");
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════
+  // GRAPHQL WIRE INTEGRATION
+  // ═══════════════════════════════════════════════════════════════
+
+  describe("graphql wire integration", () => {
+    it("free-text graphqlQuery Sum aggregates the wire rows through the real data.js pipeline", async () => {
+      const { graphql } = require("lightning/graphql");
+
+      const element = createElement("c-d3-funnel-chart", {
+        is: D3FunnelChart
+      });
+      Object.assign(element, {
+        graphqlQuery:
+          "query { uiapi { query { Opportunity { edges { node { StageName { value } Amount { value } } } } } } }",
+        objectApiName: "Opportunity",
+        groupByField: "StageName",
+        valueField: "Amount",
+        operation: "Sum"
+      });
+      document.body.appendChild(element);
+
+      await flushPromises();
+      graphql.emit({
+        uiapi: {
+          query: {
+            Opportunity: {
+              edges: [
+                {
+                  node: {
+                    StageName: { value: "Prospecting" },
+                    Amount: { value: 100 }
+                  }
+                },
+                {
+                  node: {
+                    StageName: { value: "Prospecting" },
+                    Amount: { value: 200 }
+                  }
+                },
+                {
+                  node: {
+                    StageName: { value: "Closed Won" },
+                    Amount: { value: 500 }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      });
+      await flushPromises();
+      await flushPromises();
+
+      const dataCalls = mockD3.data.mock.calls;
+      const chartDataCall = dataCalls.find(
+        (call) =>
+          Array.isArray(call[0]) && call[0].length > 0 && call[0][0].label
+      );
+      expect(chartDataCall).toBeTruthy();
+      // Sum: Closed Won=500, Prospecting=300; sorted descending by value for the funnel.
+      expect(chartDataCall[0]).toEqual([
+        { label: "Closed Won", value: 500 },
+        { label: "Prospecting", value: 300 }
+      ]);
+
+      const errorEl = element.shadowRoot.querySelector(
+        ".slds-text-color_error"
+      );
+      expect(errorEl).toBeFalsy();
     });
   });
 
