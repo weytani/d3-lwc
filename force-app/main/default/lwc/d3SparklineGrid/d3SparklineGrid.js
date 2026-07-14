@@ -1,27 +1,20 @@
 // ABOUTME: D3 Sparkline Grid Lightning Web Component.
 // ABOUTME: Displays small multiples inline mini-charts for entity comparison with monthly aggregation.
 import { LightningElement, api, track, wire } from "lwc";
-import { loadD3 } from "c/d3Lib";
-import {
-  prepareData,
-  OPERATIONS,
-  CHART_LIMITS,
-  applyFilterClause
-} from "c/dataService";
-import { getColors, DEFAULT_THEME } from "c/themeService";
+import { loadD3 } from "./d3Loader";
+import { prepareData, OPERATIONS, CHART_LIMITS } from "./data";
+import { getColors, DEFAULT_THEME } from "./theme";
 import {
   formatNumber,
   truncateLabel,
   createTooltip,
   createResizeHandler,
-  createLayoutRetry,
   buildTooltipContent,
   applySvgA11y
-} from "c/chartUtils";
+} from "./utils";
 import { NavigationMixin } from "lightning/navigation";
-import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
 import { gql, graphql } from "lightning/graphql";
-import { buildRecordQuery, normalizeRecordsGeneric } from "c/graphqlService";
+import { buildRecordQuery, normalizeRecordsGeneric } from "./graphql";
 
 export default class D3SparklineGrid extends NavigationMixin(LightningElement) {
   // ===============================================================
@@ -30,10 +23,6 @@ export default class D3SparklineGrid extends NavigationMixin(LightningElement) {
 
   /** Data collection from Flow or parent component */
   @api recordCollection = [];
-
-  /** SOQL query string (used if recordCollection is empty) */
-  @api soqlQuery =
-    "SELECT Type, CloseDate, Amount FROM Opportunity ORDER BY CloseDate";
 
   /** Field to group entities by (e.g., Type, Owner) */
   @api entityField = "";
@@ -56,20 +45,21 @@ export default class D3SparklineGrid extends NavigationMixin(LightningElement) {
   /** Advanced configuration JSON */
   @api advancedConfig = "{}";
 
-  /** Object API name for drill-down navigation */
+  /** Object API name for drill-down navigation and structured GraphQL query building */
   @api objectApiName = "";
 
-  /** Filter field for drill-down */
+  /** Filter field for drill-down (defaults to entityField) */
   @api filterField = "";
-
-  /** Optional WHERE clause fragment */
-  @api filterClause = "";
 
   /** Maximum records to process (overrides default limit) */
   @api recordLimit;
 
-  /** Fetch-mode selector: "auto" (default, existing priority order), "apex", or "graphql". */
-  @api fetchMode = "auto";
+  /**
+   * Free-text UI API GraphQL document. When non-blank it overrides the
+   * structured record-query builder as the wire's data source; the returned
+   * records are grouped by entityField and bucketed by month client-side.
+   */
+  @api graphqlQuery = "";
 
   /** Structured filter for the GraphQL path: { field, operator, value }. */
   @api graphqlFilter;
@@ -90,7 +80,6 @@ export default class D3SparklineGrid extends NavigationMixin(LightningElement) {
   tooltip = null;
   resizeHandler = null;
   chartRendered = false;
-  _layoutRetry = null;
   _config = {};
   _configParsed = false;
 
@@ -127,19 +116,34 @@ export default class D3SparklineGrid extends NavigationMixin(LightningElement) {
   }
 
   // ===============================================================
-  // GRAPHQL SELF-FETCH PATH (Approach A — additive, CT-REC)
+  // GRAPHQL SELF-FETCH PATH
   // ===============================================================
+
+  /** True when an admin has supplied a non-blank free-text GraphQL document. */
+  get hasFreeTextQuery() {
+    return !!(this.graphqlQuery && this.graphqlQuery.trim());
+  }
 
   /**
    * Reactive GraphQL query for the self-fetch path. Returns undefined (so the
-   * wire is skipped) unless fetchMode is "graphql" and objectApiName/entityField
-   * /dateField are set. Sparkline grid has no server-side aggregate: it always
-   * fetches raw records for entityField, dateField, and (if set) valueField,
-   * then feeds the existing recordCollection processing path
-   * (processEntityData), same as recordCollection/soqlQuery.
+   * wire is skipped) when recordCollection is the source or required config is
+   * missing. The grid has no server-side aggregate: the structured path fetches
+   * raw records (entityField, dateField, and, when set, valueField), and a
+   * non-blank graphqlQuery overrides it with the admin's document. Both feed the
+   * same per-entity monthly bucketing (processEntityData).
    */
   get gqlQuery() {
-    if (this.fetchMode !== "graphql") return undefined;
+    // recordCollection wins: skip the wire so it is never the data source.
+    if (this.recordCollection && this.recordCollection.length > 0) {
+      return undefined;
+    }
+    // Admin free-text override: pass the document straight to the wire.
+    if (this.hasFreeTextQuery) {
+      return gql`
+        ${this.graphqlQuery}
+      `;
+    }
+    // Structured builder path: raw record query (no server-side aggregate).
     if (!this.objectApiName || !this.entityField || !this.dateField) {
       return undefined;
     }
@@ -167,7 +171,8 @@ export default class D3SparklineGrid extends NavigationMixin(LightningElement) {
 
   @wire(graphql, { query: "$gqlQuery" })
   wiredRecords({ data, errors }) {
-    if (this.fetchMode !== "graphql") return;
+    // recordCollection is handled synchronously in loadData; ignore the wire.
+    if (this.recordCollection && this.recordCollection.length > 0) return;
     if (errors) {
       this.error = this._formatGqlErrors(errors);
       this.isLoading = false;
@@ -184,13 +189,18 @@ export default class D3SparklineGrid extends NavigationMixin(LightningElement) {
         objectApiName: this.objectApiName,
         fields
       });
-      this.processEntityData(records);
-      if (this.entityData.length === 0) {
-        this.error = "No data after processing";
-      } else {
-        this.error = null;
-        this.chartRendered = false; // force renderedCallback to re-initialize the SVG
+      if (!records.length) {
+        // No rows normalized. On the free-text path the pasted document must be
+        // a UI API record query (uiapi.query); otherwise it is simply no data.
+        this.error = this.hasFreeTextQuery
+          ? "The GraphQL Query returned no records. It must be a UI API record query (uiapi.query)."
+          : "No data after processing";
+        this.isLoading = false;
+        return;
       }
+      this._processRawData(records);
+      this.error = null;
+      this.chartRendered = false; // force renderedCallback to re-initialize the SVG
     } catch (e) {
       this.error = e.message;
     }
@@ -214,32 +224,27 @@ export default class D3SparklineGrid extends NavigationMixin(LightningElement) {
       this.error = e.message || "Failed to initialize chart";
       console.error("D3SparklineGrid initialization error:", e);
     } finally {
-      this.isLoading = false;
+      // Keep the spinner up while a GraphQL query is provisioned but has not yet
+      // emitted data or an error — the wire handler clears isLoading on arrival.
+      // This avoids a no-data flash on the self-fetch path. When no wire is
+      // provisioned (recordCollection resolved it, or nothing is configured) we
+      // stop loading here.
+      if (this.hasData || this.error || !this.gqlQuery) {
+        this.isLoading = false;
+      }
     }
   }
 
   renderedCallback() {
     if (this.showChart && !this.chartRendered) {
+      // initializeChart installs a lifetime ResizeObserver that draws the grid
+      // on the first measurable width and re-draws on resize — so it is safe to
+      // mark initialization done even if the container is not measurable yet.
       this.chartRendered = this.initializeChart();
-      if (!this.chartRendered && !this._layoutRetry) {
-        const container = this.template.querySelector(".chart-container");
-        if (container) {
-          this._layoutRetry = createLayoutRetry(container, () => {
-            this._layoutRetry = null;
-            if (!this.chartRendered) {
-              this.chartRendered = this.initializeChart();
-            }
-          });
-        }
-      }
     }
   }
 
   disconnectedCallback() {
-    if (this._layoutRetry) {
-      this._layoutRetry.cancel();
-      this._layoutRetry = null;
-    }
     this.cleanup();
   }
 
@@ -248,30 +253,20 @@ export default class D3SparklineGrid extends NavigationMixin(LightningElement) {
   // ===============================================================
 
   async loadData() {
-    // GraphQL path is handled reactively by the @wire(graphql) — nothing to do here.
-    if (this.fetchMode === "graphql") {
-      return;
-    }
-
-    let rawData = [];
-
+    // recordCollection is grouped + bucketed client-side here. Otherwise the
+    // GraphQL wire (structured builder or a free-text graphqlQuery) provides the
+    // data reactively and there is nothing to fetch synchronously.
     if (this.recordCollection && this.recordCollection.length > 0) {
-      rawData = [...this.recordCollection];
-    } else if (this.soqlQuery) {
-      try {
-        rawData = await executeQuery({
-          queryString: applyFilterClause(this.soqlQuery, this.filterClause)
-        });
-      } catch (e) {
-        throw new Error(`SOQL Error: ${e.body?.message || e.message}`);
-      }
-    } else {
-      throw new Error(
-        "No data source provided. Set recordCollection or soqlQuery."
-      );
+      this._processRawData([...this.recordCollection]);
     }
+  }
 
-    // Required fields
+  /**
+   * Validates and truncates raw records, then groups them into per-entity
+   * sparkline series. Shared by the recordCollection path and the GraphQL
+   * structured / free-text paths.
+   */
+  _processRawData(rawData) {
     const requiredFields = [this.entityField, this.dateField];
     if (this.operation !== OPERATIONS.COUNT) {
       requiredFields.push(this.valueField);
@@ -322,8 +317,13 @@ export default class D3SparklineGrid extends NavigationMixin(LightningElement) {
         const date = new Date(dateVal);
         if (isNaN(date.getTime())) return;
 
-        // Bucket key: YYYY-MM
-        const bucketKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+        // Bucket key: YYYY-MM. UTC getters, not local: a date-only field
+        // (e.g. CloseDate) arrives as "2024-01-01" and is parsed as UTC
+        // midnight per the ECMAScript date-string spec. Reading it back with
+        // local getters rolls it back a calendar day in any negative-UTC-offset
+        // timezone (all of the Americas), silently bucketing the 1st of the
+        // month into the previous month and corrupting the sum.
+        const bucketKey = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
 
         if (!monthBuckets.has(bucketKey)) {
           monthBuckets.set(bucketKey, { sum: 0, count: 0 });
@@ -353,9 +353,11 @@ export default class D3SparklineGrid extends NavigationMixin(LightningElement) {
             value = bucket.count;
         }
 
-        // Parse bucket key back to date (first day of month)
+        // Parse bucket key back to date (first day of month), in UTC to match
+        // the UTC bucket key above — a local-time reconstruction here would
+        // reintroduce the same off-by-one-day/month drift downstream.
         const [year, month] = bucketKey.split("-").map(Number);
-        const date = new Date(year, month - 1, 1);
+        const date = new Date(Date.UTC(year, month - 1, 1));
 
         sparklineData.push({ date, value });
       });
@@ -381,29 +383,56 @@ export default class D3SparklineGrid extends NavigationMixin(LightningElement) {
   // ===============================================================
 
   /**
-   * Initializes the chart SVG, tooltip, and resize observer.
-   * @returns {boolean} true if the chart was successfully initialized
+   * Initializes the tooltip and a single lifetime ResizeObserver, then attempts
+   * an immediate render. The observer drives both the first render (whenever the
+   * container becomes measurable — there is no fixed give-up window) and every
+   * subsequent resize, so a container that is unmeasurable or narrower than the
+   * grid's horizontal chrome at boot still renders the moment it gains usable width.
+   * @returns {boolean} true once the tooltip + observer are installed
    */
   initializeChart() {
     const container = this.template.querySelector(".chart-container");
     if (!container) return false;
 
-    const { width } = container.getBoundingClientRect();
-    if (width === 0) return false;
+    // Create the tooltip once.
+    if (!this.tooltip) {
+      this.tooltip = createTooltip(container);
+    }
 
-    this.tooltip = createTooltip(container);
-    this.renderChart(width);
-
-    this.resizeHandler = createResizeHandler(
-      container,
-      ({ width: newWidth }) => {
-        if (newWidth > 0) {
-          this.renderChart(newWidth);
+    // Install the single observer once; it renders on every measurable width.
+    if (!this.resizeHandler) {
+      this.resizeHandler = createResizeHandler(
+        container,
+        ({ width: newWidth }) => {
+          if (newWidth > 0) {
+            this._safeRenderChart(newWidth);
+          }
         }
-      }
-    );
-    this.resizeHandler.observe();
+      );
+      this.resizeHandler.observe();
+    }
+
+    // Render immediately when the container is already measured (the common,
+    // warm-cache path); otherwise the observer renders once it has a width.
+    const { width } = container.getBoundingClientRect();
+    if (width > 0) {
+      this._safeRenderChart(width);
+    }
+
     return true;
+  }
+
+  /**
+   * Renders the grid, surfacing any unexpected exception to the component error
+   * state instead of dying silently mid-render.
+   */
+  _safeRenderChart(containerWidth) {
+    try {
+      this.renderChart(containerWidth);
+    } catch (e) {
+      this.error = e.message || "Failed to render chart";
+      this.isLoading = false;
+    }
   }
 
   renderChart(containerWidth) {
@@ -697,9 +726,13 @@ export default class D3SparklineGrid extends NavigationMixin(LightningElement) {
   _showPointTooltip(event, entityName, d) {
     if (!this.tooltip) return;
 
+    // timeZone: "UTC" matches the UTC bucket date built in processEntityData —
+    // formatting it in the host's local zone would re-shift the displayed
+    // month back by a day in negative-UTC-offset timezones.
     const monthLabel = d.date.toLocaleString("default", {
       month: "short",
-      year: "numeric"
+      year: "numeric",
+      timeZone: "UTC"
     });
     const content = buildTooltipContent(entityName, d.value, {
       prefix: `${monthLabel}: `
