@@ -291,6 +291,38 @@ describe("d3DonutChart GraphQL path", () => {
     ).not.toBeNull();
   });
 
+  it("reports a missing-field error (not a generic aggregation failure) when a free-text query is used with a blank groupByField", async () => {
+    // Misconfiguration: graphqlQuery is set but groupByField was left blank.
+    // The gqlQuery getter's free-text branch returns before the
+    // !groupByField gate, so without the dedup+filter, fields would include
+    // "" — normalizeRecordsGeneric would project a "" key onto every record,
+    // and validateFields would see "" in the sample and accept it as present.
+    // (aggregateData's own `!groupByField` guard still catches this and
+    // errors either way, so both the old and new code show *an* error here —
+    // the fix's effect is the *reason*: without the dedup+filter,
+    // validateFields wrongly accepts the blank mapping and the failure only
+    // surfaces two steps later as a generic "No data after aggregation".
+    // With the blank mapping dropped from the projection, validateFields
+    // itself reports it missing, immediately and specifically.)
+    const element = createElement("c-d3-donut-chart", { is: D3DonutChart });
+    element.graphqlQuery = FREE_TEXT_QUERY;
+    element.objectApiName = "Opportunity";
+    element.groupByField = "";
+    element.valueField = "Amount";
+    element.operation = "Sum";
+    document.body.appendChild(element);
+
+    await flushPromises();
+    graphql.emit(FREE_TEXT_RESPONSE);
+    await flushPromises();
+    await flushPromises();
+
+    const err = element.shadowRoot.querySelector(".slds-text-color_error");
+    expect(err).not.toBeNull();
+    expect(element.shadowRoot.querySelector(".chart-container")).toBeNull();
+    expect(err.textContent).toMatch(/missing required field/i);
+  });
+
   it("hints record-query-only when a free-text graphqlQuery yields no records", async () => {
     // An aggregate-shaped payload has no uiapi.query, so the record normalizer
     // finds nothing — the error should point the admin at the record-query contract.

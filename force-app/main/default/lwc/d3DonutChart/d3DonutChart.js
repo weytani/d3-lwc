@@ -183,7 +183,7 @@ export default class D3DonutChart extends NavigationMixin(LightningElement) {
       if (this.operation === OPERATIONS.COUNT) {
         queryString = buildRecordQuery({
           objectApiName: this.objectApiName,
-          fields: [this.groupByField],
+          fields: [...new Set([this.groupByField].filter(Boolean))],
           filter: this.graphqlFilter,
           first: this.recordLimit || 2000
         });
@@ -220,11 +220,17 @@ export default class D3DonutChart extends NavigationMixin(LightningElement) {
       let normalized;
       if (this.hasFreeTextQuery) {
         // Free-text override: treat the response as a record query and
-        // aggregate client-side by the field mappings.
+        // aggregate client-side by the field mappings. Dedup guards a
+        // groupByField === valueField collision; the Boolean filter drops a
+        // blank mapping instead of projecting a bogus "" field key (a blank
+        // groupByField would otherwise silently pass validateFields, since
+        // every normalized record ends up with an own "" key).
         const fields =
           this.operation === OPERATIONS.COUNT
-            ? [this.groupByField]
-            : [this.groupByField, this.valueField];
+            ? [...new Set([this.groupByField].filter(Boolean))]
+            : [
+                ...new Set([this.groupByField, this.valueField].filter(Boolean))
+              ];
         const records = normalizeRecordsGeneric(data, {
           objectApiName: this.objectApiName,
           fields
@@ -241,7 +247,7 @@ export default class D3DonutChart extends NavigationMixin(LightningElement) {
       } else if (this.operation === OPERATIONS.COUNT) {
         const records = normalizeRecordsGeneric(data, {
           objectApiName: this.objectApiName,
-          fields: [this.groupByField]
+          fields: [...new Set([this.groupByField].filter(Boolean))]
         });
         normalized = this._aggregateRawData(records);
       } else {
