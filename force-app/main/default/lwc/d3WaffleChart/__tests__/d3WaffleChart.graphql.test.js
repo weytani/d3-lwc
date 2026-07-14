@@ -274,6 +274,36 @@ describe("d3WaffleChart GraphQL path", () => {
     ).not.toBeNull();
   });
 
+  it("names the missing field when groupByField is blank on a free-text query", async () => {
+    // A blank groupByField must not sneak an empty-string key into the
+    // projected field set. Undeduped/unfiltered, normalizeRecordsGeneric
+    // would set that "" key to null on every record, which makes
+    // validateFields see the (bogus) "" field as present and pass — the
+    // vaguer "No data after aggregation" (from aggregateData's own
+    // groupByField guard) surfaces instead of naming the real problem.
+    // Dropping the blank entry from the projection lets validateFields catch
+    // it directly and name the missing field.
+    const element = createElement("c-d3-waffle-chart", {
+      is: D3WaffleChart
+    });
+    element.graphqlQuery = FREE_TEXT_QUERY;
+    element.objectApiName = "Opportunity";
+    element.groupByField = "";
+    element.valueField = "Amount";
+    element.operation = "Sum";
+    document.body.appendChild(element);
+
+    await flushPromises();
+    graphql.emit(FREE_TEXT_RESPONSE);
+    await flushPromises();
+    await flushPromises();
+
+    const err = element.shadowRoot.querySelector(".slds-text-color_error");
+    expect(err).not.toBeNull();
+    expect(err.textContent).toMatch(/missing required fields/i);
+    expect(element.shadowRoot.querySelector(".chart-container")).toBeNull();
+  });
+
   it("hints record-query-only when a free-text graphqlQuery yields no records", async () => {
     // An aggregate-shaped payload has no uiapi.query, so the record normalizer
     // finds nothing — the error should point the admin at the record-query contract.

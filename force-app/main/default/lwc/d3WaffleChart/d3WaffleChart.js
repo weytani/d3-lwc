@@ -184,7 +184,7 @@ export default class D3WaffleChart extends NavigationMixin(LightningElement) {
       if (this.operation === OPERATIONS.COUNT) {
         queryString = buildRecordQuery({
           objectApiName: this.objectApiName,
-          fields: [this.groupByField],
+          fields: [...new Set([this.groupByField].filter(Boolean))],
           filter: this.graphqlFilter,
           first: this.recordLimit || 2000
         });
@@ -224,8 +224,10 @@ export default class D3WaffleChart extends NavigationMixin(LightningElement) {
         // aggregate client-side by the field mappings.
         const fields =
           this.operation === OPERATIONS.COUNT
-            ? [this.groupByField]
-            : [this.groupByField, this.valueField];
+            ? [...new Set([this.groupByField].filter(Boolean))]
+            : [
+                ...new Set([this.groupByField, this.valueField].filter(Boolean))
+              ];
         const records = normalizeRecordsGeneric(data, {
           objectApiName: this.objectApiName,
           fields
@@ -242,7 +244,7 @@ export default class D3WaffleChart extends NavigationMixin(LightningElement) {
       } else if (this.operation === OPERATIONS.COUNT) {
         const records = normalizeRecordsGeneric(data, {
           objectApiName: this.objectApiName,
-          fields: [this.groupByField]
+          fields: [...new Set([this.groupByField].filter(Boolean))]
         });
         normalized = this._aggregateRawData(records);
       } else {
