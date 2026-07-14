@@ -265,9 +265,8 @@
             <!-- Variable-Color Line: Amount over CloseDate, threshold alert (Wave 2, CHART-INDEX #12) -->
             <componentInstance>
                 <componentInstanceProperties>
-                    <name>soqlQuery</name>
-                    <value
-          >SELECT CloseDate, Amount FROM Opportunity WHERE Amount != null AND CloseDate != null ORDER BY CloseDate</value>
+                    <name>objectApiName</name>
+                    <value>Opportunity</value>
                 </componentInstanceProperties>
                 <componentInstanceProperties>
                     <name>dateField</name>
