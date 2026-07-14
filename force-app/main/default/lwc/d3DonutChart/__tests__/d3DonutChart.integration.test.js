@@ -1,34 +1,17 @@
-// ABOUTME: Integration tests for d3DonutChart verifying real service interactions.
-// ABOUTME: Tests real dataService aggregation, themeService colors, and chartUtils formatting against mock D3 rendering.
+// ABOUTME: Integration tests for d3DonutChart verifying real bundle-local pipelines (data, theme, utils, graphql).
+// ABOUTME: Only D3, GraphQL, and NavigationMixin are mocked; aggregation, color, and formatting logic run for real.
 
 import { createElement } from "lwc";
 import D3DonutChart from "c/d3DonutChart";
-import { loadD3 } from "c/d3Lib";
-import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
+import { loadD3 } from "../d3Loader";
 
 // ═══════════════════════════════════════════════════════════════
-// MOCKS — Only external dependencies, NOT real utility services
+// MOCKS — Only external dependencies, NOT real bundle-local modules
 // ═══════════════════════════════════════════════════════════════
 
-jest.mock("c/d3Lib", () => ({
+jest.mock("../d3Loader", () => ({
   loadD3: jest.fn()
 }));
-
-jest.mock(
-  "@salesforce/apex/D3ChartController.executeQuery",
-  () => ({
-    default: jest.fn()
-  }),
-  { virtual: true }
-);
-
-jest.mock(
-  "lightning/platformShowToastEvent",
-  () => ({
-    ShowToastEvent: jest.fn()
-  }),
-  { virtual: true }
-);
 
 const NAVIGATE_SYMBOL = Symbol.for("NavigationMixin.Navigate");
 const mockNavigate = jest.fn();
@@ -148,7 +131,6 @@ describe("c-d3-donut-chart integration", () => {
     jest.clearAllMocks();
     mockD3 = createMockD3();
     loadD3.mockResolvedValue(mockD3);
-    executeQuery.mockResolvedValue(SAMPLE_DATA);
 
     consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
     consoleWarnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
@@ -178,10 +160,10 @@ describe("c-d3-donut-chart integration", () => {
   });
 
   // ═══════════════════════════════════════════════════════════════
-  // LEGEND WITH REAL THEMESERVICE COLORS
+  // LEGEND WITH REAL THEME COLORS
   // ═══════════════════════════════════════════════════════════════
 
-  describe("legend with real themeService colors", () => {
+  describe("legend with real theme colors", () => {
     it("legend items display correct Salesforce Standard colors", async () => {
       const element = await createChart();
 
@@ -262,6 +244,112 @@ describe("c-d3-donut-chart integration", () => {
       );
       expect(dataPassedToPie[1].value).toBe(1);
       expect(dataPassedToPie[2].value).toBe(1);
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════
+  // GRAPHQL WIRE INTEGRATION (real data.js pipeline)
+  // ═══════════════════════════════════════════════════════════════
+
+  describe("graphql wire integration", () => {
+    it("aggregates a GraphQL Count record set through the real pipeline", async () => {
+      const { graphql } = require("lightning/graphql");
+
+      const element = createElement("c-d3-donut-chart", {
+        is: D3DonutChart
+      });
+      Object.assign(element, {
+        objectApiName: "Opportunity",
+        groupByField: "StageName",
+        operation: "Count"
+      });
+      document.body.appendChild(element);
+
+      await flushPromises();
+      graphql.emit({
+        uiapi: {
+          query: {
+            Opportunity: {
+              edges: [
+                { node: { StageName: { value: "Negotiation" } } },
+                { node: { StageName: { value: "Negotiation" } } },
+                { node: { StageName: { value: "Closed Lost" } } }
+              ]
+            }
+          }
+        }
+      });
+      await flushPromises();
+      await flushPromises();
+
+      // Real aggregateData Count: Negotiation=2, Closed Lost=1; default value-desc.
+      const pieFn = mockD3.pie.mock.results[0].value;
+      const dataPassedToPie = pieFn.mock.calls[0][0];
+      expect(dataPassedToPie).toEqual([
+        { label: "Negotiation", value: 2 },
+        { label: "Closed Lost", value: 1 }
+      ]);
+      const errorEl = element.shadowRoot.querySelector(
+        ".slds-text-color_error"
+      );
+      expect(errorEl).toBeFalsy();
+    });
+
+    it("free-text graphqlQuery Sum aggregates the wire rows to the correct values", async () => {
+      const { graphql } = require("lightning/graphql");
+
+      const element = createElement("c-d3-donut-chart", {
+        is: D3DonutChart
+      });
+      Object.assign(element, {
+        graphqlQuery:
+          "query { uiapi { query { Opportunity { edges { node { StageName { value } Amount { value } } } } } } }",
+        objectApiName: "Opportunity",
+        groupByField: "StageName",
+        valueField: "Amount",
+        operation: "Sum"
+      });
+      document.body.appendChild(element);
+
+      await flushPromises();
+      graphql.emit({
+        uiapi: {
+          query: {
+            Opportunity: {
+              edges: [
+                {
+                  node: {
+                    StageName: { value: "Prospecting" },
+                    Amount: { value: 100 }
+                  }
+                },
+                {
+                  node: {
+                    StageName: { value: "Prospecting" },
+                    Amount: { value: 200 }
+                  }
+                },
+                {
+                  node: {
+                    StageName: { value: "Closed Won" },
+                    Amount: { value: 500 }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      });
+      await flushPromises();
+      await flushPromises();
+
+      const pieFn = mockD3.pie.mock.results[0].value;
+      const dataPassedToPie = pieFn.mock.calls[0][0];
+      // Sum: Closed Won=500, Prospecting=300 (default value-desc sort).
+      expect(dataPassedToPie).toEqual([
+        { label: "Closed Won", value: 500 },
+        { label: "Prospecting", value: 300 }
+      ]);
     });
   });
 

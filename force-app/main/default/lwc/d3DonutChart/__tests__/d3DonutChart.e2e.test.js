@@ -1,26 +1,19 @@
 // ABOUTME: End-to-end lifecycle tests for the D3 Donut Chart component.
-// ABOUTME: Verifies full render pipeline, legend behavior, pie/donut modes, and error recovery using real services with mocked D3.
+// ABOUTME: Verifies full render pipeline, legend behavior, pie/donut modes, GraphQL self-fetch, and error recovery using real bundle-local modules with mocked D3.
 
 import { createElement } from "lwc";
 import D3DonutChart from "c/d3DonutChart";
-import { loadD3 } from "c/d3Lib";
+import { loadD3 } from "../d3Loader";
+import { graphql } from "lightning/graphql";
 
 // ═══════════════════════════════════════════════════════════════
-// MOCK SETUP: Only mock D3 lib, Apex, navigation, and toast
-// Real modules: c/dataService, c/themeService, c/chartUtils
+// MOCK SETUP: Only mock D3 loader and navigation
+// Real modules: ./data, ./theme, ./utils, ./graphql
 // ═══════════════════════════════════════════════════════════════
 
-jest.mock("c/d3Lib", () => ({
+jest.mock("../d3Loader", () => ({
   loadD3: jest.fn()
 }));
-
-jest.mock(
-  "@salesforce/apex/D3ChartController.executeQuery",
-  () => ({
-    default: jest.fn()
-  }),
-  { virtual: true }
-);
 
 const mockNavigate = jest.fn();
 jest.mock(
@@ -34,25 +27,6 @@ jest.mock(
     NavMixin.Navigate = Symbol.for("NavigationMixin.Navigate");
     NavMixin.GenerateUrl = Symbol.for("NavigationMixin.GenerateUrl");
     return { NavigationMixin: NavMixin };
-  },
-  { virtual: true }
-);
-
-jest.mock(
-  "lightning/platformShowToastEvent",
-  () => {
-    return {
-      ShowToastEvent: class ShowToastEvent extends CustomEvent {
-        constructor(toast) {
-          super("lightning__showtoast", {
-            composed: true,
-            cancelable: true,
-            bubbles: true,
-            detail: toast
-          });
-        }
-      }
-    };
   },
   { virtual: true }
 );
@@ -221,6 +195,71 @@ describe("c-d3-donut-chart e2e", () => {
         (call) => !String(call[0]).includes("D3DonutChart initialization error")
       );
       expect(realErrors.length).toBe(0);
+    });
+
+    it("GraphQL fetch path: no recordCollection -> wire emits -> full pipeline", async () => {
+      const mockD3 = createMockD3();
+      loadD3.mockResolvedValue(mockD3);
+
+      const element = createElement("c-d3-donut-chart", {
+        is: D3DonutChart
+      });
+      Object.assign(element, {
+        groupByField: "StageName",
+        valueField: "Amount",
+        operation: "Sum",
+        height: 300,
+        objectApiName: "Opportunity",
+        recordCollection: []
+      });
+      document.body.appendChild(element);
+      await flushPromises();
+
+      // Grouped-aggregate wire result for the structured Sum path
+      graphql.emit({
+        uiapi: {
+          aggregate: {
+            Opportunity: {
+              edges: [
+                {
+                  node: {
+                    aggregate: {
+                      StageName: { value: "Discovery" },
+                      Amount: { sum: { value: 500 } }
+                    }
+                  }
+                },
+                {
+                  node: {
+                    aggregate: {
+                      StageName: { value: "Proposal" },
+                      Amount: { sum: { value: 300 } }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      });
+      await flushPromises();
+      await flushPromises();
+
+      expect(loadD3).toHaveBeenCalled();
+      expect(mockD3.select).toHaveBeenCalled();
+      const appendCalls = mockD3.append.mock.calls;
+      expect(appendCalls.some((call) => call[0] === "svg")).toBe(true);
+      expect(mockD3.pie).toHaveBeenCalled();
+
+      const container = element.shadowRoot.querySelector(".chart-container");
+      expect(container).toBeTruthy();
+      const errorEl = element.shadowRoot.querySelector(
+        ".slds-text-color_error"
+      );
+      expect(errorEl).toBeFalsy();
+
+      const legendItems = element.shadowRoot.querySelectorAll(".legend-item");
+      expect(legendItems.length).toBe(2);
     });
 
     it("cleanup removes resize handler and tooltip on disconnect", async () => {
