@@ -282,6 +282,28 @@ describe("d3PieChart GraphQL path", () => {
     expect(err.textContent).toMatch(/record query/i);
   });
 
+  it("surfaces a validation error for a free-text Count query when groupByField is blank", async () => {
+    // A blank groupByField bypasses the structured-path guard entirely on the
+    // free-text override (hasFreeTextQuery short-circuits gqlQuery before the
+    // objectApiName/groupByField/operation check). Without deduping the bare
+    // field-projection array, an empty string field name would silently
+    // normalize into a single "Null" bucket instead of surfacing an error.
+    const element = createElement("c-d3-pie-chart", { is: D3PieChart });
+    element.graphqlQuery = FREE_TEXT_QUERY;
+    element.objectApiName = "Opportunity";
+    element.groupByField = "";
+    element.operation = "Count";
+    document.body.appendChild(element);
+
+    await flushPromises();
+    graphql.emit(RECORD_RESPONSE);
+    await flushPromises();
+
+    const err = element.shadowRoot.querySelector(".slds-text-color_error");
+    expect(err).not.toBeNull();
+    expect(err.textContent).toMatch(/missing required field/i);
+  });
+
   it("ignores a blank graphqlQuery and falls through to the structured builder", async () => {
     const element = createElement("c-d3-pie-chart", { is: D3PieChart });
     element.graphqlQuery = "   ";
