@@ -1,27 +1,19 @@
 // ABOUTME: End-to-end lifecycle tests for the d3LollipopChart Lightning Web Component.
-// ABOUTME: Verifies full pipeline: D3 load, data aggregation, stem+head rendering, cleanup, and multi-instance isolation.
+// ABOUTME: Verifies full pipeline: D3 load, data aggregation, stem+head rendering, GraphQL self-fetch, cleanup, and multi-instance isolation.
 
 import { createElement } from "lwc";
 import D3LollipopChart from "c/d3LollipopChart";
-import { loadD3 } from "c/d3Lib";
-import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
+import { loadD3 } from "../d3Loader";
+import { graphql } from "lightning/graphql";
 
 // ═══════════════════════════════════════════════════════════════
 // MOCKS — only external boundaries are mocked
-// c/dataService, c/themeService, c/chartUtils use REAL implementations
+// ../data, ../theme, ../utils, ../graphql use REAL implementations
 // ═══════════════════════════════════════════════════════════════
 
-jest.mock("c/d3Lib", () => ({
+jest.mock("../d3Loader", () => ({
   loadD3: jest.fn()
 }));
-
-jest.mock(
-  "@salesforce/apex/D3ChartController.executeQuery",
-  () => ({
-    default: jest.fn()
-  }),
-  { virtual: true }
-);
 
 // NavigationMixin mock — matches the Symbol.for pattern used by LWC internals
 jest.mock("lightning/navigation", () => {
@@ -37,13 +29,6 @@ jest.mock("lightning/navigation", () => {
     Navigate,
     GenerateUrl
   };
-});
-
-jest.mock("lightning/platformShowToastEvent", () => {
-  const ShowToastEventMock = jest.fn().mockImplementation((config) => {
-    return new CustomEvent("lightning__showtoast", { detail: config });
-  });
-  return { ShowToastEvent: ShowToastEventMock };
 });
 
 // ═══════════════════════════════════════════════════════════════
@@ -164,7 +149,6 @@ describe("c-d3-lollipop-chart e2e", () => {
     jest.clearAllMocks();
     mockD3 = createMockD3();
     loadD3.mockResolvedValue(mockD3);
-    executeQuery.mockResolvedValue([]);
 
     consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
 
@@ -204,9 +188,6 @@ describe("c-d3-lollipop-chart e2e", () => {
       // D3 was loaded through the mock
       expect(loadD3).toHaveBeenCalled();
 
-      // Apex should NOT have been called — data came from recordCollection
-      expect(executeQuery).not.toHaveBeenCalled();
-
       // D3 select was called on the chart container to build the SVG
       expect(mockD3.select).toHaveBeenCalled();
 
@@ -235,6 +216,65 @@ describe("c-d3-lollipop-chart e2e", () => {
       expect(spinner).toBeFalsy();
 
       // No error state
+      const errorEl = element.shadowRoot.querySelector(
+        ".slds-text-color_error"
+      );
+      expect(errorEl).toBeFalsy();
+    });
+
+    it("GraphQL fetch path: no recordCollection -> wire emits -> full pipeline", async () => {
+      const element = createElement("c-d3-lollipop-chart", {
+        is: D3LollipopChart
+      });
+      Object.assign(element, {
+        groupByField: "StageName",
+        valueField: "Amount",
+        operation: "Sum",
+        height: 300,
+        objectApiName: "Opportunity",
+        recordCollection: []
+      });
+      document.body.appendChild(element);
+      await flushPromises();
+
+      // Grouped-aggregate wire result for the structured Sum path
+      graphql.emit({
+        uiapi: {
+          aggregate: {
+            Opportunity: {
+              edges: [
+                {
+                  node: {
+                    aggregate: {
+                      StageName: { value: "Discovery" },
+                      Amount: { sum: { value: 500 } }
+                    }
+                  }
+                },
+                {
+                  node: {
+                    aggregate: {
+                      StageName: { value: "Proposal" },
+                      Amount: { sum: { value: 300 } }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      });
+      await flushPromises();
+      await flushPromises();
+
+      expect(loadD3).toHaveBeenCalled();
+      expect(mockD3.select).toHaveBeenCalled();
+      const appendCalls = mockD3.append.mock.calls;
+      expect(appendCalls.some((call) => call[0] === "svg")).toBe(true);
+      expect(mockD3.data).toHaveBeenCalled();
+
+      const container = element.shadowRoot.querySelector(".chart-container");
+      expect(container).toBeTruthy();
       const errorEl = element.shadowRoot.querySelector(
         ".slds-text-color_error"
       );
@@ -334,47 +374,6 @@ describe("c-d3-lollipop-chart e2e", () => {
       // Chart container should NOT be rendered
       const container = element.shadowRoot.querySelector(".chart-container");
       expect(container).toBeFalsy();
-    });
-
-    it("SOQL fetch path: no recordCollection -> Apex returns data -> full pipeline", async () => {
-      const soqlData = [
-        { StageName: "Discovery", Amount: 400 },
-        { StageName: "Discovery", Amount: 100 },
-        { StageName: "Proposal", Amount: 300 }
-      ];
-      executeQuery.mockResolvedValue(soqlData);
-
-      const element = await createChart({
-        recordCollection: [],
-        soqlQuery: "SELECT StageName, Amount FROM Opportunity"
-      });
-
-      // Apex was called with the correct query
-      expect(executeQuery).toHaveBeenCalledWith({
-        queryString: "SELECT StageName, Amount FROM Opportunity"
-      });
-
-      // D3 loaded
-      expect(loadD3).toHaveBeenCalled();
-
-      // Chart rendered — SVG created
-      expect(mockD3.select).toHaveBeenCalled();
-      const appendCalls = mockD3.append.mock.calls;
-      const svgAppended = appendCalls.some((call) => call[0] === "svg");
-      expect(svgAppended).toBe(true);
-
-      // Data bound to D3
-      expect(mockD3.data).toHaveBeenCalled();
-
-      // Container visible
-      const container = element.shadowRoot.querySelector(".chart-container");
-      expect(container).toBeTruthy();
-
-      // No error
-      const errorEl = element.shadowRoot.querySelector(
-        ".slds-text-color_error"
-      );
-      expect(errorEl).toBeFalsy();
     });
   });
 
@@ -502,8 +501,6 @@ describe("c-d3-lollipop-chart e2e", () => {
         });
       }
 
-      const { ShowToastEvent } = require("lightning/platformShowToastEvent");
-
       const element = await createChart({
         recordCollection: largeData,
         operation: "Sum",
@@ -513,13 +510,6 @@ describe("c-d3-lollipop-chart e2e", () => {
 
       // Extra flush to ensure all async work completes
       await flushPromises();
-
-      // Truncation happens silently — no ShowToastEvent constructed
-      expect(ShowToastEvent).not.toHaveBeenCalledWith(
-        expect.objectContaining({
-          title: "Data Truncated"
-        })
-      );
 
       // No truncation warning banner in the template
       const warningBanner =

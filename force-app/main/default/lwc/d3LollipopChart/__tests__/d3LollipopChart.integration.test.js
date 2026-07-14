@@ -1,39 +1,18 @@
-// ABOUTME: Integration tests for d3LollipopChart verifying real service pipelines (dataService, themeService, chartUtils).
-// ABOUTME: Only D3, Apex, NavigationMixin, and ShowToastEvent are mocked; all utility services use real implementations.
+// ABOUTME: Integration tests for d3LollipopChart verifying real bundle-local pipelines (data, theme, utils, graphql).
+// ABOUTME: Only D3, GraphQL, and NavigationMixin are mocked; aggregation, color, and normalization logic run for real.
 
 import { createElement } from "lwc";
 import D3LollipopChart from "c/d3LollipopChart";
-import { loadD3 } from "c/d3Lib";
-import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
-// ShowToastEvent is imported by the component; we mock it below
+import { loadD3 } from "../d3Loader";
 
 // ═══════════════════════════════════════════════════════════════
 // MOCKS — Only external dependencies that cannot run in JSDOM
-// Real services (dataService, themeService, chartUtils) are NOT mocked
+// Real bundle-local modules (data, theme, utils, graphql) are NOT mocked
 // ═══════════════════════════════════════════════════════════════
 
-jest.mock("c/d3Lib", () => ({
+jest.mock("../d3Loader", () => ({
   loadD3: jest.fn()
 }));
-
-jest.mock(
-  "@salesforce/apex/D3ChartController.executeQuery",
-  () => ({ default: jest.fn() }),
-  { virtual: true }
-);
-
-// ShowToastEvent mock must produce real Event instances so dispatchEvent() accepts them.
-// The factory is self-contained to work with jest.mock hoisting.
-jest.mock(
-  "lightning/platformShowToastEvent",
-  () => {
-    const Mock = jest.fn((params) => {
-      return new CustomEvent("lightning__showtoast", { detail: params });
-    });
-    return { ShowToastEvent: Mock };
-  },
-  { virtual: true }
-);
 
 const mockNavigate = jest.fn();
 jest.mock(
@@ -135,7 +114,6 @@ describe("c-d3-lollipop-chart integration", () => {
 
     mockD3 = createMockD3();
     loadD3.mockResolvedValue(mockD3);
-    executeQuery.mockResolvedValue(SAMPLE_DATA);
 
     consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
     consoleWarnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
@@ -306,26 +284,42 @@ describe("c-d3-lollipop-chart integration", () => {
       expect(passedData[1].value).toBe(150);
       expect(passedData[2].value).toBe(150);
     });
+  });
 
-    it("passes SOQL query results through same pipeline", async () => {
-      const soqlResults = [
-        { StageName: "Negotiation", Amount: 400 },
-        { StageName: "Negotiation", Amount: 100 },
-        { StageName: "Closed Lost", Amount: 250 }
-      ];
-      executeQuery.mockResolvedValue(soqlResults);
+  // ═══════════════════════════════════════════════════════════════
+  // GRAPHQL WIRE INTEGRATION
+  // ═══════════════════════════════════════════════════════════════
 
-      await createChart({
-        recordCollection: [],
-        soqlQuery: "SELECT StageName, Amount FROM Opportunity",
-        operation: "Sum",
+  describe("graphql wire integration", () => {
+    it("aggregates a GraphQL Count record set through the real pipeline", async () => {
+      const { graphql } = require("lightning/graphql");
+
+      element = createElement("c-d3-lollipop-chart", {
+        is: D3LollipopChart
+      });
+      Object.assign(element, {
+        objectApiName: "Opportunity",
         groupByField: "StageName",
-        valueField: "Amount"
+        operation: "Count"
       });
+      document.body.appendChild(element);
 
-      expect(executeQuery).toHaveBeenCalledWith({
-        queryString: "SELECT StageName, Amount FROM Opportunity"
+      await flushPromises();
+      graphql.emit({
+        uiapi: {
+          query: {
+            Opportunity: {
+              edges: [
+                { node: { StageName: { value: "Negotiation" } } },
+                { node: { StageName: { value: "Negotiation" } } },
+                { node: { StageName: { value: "Closed Lost" } } }
+              ]
+            }
+          }
+        }
       });
+      await flushPromises();
+      await flushPromises();
 
       const dataCalls = mockD3.data.mock.calls;
       const chartDataCall = dataCalls.find(
@@ -333,12 +327,75 @@ describe("c-d3-lollipop-chart integration", () => {
           Array.isArray(call[0]) && call[0].length > 0 && call[0][0].label
       );
       expect(chartDataCall).toBeTruthy();
+      // Real aggregateData Count: Negotiation=2, Closed Lost=1; sorted desc.
+      expect(chartDataCall[0]).toEqual([
+        { label: "Negotiation", value: 2 },
+        { label: "Closed Lost", value: 1 }
+      ]);
+      const errorEl = element.shadowRoot.querySelector(
+        ".slds-text-color_error"
+      );
+      expect(errorEl).toBeFalsy();
+    });
 
-      const passedData = chartDataCall[0];
-      // Sum: Negotiation=500, Closed Lost=250 (sorted desc)
-      expect(passedData).toEqual([
-        { label: "Negotiation", value: 500 },
-        { label: "Closed Lost", value: 250 }
+    it("free-text graphqlQuery Sum aggregates the wire rows through the real pipeline", async () => {
+      const { graphql } = require("lightning/graphql");
+
+      element = createElement("c-d3-lollipop-chart", {
+        is: D3LollipopChart
+      });
+      Object.assign(element, {
+        graphqlQuery:
+          "query { uiapi { query { Opportunity { edges { node { StageName { value } Amount { value } } } } } } }",
+        objectApiName: "Opportunity",
+        groupByField: "StageName",
+        valueField: "Amount",
+        operation: "Sum"
+      });
+      document.body.appendChild(element);
+
+      await flushPromises();
+      graphql.emit({
+        uiapi: {
+          query: {
+            Opportunity: {
+              edges: [
+                {
+                  node: {
+                    StageName: { value: "Prospecting" },
+                    Amount: { value: 100 }
+                  }
+                },
+                {
+                  node: {
+                    StageName: { value: "Prospecting" },
+                    Amount: { value: 200 }
+                  }
+                },
+                {
+                  node: {
+                    StageName: { value: "Closed Won" },
+                    Amount: { value: 500 }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      });
+      await flushPromises();
+      await flushPromises();
+
+      const dataCalls = mockD3.data.mock.calls;
+      const chartDataCall = dataCalls.find(
+        (call) =>
+          Array.isArray(call[0]) && call[0].length > 0 && call[0][0].label
+      );
+      expect(chartDataCall).toBeTruthy();
+      // Sum: Closed Won=500, Prospecting=300 (desc).
+      expect(chartDataCall[0]).toEqual([
+        { label: "Closed Won", value: 500 },
+        { label: "Prospecting", value: 300 }
       ]);
     });
   });
@@ -528,19 +585,23 @@ describe("c-d3-lollipop-chart integration", () => {
       expect(errorElement.textContent).toContain("Missing required fields");
     });
 
-    it("shows error when data is empty array", async () => {
+    it("shows the no-data state when no source is configured", async () => {
       await createChart({
         recordCollection: [],
-        soqlQuery: ""
+        objectApiName: "",
+        graphqlQuery: ""
       });
 
       await flushPromises();
 
-      // Component should display error state for no data source
+      // No recordCollection and no provisioned GraphQL query: neither an error
+      // nor a chart, just the empty state.
       const errorElement = element.shadowRoot.querySelector(
         ".slds-text-color_error"
       );
-      expect(errorElement).toBeTruthy();
+      expect(errorElement).toBeFalsy();
+      const container = element.shadowRoot.querySelector(".chart-container");
+      expect(container).toBeFalsy();
     });
   });
 
@@ -595,6 +656,33 @@ describe("c-d3-lollipop-chart integration", () => {
       const titleInsert = insertCalls.find((call) => call[0] === "title");
       expect(titleInsert).toBeTruthy();
       expect(titleInsert[1]).toBe(":first-child");
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════
+  // DRILL-DOWN INTEGRATION
+  // ═══════════════════════════════════════════════════════════════
+
+  describe("drill-down integration", () => {
+    it("navigates and dispatches lollipopclick with the real aggregated label/value", async () => {
+      await createChart({ objectApiName: "Opportunity" });
+
+      const onCalls = mockD3.on.mock.calls;
+      const clickHandler = onCalls.find((c) => c[0] === "click")[1];
+
+      const handler = jest.fn();
+      element.addEventListener("lollipopclick", handler);
+
+      // Real aggregateData Sum desc: Closed Won is first.
+      clickHandler({}, { label: "Closed Won", value: 500 });
+
+      expect(handler).toHaveBeenCalled();
+      expect(handler.mock.calls[0][0].detail).toEqual({
+        label: "Closed Won",
+        value: 500,
+        filterField: "StageName"
+      });
+      expect(mockNavigate).toHaveBeenCalled();
     });
   });
 });
