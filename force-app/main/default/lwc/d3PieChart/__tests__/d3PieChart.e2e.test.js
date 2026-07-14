@@ -1,26 +1,19 @@
 // ABOUTME: End-to-end lifecycle tests for the D3 Pie Chart component.
-// ABOUTME: Verifies full render pipeline, legend behavior, multi-instance isolation, and error recovery using real services with mocked D3.
+// ABOUTME: Verifies full render pipeline, legend behavior, GraphQL self-fetch, multi-instance isolation, and error recovery using real bundle-local modules with mocked D3.
 
 import { createElement } from "lwc";
 import D3PieChart from "c/d3PieChart";
-import { loadD3 } from "c/d3Lib";
+import { loadD3 } from "../d3Loader";
+import { graphql } from "lightning/graphql";
 
 // ═══════════════════════════════════════════════════════════════
-// MOCK SETUP: Only mock D3 lib, Apex, navigation, and toast
-// Real modules: c/dataService, c/themeService, c/chartUtils
+// MOCK SETUP: Only mock D3, navigation, and toast
+// Real modules: bundle-local data, theme, utils, graphql
 // ═══════════════════════════════════════════════════════════════
 
-jest.mock("c/d3Lib", () => ({
+jest.mock("../d3Loader", () => ({
   loadD3: jest.fn()
 }));
-
-jest.mock(
-  "@salesforce/apex/D3ChartController.executeQuery",
-  () => ({
-    default: jest.fn()
-  }),
-  { virtual: true }
-);
 
 const mockNavigate = jest.fn();
 jest.mock(
@@ -222,6 +215,69 @@ describe("c-d3-pie-chart e2e", () => {
         (call) => !String(call[0]).includes("D3PieChart initialization error")
       );
       expect(realErrors.length).toBe(0);
+    });
+
+    it("GraphQL self-fetch path: no recordCollection -> wire emits -> full pipeline", async () => {
+      const mockD3 = createMockD3();
+      loadD3.mockResolvedValue(mockD3);
+
+      const element = createElement("c-d3-pie-chart", { is: D3PieChart });
+      Object.assign(element, {
+        groupByField: "StageName",
+        valueField: "Amount",
+        operation: "Sum",
+        height: 300,
+        objectApiName: "Opportunity",
+        recordCollection: []
+      });
+      document.body.appendChild(element);
+      await flushPromises();
+
+      // Grouped-aggregate wire result for the structured Sum path
+      graphql.emit({
+        uiapi: {
+          aggregate: {
+            Opportunity: {
+              edges: [
+                {
+                  node: {
+                    aggregate: {
+                      StageName: { value: "Discovery" },
+                      Amount: { sum: { value: 500 } }
+                    }
+                  }
+                },
+                {
+                  node: {
+                    aggregate: {
+                      StageName: { value: "Proposal" },
+                      Amount: { sum: { value: 300 } }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      });
+      await flushPromises();
+      await flushPromises();
+
+      expect(loadD3).toHaveBeenCalled();
+      expect(mockD3.select).toHaveBeenCalled();
+      const appendCalls = mockD3.append.mock.calls.map((c) => c[0]);
+      expect(appendCalls).toContain("svg");
+      expect(mockD3.pie).toHaveBeenCalled();
+
+      const container = element.shadowRoot.querySelector(".chart-container");
+      expect(container).toBeTruthy();
+      const errorEl = element.shadowRoot.querySelector(
+        ".slds-text-color_error"
+      );
+      expect(errorEl).toBeFalsy();
+
+      const legendItems = element.shadowRoot.querySelectorAll(".legend-item");
+      expect(legendItems.length).toBe(2);
     });
 
     it("cleanup removes resize handler and tooltip on disconnect", async () => {

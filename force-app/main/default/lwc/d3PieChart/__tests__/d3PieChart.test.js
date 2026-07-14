@@ -1,33 +1,14 @@
 // ABOUTME: Unit tests for the D3 pie chart Lightning Web Component.
-// ABOUTME: Covers initialization, data sources, aggregation, themes, config, legend, events, tooltips, responsive behavior, and pie rendering details.
+// ABOUTME: Covers initialization, data sources, aggregation, themes, config, legend, events, tooltips, responsive behavior, and render-orchestration hardening.
 
 import { createElement } from "lwc";
 import D3PieChart from "c/d3PieChart";
-import { loadD3 } from "c/d3Lib";
-import executeQuery from "@salesforce/apex/D3ChartController.executeQuery";
-import getAggregatedData from "@salesforce/apex/D3ChartController.getAggregatedData";
+import { loadD3 } from "../d3Loader";
 
-// Mock d3Lib
-jest.mock("c/d3Lib", () => ({
+// Mock the bundle-local D3 loader
+jest.mock("../d3Loader", () => ({
   loadD3: jest.fn()
 }));
-
-// Mock Apex
-jest.mock(
-  "@salesforce/apex/D3ChartController.executeQuery",
-  () => ({
-    default: jest.fn()
-  }),
-  { virtual: true }
-);
-
-jest.mock(
-  "@salesforce/apex/D3ChartController.getAggregatedData",
-  () => ({
-    default: jest.fn()
-  }),
-  { virtual: true }
-);
 
 // Mock NavigationMixin
 const mockNavigate = jest.fn();
@@ -44,28 +25,6 @@ jest.mock(
   },
   { virtual: true }
 );
-
-// Mock chartUtils
-jest.mock("c/chartUtils", () => ({
-  formatNumber: jest.fn((v) => String(v)),
-  formatPercent: jest.fn((v) => (v * 100).toFixed(1) + "%"),
-  createTooltip: jest.fn().mockReturnValue({
-    show: jest.fn(),
-    hide: jest.fn(),
-    destroy: jest.fn()
-  }),
-  buildTooltipContent: jest.fn().mockReturnValue("<div>tooltip</div>"),
-  createResizeHandler: jest.fn().mockReturnValue({
-    observe: jest.fn(),
-    disconnect: jest.fn()
-  }),
-  createLayoutRetry: jest.fn().mockReturnValue({ cancel: jest.fn() }),
-  calculateDimensions: jest
-    .fn()
-    .mockReturnValue({ width: 300, height: 200, margins: {} }),
-  shouldUseCompactMode: jest.fn().mockReturnValue(false),
-  applySvgA11y: jest.fn()
-}));
 
 // Factory function for isolated mock D3 instances (prevents shared mutable state between tests)
 const createMockD3 = () => {
@@ -84,6 +43,7 @@ const createMockD3 = () => {
     on: jest.fn(() => d3),
     remove: jest.fn(() => d3),
     text: jest.fn(() => d3),
+    insert: jest.fn(() => d3),
     pie: jest.fn(() => {
       const pieFn = jest.fn((data) =>
         data.map((d, i) => ({
@@ -131,12 +91,6 @@ describe("c-d3-pie-chart", () => {
     jest.clearAllMocks();
     mockD3 = createMockD3();
     loadD3.mockResolvedValue(mockD3);
-    executeQuery.mockResolvedValue(SAMPLE_DATA);
-    getAggregatedData.mockResolvedValue([
-      { label: "Prospecting", value: 300 },
-      { label: "Qualification", value: 150 },
-      { label: "Closed Won", value: 500 }
-    ]);
 
     consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
     consoleWarnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
@@ -231,50 +185,45 @@ describe("c-d3-pie-chart", () => {
   describe("data sources", () => {
     it("uses recordCollection when provided", async () => {
       await createChart({ recordCollection: SAMPLE_DATA });
-      expect(executeQuery).not.toHaveBeenCalled();
+      await flushPromises();
+
+      const container = element.shadowRoot.querySelector(".chart-container");
+      expect(container).toBeTruthy();
     });
 
-    it("calls Apex when recordCollection is empty", async () => {
+    it("shows the no-data state when no source is configured", async () => {
       await createChart({
         recordCollection: [],
-        soqlQuery: "SELECT StageName, Amount FROM Opportunity"
-      });
-
-      expect(executeQuery).toHaveBeenCalledWith({
-        queryString: "SELECT StageName, Amount FROM Opportunity"
-      });
-    });
-
-    it("shows error when no data source provided", async () => {
-      await createChart({
-        recordCollection: [],
-        soqlQuery: ""
+        objectApiName: "",
+        graphqlQuery: ""
       });
       await flushPromises();
       await flushPromises(); // Extra flush for re-render
 
+      // No recordCollection and no provisioned GraphQL query: neither an error
+      // nor a chart, just the empty state.
       const errorMessage = element.shadowRoot.querySelector(
         ".slds-text-color_error"
       );
-      expect(errorMessage).toBeTruthy();
+      expect(errorMessage).toBeFalsy();
+      const container = element.shadowRoot.querySelector(".chart-container");
+      expect(container).toBeFalsy();
     });
 
-    it("shows error when SOQL query fails", async () => {
-      executeQuery.mockRejectedValue({
-        body: { message: "Invalid query" }
-      });
-
+    it("recordCollection takes priority over a free-text graphqlQuery", async () => {
       await createChart({
-        recordCollection: [],
-        soqlQuery: "SELECT Invalid FROM Object"
+        recordCollection: SAMPLE_DATA,
+        graphqlQuery:
+          "query { uiapi { query { Opportunity { edges { node { StageName { value } } } } } } }"
       });
       await flushPromises();
-      await flushPromises(); // Extra flush for re-render
 
-      const errorMessage = element.shadowRoot.querySelector(
+      const container = element.shadowRoot.querySelector(".chart-container");
+      expect(container).toBeTruthy();
+      const errorElement = element.shadowRoot.querySelector(
         ".slds-text-color_error"
       );
-      expect(errorMessage).toBeTruthy();
+      expect(errorElement).toBeFalsy();
     });
   });
 
@@ -381,25 +330,20 @@ describe("c-d3-pie-chart", () => {
   // ═══════════════════════════════════════════════════════════════
 
   describe("responsive behavior", () => {
-    it("creates resize handler for responsive reflow", async () => {
-      const { createResizeHandler } = require("c/chartUtils");
+    it("creates a ResizeObserver for responsive reflow", async () => {
       await createChart();
       await flushPromises();
 
-      // Component uses createResizeHandler from chartUtils, not global ResizeObserver
-      expect(createResizeHandler).toHaveBeenCalled();
-      // The returned handler's observe() should be called
-      const handler = createResizeHandler.mock.results[0].value;
-      expect(handler.observe).toHaveBeenCalled();
+      expect(global.ResizeObserver).toHaveBeenCalled();
     });
 
-    it("disconnects resize handler on component removal", async () => {
-      const { createResizeHandler } = require("c/chartUtils");
+    it("disconnects the resize observer on component removal", async () => {
       const mockDisconnect = jest.fn();
-      createResizeHandler.mockReturnValue({
+      global.ResizeObserver = jest.fn().mockImplementation(() => ({
         observe: jest.fn(),
+        unobserve: jest.fn(),
         disconnect: mockDisconnect
-      });
+      }));
 
       await createChart();
       await flushPromises();
@@ -608,37 +552,117 @@ describe("c-d3-pie-chart", () => {
       await createChart();
       await flushPromises();
 
-      // When width is 0, initializeChart returns early without calling renderChart
-      // So d3.select should not be called for SVG creation
-      // The component still renders the container but no SVG content
+      // Zero width: initializeChart installs the observer but skips the
+      // immediate render call, so no pie layout is created yet — but the
+      // container itself still renders (chartData is already populated).
       expect(element.shadowRoot.querySelector(".chart-container")).toBeTruthy();
+      expect(mockD3.pie).not.toHaveBeenCalled();
     });
 
-    it("re-renders on resize callback via createResizeHandler", async () => {
-      const { createResizeHandler } = require("c/chartUtils");
-      let capturedCallback;
-
-      createResizeHandler.mockImplementation((container, callback) => {
-        capturedCallback = callback;
+    it("renders once the container becomes measurable via the resize observer", async () => {
+      let roCallback = null;
+      global.ResizeObserver = jest.fn().mockImplementation((cb) => {
+        roCallback = cb;
         return {
           observe: jest.fn(),
+          unobserve: jest.fn(),
           disconnect: jest.fn()
         };
+      });
+      Element.prototype.getBoundingClientRect = jest.fn(() => ({
+        width: 0,
+        height: 300,
+        top: 0,
+        left: 0,
+        bottom: 300,
+        right: 0
+      }));
+
+      await createChart();
+      await flushPromises();
+
+      // Zero width: nothing drawn yet, but the observer must already be
+      // registered so a later measurement can render (no fixed give-up window).
+      expect(mockD3.pie).not.toHaveBeenCalled();
+      expect(roCallback).toBeTruthy();
+
+      // The container becomes measurable; the observer fires the render.
+      jest.useFakeTimers();
+      roCallback([{ contentRect: { width: 400, height: 300 } }]);
+      jest.advanceTimersByTime(250);
+      jest.useRealTimers();
+      await flushPromises();
+
+      expect(mockD3.pie).toHaveBeenCalled();
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════
+  // RENDER ORCHESTRATION HARDENING
+  // ═══════════════════════════════════════════════════════════════
+
+  describe("render orchestration hardening", () => {
+    it("does not latch an empty shell when first measured below the chart margins, and recovers when it grows", async () => {
+      // Pie's padding floors at 10px per side (Math.max(10, containerWidth * 0.04)),
+      // so any width under the 20px left+right margin sum makes renderChart bail
+      // before appending the svg.
+      let roCallback = null;
+      global.ResizeObserver = jest.fn().mockImplementation((cb) => {
+        roCallback = cb;
+        return {
+          observe: jest.fn(),
+          unobserve: jest.fn(),
+          disconnect: jest.fn()
+        };
+      });
+      Element.prototype.getBoundingClientRect = jest.fn(() => ({
+        width: 15,
+        height: 300,
+        top: 0,
+        left: 0,
+        bottom: 300,
+        right: 15
+      }));
+
+      await createChart();
+      await flushPromises();
+
+      // 15px is below the 20px horizontal margin sum: no slices drawn yet.
+      expect(mockD3.pie).not.toHaveBeenCalled();
+      expect(roCallback).toBeTruthy();
+
+      jest.useFakeTimers();
+      roCallback([{ contentRect: { width: 400, height: 300 } }]);
+      jest.advanceTimersByTime(250);
+      jest.useRealTimers();
+      await flushPromises();
+
+      expect(mockD3.pie).toHaveBeenCalled();
+    });
+
+    it("creates exactly one resize observer across the render lifecycle", async () => {
+      await createChart();
+      await flushPromises();
+      await flushPromises();
+
+      // A single unified observer drives both the first render and re-renders.
+      expect(global.ResizeObserver).toHaveBeenCalledTimes(1);
+    });
+
+    it("surfaces an exception thrown during renderChart to the error state", async () => {
+      // Force renderChart to throw mid-flight; it must not die silently.
+      mockD3.select = jest.fn(() => {
+        throw new Error("render boom");
       });
 
       await createChart();
       await flushPromises();
 
-      expect(capturedCallback).toBeDefined();
-
-      // Reset D3 mock calls to verify re-render
-      mockD3.select.mockClear();
-
-      // Trigger the resize callback with a valid width
-      capturedCallback({ width: 500 });
-
-      // renderChart should be called, which invokes d3.select
-      expect(mockD3.select).toHaveBeenCalled();
+      const errorElement = element.shadowRoot.querySelector(
+        ".slds-text-color_error"
+      );
+      expect(errorElement).toBeTruthy();
+      expect(errorElement.textContent).toContain("render boom");
     });
   });
 
@@ -730,296 +754,6 @@ describe("c-d3-pie-chart", () => {
       );
       expect(widthSet).toBe(true);
       expect(heightSet).toBe(true);
-    });
-  });
-
-  // ═══════════════════════════════════════════════════════════════
-  // SERVER AGGREGATION TESTS
-  // ═══════════════════════════════════════════════════════════════
-
-  describe("server aggregation", () => {
-    it("calls getAggregatedData when objectApiName, groupByField, valueField, and operation are set", async () => {
-      await createChart({
-        recordCollection: [],
-        soqlQuery: "",
-        objectApiName: "Opportunity",
-        groupByField: "StageName",
-        valueField: "Amount",
-        operation: "Sum"
-      });
-
-      await flushPromises();
-
-      expect(getAggregatedData).toHaveBeenCalledWith({
-        objectName: "Opportunity",
-        groupByField: "StageName",
-        valueField: "Amount",
-        operation: "Sum",
-        filterClause: null
-      });
-      expect(executeQuery).not.toHaveBeenCalled();
-    });
-
-    it("passes filterClause to getAggregatedData when set", async () => {
-      await createChart({
-        recordCollection: [],
-        soqlQuery: "",
-        objectApiName: "Opportunity",
-        groupByField: "StageName",
-        valueField: "Amount",
-        operation: "Sum",
-        filterClause: "Amount > 1000"
-      });
-
-      await flushPromises();
-
-      expect(getAggregatedData).toHaveBeenCalledWith({
-        objectName: "Opportunity",
-        groupByField: "StageName",
-        valueField: "Amount",
-        operation: "Sum",
-        filterClause: "Amount > 1000"
-      });
-    });
-
-    it("falls back to soqlQuery when objectApiName is not set", async () => {
-      await createChart({
-        recordCollection: [],
-        soqlQuery: "SELECT StageName, Amount FROM Opportunity",
-        objectApiName: "",
-        groupByField: "StageName",
-        valueField: "Amount",
-        operation: "Sum"
-      });
-
-      await flushPromises();
-
-      expect(getAggregatedData).not.toHaveBeenCalled();
-      expect(executeQuery).toHaveBeenCalledWith({
-        queryString: "SELECT StageName, Amount FROM Opportunity"
-      });
-    });
-
-    it("renders chart from server aggregated data", async () => {
-      await createChart({
-        recordCollection: [],
-        soqlQuery: "",
-        objectApiName: "Opportunity",
-        groupByField: "StageName",
-        valueField: "Amount",
-        operation: "Sum"
-      });
-
-      await flushPromises();
-      await flushPromises();
-
-      const container = element.shadowRoot.querySelector(".chart-container");
-      expect(container).toBeTruthy();
-      const errorElement = element.shadowRoot.querySelector(
-        ".slds-text-color_error"
-      );
-      expect(errorElement).toBeFalsy();
-    });
-
-    it("shows error when getAggregatedData fails", async () => {
-      getAggregatedData.mockRejectedValue({
-        body: { message: "Aggregation failed" }
-      });
-
-      await createChart({
-        recordCollection: [],
-        soqlQuery: "",
-        objectApiName: "Opportunity",
-        groupByField: "StageName",
-        valueField: "Amount",
-        operation: "Sum"
-      });
-
-      await flushPromises();
-
-      const errorElement = element.shadowRoot.querySelector(
-        ".slds-text-color_error"
-      );
-      expect(errorElement).toBeTruthy();
-    });
-
-    it("shows error when getAggregatedData returns empty array", async () => {
-      getAggregatedData.mockResolvedValue([]);
-
-      await createChart({
-        recordCollection: [],
-        soqlQuery: "",
-        objectApiName: "Opportunity",
-        groupByField: "StageName",
-        valueField: "Amount",
-        operation: "Sum"
-      });
-
-      await flushPromises();
-
-      const errorElement = element.shadowRoot.querySelector(
-        ".slds-text-color_error"
-      );
-      expect(errorElement).toBeTruthy();
-    });
-
-    it("prefers recordCollection over server aggregation", async () => {
-      await createChart({
-        recordCollection: SAMPLE_DATA,
-        objectApiName: "Opportunity",
-        groupByField: "StageName",
-        valueField: "Amount",
-        operation: "Sum"
-      });
-
-      await flushPromises();
-
-      expect(getAggregatedData).not.toHaveBeenCalled();
-      expect(executeQuery).not.toHaveBeenCalled();
-    });
-  });
-
-  // ═══════════════════════════════════════════════════════════════
-  // LAYOUT RETRY TESTS
-  // ═══════════════════════════════════════════════════════════════
-
-  describe("layout retry", () => {
-    /**
-     * Helper that configures the createLayoutRetry mock to use real RAF calls.
-     * Must be called inside a test body (not a mock factory) so global.requestAnimationFrame is accessible.
-     */
-    function useRealLayoutRetry() {
-      const { createLayoutRetry } = require("c/chartUtils");
-      createLayoutRetry.mockImplementation((container, onLayout, opts = {}) => {
-        const maxAttempts = (opts && opts.maxAttempts) || 60;
-        let rafId = null;
-        let cancelled = false;
-        const check = (attempt) => {
-          if (cancelled) return;
-          const { width } = container.getBoundingClientRect();
-          if (width > 0) {
-            rafId = null;
-            onLayout(width);
-            return;
-          }
-          if (attempt >= maxAttempts) {
-            rafId = null;
-            return;
-          }
-          rafId = global.requestAnimationFrame(() => check(attempt + 1));
-        };
-        rafId = global.requestAnimationFrame(() => check(0));
-        return {
-          cancel() {
-            cancelled = true;
-            if (rafId !== null) {
-              global.cancelAnimationFrame(rafId);
-              rafId = null;
-            }
-          }
-        };
-      });
-    }
-
-    it("retries chart init when container starts at zero width", async () => {
-      // Start with zero width
-      let containerWidth = 0;
-      Element.prototype.getBoundingClientRect = jest.fn(() => ({
-        width: containerWidth,
-        height: 300,
-        top: 0,
-        left: 0,
-        bottom: 300,
-        right: containerWidth
-      }));
-
-      // Track RAF calls
-      const rafCallbacks = [];
-      global.requestAnimationFrame = jest.fn((cb) => {
-        rafCallbacks.push(cb);
-        return rafCallbacks.length;
-      });
-      global.cancelAnimationFrame = jest.fn();
-
-      useRealLayoutRetry();
-
-      await createChart();
-      await flushPromises();
-
-      // Chart was not rendered (width was 0), but RAF should have been requested
-      expect(global.requestAnimationFrame).toHaveBeenCalled();
-      expect(mockD3.pie).not.toHaveBeenCalled();
-
-      // Simulate container getting width from layout engine
-      containerWidth = 400;
-      Element.prototype.getBoundingClientRect = jest.fn(() => ({
-        width: 400,
-        height: 300,
-        top: 0,
-        left: 0,
-        bottom: 300,
-        right: 400
-      }));
-
-      // Fire the RAF callback chain
-      while (rafCallbacks.length > 0) {
-        const cb = rafCallbacks.shift();
-        cb();
-      }
-
-      // Chart should now have rendered
-      expect(mockD3.select).toHaveBeenCalled();
-    });
-
-    it("cancels layout retry on disconnect", async () => {
-      // Start with zero width
-      Element.prototype.getBoundingClientRect = jest.fn(() => ({
-        width: 0,
-        height: 0,
-        top: 0,
-        left: 0,
-        bottom: 0,
-        right: 0
-      }));
-
-      global.requestAnimationFrame = jest.fn(() => 42);
-      global.cancelAnimationFrame = jest.fn();
-
-      useRealLayoutRetry();
-
-      await createChart();
-      await flushPromises();
-
-      // Remove element triggers disconnectedCallback
-      document.body.removeChild(element);
-
-      expect(global.cancelAnimationFrame).toHaveBeenCalled();
-    });
-
-    it("does not create multiple retry loops", async () => {
-      // Start with zero width
-      Element.prototype.getBoundingClientRect = jest.fn(() => ({
-        width: 0,
-        height: 300,
-        top: 0,
-        left: 0,
-        bottom: 300,
-        right: 0
-      }));
-
-      let rafCount = 0;
-      global.requestAnimationFrame = jest.fn(() => ++rafCount);
-      global.cancelAnimationFrame = jest.fn();
-
-      useRealLayoutRetry();
-
-      await createChart();
-      await flushPromises();
-      await flushPromises();
-      await flushPromises();
-
-      // Only one RAF should be requested (one retry loop, not multiple)
-      expect(global.requestAnimationFrame).toHaveBeenCalledTimes(1);
     });
   });
 
