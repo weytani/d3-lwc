@@ -326,6 +326,38 @@ describe("d3LollipopChart GraphQL path", () => {
     expect(err.textContent).toMatch(/record query/i);
   });
 
+  it("surfaces a validation error for a free-text Count query when groupByField is blank", async () => {
+    // hasFreeTextQuery bypasses the structured path's !groupByField guard, so a
+    // blank Group By Field can still reach the wire here. Without the §9.6
+    // field-projection dedup, the bare [this.groupByField] literal becomes
+    // [""], which normalizeRecordsGeneric treats as a REAL field name — every
+    // row gets a {"": null} shape. `_aggregateRawData`'s own field-presence
+    // check is fooled (`"" in {"": null}` is true), so the ONLY thing that
+    // still catches the blank mapping is aggregateData's independent
+    // `!groupByField` bail, which throws the generic "No data after
+    // aggregation" rather than the precise "Missing required fields" message.
+    // The dedup drops the blank field from the projection entirely (fields
+    // becomes []), so the field-presence check now correctly fails first —
+    // asserting on the message (not just error-vs-no-error) is what actually
+    // distinguishes the fixed behavior from the unfixed one.
+    const element = createElement("c-d3-lollipop-chart", {
+      is: D3LollipopChart
+    });
+    element.graphqlQuery = FREE_TEXT_QUERY;
+    element.objectApiName = "Opportunity";
+    element.groupByField = "";
+    element.operation = "Count";
+    document.body.appendChild(element);
+
+    await flushPromises();
+    graphql.emit(RECORD_RESPONSE);
+    await flushPromises();
+
+    const err = element.shadowRoot.querySelector(".slds-text-color_error");
+    expect(err).not.toBeNull();
+    expect(err.textContent).toMatch(/missing required field/i);
+  });
+
   it("ignores a blank graphqlQuery and falls through to the structured builder", async () => {
     const element = createElement("c-d3-lollipop-chart", {
       is: D3LollipopChart
