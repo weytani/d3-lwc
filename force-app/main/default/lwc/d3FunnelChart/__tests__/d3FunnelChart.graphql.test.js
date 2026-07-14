@@ -273,6 +273,34 @@ describe("d3FunnelChart GraphQL path", () => {
     expect(queryStrings.every((q) => !q.includes("groupBy"))).toBe(true);
   });
 
+  it("surfaces a missing-field error instead of silently bucketing under a blank key when groupByField is blank on the free-text path", async () => {
+    // Without the §9.6 [...new Set([...].filter(Boolean))] dedup on the
+    // free-text field-projection list, a blank groupByField still produces a
+    // literal "" entry. normalizeRecordsGeneric then sets record[""] = null on
+    // every row, and "" in sample passes prepareData's field-presence check
+    // (the key exists, even though the value is null) — so validation never
+    // fires and aggregateData groups every row under a single bogus "Null"
+    // bucket instead of surfacing an error. filter(Boolean) drops the blank
+    // entry so the missing-field check fires as intended.
+    const element = createElement("c-d3-funnel-chart", { is: D3FunnelChart });
+    element.graphqlQuery = FREE_TEXT_QUERY;
+    element.objectApiName = "Opportunity";
+    element.groupByField = "";
+    element.valueField = "Amount";
+    element.operation = "Sum";
+    document.body.appendChild(element);
+
+    await flushPromises();
+    graphql.emit(FREE_TEXT_RESPONSE);
+    await flushPromises();
+    await flushPromises();
+
+    const err = element.shadowRoot.querySelector(".slds-text-color_error");
+    expect(err).not.toBeNull();
+    expect(err.textContent).toMatch(/missing required field/i);
+    expect(element.shadowRoot.querySelector(".chart-container")).toBeNull();
+  });
+
   it("surfaces wire errors from a free-text graphqlQuery in the error state", async () => {
     const element = createElement("c-d3-funnel-chart", { is: D3FunnelChart });
     element.graphqlQuery = FREE_TEXT_QUERY;
