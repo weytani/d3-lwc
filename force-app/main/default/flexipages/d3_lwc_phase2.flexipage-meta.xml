@@ -325,9 +325,8 @@
             <!-- Sparkline Grid: Amount Trends by Type -->
             <componentInstance>
                 <componentInstanceProperties>
-                    <name>soqlQuery</name>
-                    <value
-          >SELECT Type, CloseDate, Amount FROM Opportunity WHERE Type != null AND CloseDate != null ORDER BY CloseDate</value>
+                    <name>objectApiName</name>
+                    <value>Opportunity</value>
                 </componentInstanceProperties>
                 <componentInstanceProperties>
                     <name>entityField</name>
